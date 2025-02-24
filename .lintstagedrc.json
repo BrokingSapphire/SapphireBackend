@@ -1,0 +1,4 @@
+{
+    "*.ts": ["yarn lint", "yarn test"],
+    "*.js": ["yarn lint", "yarn test"]
+}
