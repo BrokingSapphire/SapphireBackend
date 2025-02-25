@@ -3,8 +3,8 @@ import bodyParser from 'body-parser';
 import helmet from 'helmet';
 import cors from 'cors';
 import csurf from 'csurf';
-import { env } from '@/env';
-import { logRoutes } from '@/middlewares';
+import { env } from '@app/env';
+import { logRoutes } from '@app/middlewares';
 
 const app = express();
 

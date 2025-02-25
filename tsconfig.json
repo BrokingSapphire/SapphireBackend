@@ -30,7 +30,7 @@
     "moduleResolution": "node",                     /* Specify how TypeScript looks up a file from a given module specifier. */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@app/*": ["./src/*"]
     },
     "rootDirs": ["src", "tests"],                                   /* Allow multiple folders to be treated as one when resolving modules. */
     // "typeRoots": [],                                  /* Specify multiple folders that act like './node_modules/@types'. */
@@ -119,6 +119,7 @@
   ],
   "ts-node": {
     // Tell ts-node CLI to install the --loader automatically
-    "esm": true
+    "esm": true,
+    "require": ["tsconfig-paths/register"]
   }
 }
