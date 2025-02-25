@@ -10,5 +10,5 @@ export const env = {
         user: process.env.DB_USER || 'postgres',
         password: process.env.DB_PASSWORD || 'postgres',
         name: process.env.DB_NAME || 'postgres',
-    }
+    },
 };
