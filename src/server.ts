@@ -1,18 +1,18 @@
-import bodyParser from 'body-parser';
-import dotenv from 'dotenv';
 import express from 'express';
-
-dotenv.config();
+import bodyParser from 'body-parser';
+import helmet from 'helmet';
+import cors from 'cors';
+import { env } from '@/env';
 
 const app = express();
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(helmet());
+app.use(cors());
 
-const PORT: string | number = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+app.listen(env.port, () => {
+    console.log(`Server is running on port ${env.port}`);
 });
 
 export default app;
