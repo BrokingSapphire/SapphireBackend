@@ -1,26 +1,13 @@
-import { Application, Router } from 'express';
-import { IRoute, ILayer } from 'express-serve-static-core';
+import winston from 'winston';
+import expressWinston from 'express-winston';
 
-const logRoutes = (app: Application) => {
-    if (!app._router) {
-        console.error('No routes found on the app.');
-        return;
-    }
-
-    app._router.stack.forEach((middleware: { route?: any; name?: string; handle?: Router }) => {
-        if (middleware.route) {
-            const methods = Object.keys(middleware.route.methods).join(', ').toUpperCase();
-            console.log(`${methods} ${middleware.route.path}`);
-        } else if (middleware.name === 'router') {
-            middleware.handle?.stack.forEach((handler: ILayer) => {
-                if (handler.route) {
-                    const route = handler.route as unknown as { [key: string]: boolean };
-                    const methods = Object.keys(route).join(', ').toUpperCase();
-                    console.log(`${methods} ${(handler.route as IRoute<string>).path}`);
-                }
-            });
-        }
-    });
-};
+const logRoutes = expressWinston.logger({
+    transports: [new winston.transports.Console()],
+    format: winston.format.combine(winston.format.colorize(), winston.format.json()),
+    meta: true, // optional: control whether you want to log the meta data about the request (default to true)
+    msg: 'HTTP {{req.method}} {{req.url}}', // optional: customize the default logging message. E.g. "{{res.statusCode}} {{req.method}} {{res.responseTime}}ms {{req.url}}"
+    expressFormat: true, // Use the default Express/morgan request formatting. Enabling this will override any msg if true. Will only output colors with colorize set to true
+    colorize: true, // Color the text and status code, using the Express/morgan color palette (text: gray, status: default green, 3XX cyan, 4XX yellow, 5XX red).
+});
 
 export default logRoutes;

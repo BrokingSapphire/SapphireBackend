@@ -1,5 +1,5 @@
 import request from 'supertest';
-import app from '../src/server';
+import app from '@app/app';
 
 describe('Server Tests', () => {
     it('should be running on the specified port', async () => {

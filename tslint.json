@@ -3,11 +3,6 @@
     "rules": {
       "no-namespace": false,
       "only-arrow-functions": false,
-      "no-console": false,
-      "no-unused-variable": false,
-      "no-empty": false,
-      "no-unnecessary-condition": false,
-      "no-unnecessary-qualifier": false,
-      "no-unnecessary-type-assertion": false
+      "no-unused-variable": false
     }
   }
