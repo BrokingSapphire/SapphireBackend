@@ -57,19 +57,4 @@ if (process.env.NODE_ENV === 'production') {
     );
 }
 
-/**
- * Request logger middleware for Express.
- */
-const requestLogger = expressWinston.logger({
-    transports: [new winston.transports.Console()],
-    format: winston.format.combine(winston.format.json(), winston.format.prettyPrint()),
-    meta: true,
-    msg: 'HTTP {{req.method}} {{req.url}}',
-    expressFormat: true,
-    colorize: false,
-    ignoreRoute: (_req: any, _res: any): boolean => {
-        return false;
-    },
-});
-
-export { logger, requestLogger };
+export default logger;

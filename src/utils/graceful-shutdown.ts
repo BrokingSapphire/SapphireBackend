@@ -1,5 +1,5 @@
 import { db } from '@app/database';
-import { logger } from '@app/logger';
+import logger from '@app/logger';
 import { Server } from 'http';
 /**
  * Close the server and database connections and exit the process.

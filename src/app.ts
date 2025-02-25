@@ -2,7 +2,7 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import csurf from 'csurf';
-import { logRoutes, errorLogger } from '@app/middlewares';
+import { logRoutes, errorLogger, errorHandler } from '@app/middlewares';
 
 const app = express();
 
@@ -15,5 +15,6 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use(logRoutes);
 app.use(errorLogger);
+app.use(errorHandler);
 
 export default app;

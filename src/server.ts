@@ -3,7 +3,7 @@ import stoppable from 'stoppable';
 import app from '@app/app';
 import normalizePort from '@app/utils/normalize-port';
 import gracefulShutdown from '@app/utils/graceful-shutdown';
-import { logger } from '@app/logger';
+import logger from '@app/logger';
 
 /**
  * Get port from environment and store in Express.
