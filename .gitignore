@@ -11,6 +11,7 @@ dist/
 .env
 .env.*
 !.env.example
+!.env.kysely.example
 
 # IDE and Editor files
 .idea/
@@ -36,3 +37,6 @@ Thumbs.db
 
 # Test coverage
 coverage/
+
+# Kysely gen
+src/database/db.d.ts
