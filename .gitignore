@@ -40,3 +40,6 @@ coverage/
 
 # Kysely gen
 src/database/db.d.ts
+
+# Temp files
+tmp/
