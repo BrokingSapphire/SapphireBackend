@@ -20,6 +20,7 @@
   "dependencies": {
     "body-parser": "^1.20.3",
     "cors": "^2.8.5",
+    "csurf": "^1.11.0",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "helmet": "^8.0.0",
@@ -36,6 +37,7 @@
     "@jest/globals": "^29.7.0",
     "@types/body-parser": "^1.19.5",
     "@types/cors": "^2.8.17",
+    "@types/csurf": "^1.11.5",
     "@types/express": "^5.0.0",
     "@types/helmet": "^4.0.0",
     "@types/jest": "^29.5.14",
@@ -50,6 +52,7 @@
     "lint-staged": "^15.4.3",
     "prettier": "^3.5.2",
     "rimraf": "^6.0.1",
+    "shx": "^0.3.4",
     "supertest": "^7.0.0",
     "ts-jest": "^29.2.6",
     "ts-node": "^10.9.2",

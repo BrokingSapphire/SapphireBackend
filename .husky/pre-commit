@@ -1,6 +1,8 @@
 yarn typecheck
+yarn shx mkdir -p tmp
 git diff --name-only > /tmp/pre_format_files
 yarn format
 git diff --name-only > /tmp/post_format_files
 comm -13 /tmp/pre_format_files /tmp/post_format_files | xargs -r git add
 yarn lint
+yarn shx rm -rf tmp
