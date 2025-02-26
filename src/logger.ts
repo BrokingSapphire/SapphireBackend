@@ -1,5 +1,4 @@
 import winston from 'winston';
-import expressWinston from 'express-winston';
 import { env } from '@app/env';
 
 interface PackageJson {
@@ -47,7 +46,7 @@ const logger = winston.createLogger({
 });
 
 // Add file transports if in production environment
-if (process.env.NODE_ENV === 'production') {
+if (env.env === 'production') {
     logger.add(new winston.transports.File({ filename: 'logs/error.log', level: 'error' }));
     logger.add(
         new winston.transports.File({

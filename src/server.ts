@@ -4,11 +4,12 @@ import app from '@app/app';
 import normalizePort from '@app/utils/normalize-port';
 import gracefulShutdown from '@app/utils/graceful-shutdown';
 import logger from '@app/logger';
+import { env } from '@app/env';
 
 /**
  * Get port from environment and store in Express.
  */
-const port = normalizePort(process.env.PORT || '3000');
+const port = normalizePort(env.port);
 app.set('port', port);
 
 /**
@@ -54,7 +55,7 @@ function onListening(): void {
     if (!addr) return;
 
     const bind = typeof addr === 'string' ? `pipe ${addr}` : `port ${addr.port}`;
-    logger.info(`Listening on ${bind} in ${process.env.NODE_ENV} environment`);
+    logger.info(`Listening on ${bind} in ${env.env} environment`);
 }
 
 server.on('error', onError);

@@ -3,8 +3,11 @@ import helmet from 'helmet';
 import cors from 'cors';
 import csurf from 'csurf';
 import { logRoutes, errorLogger, errorHandler, notFoundErrorHandler } from '@app/middlewares';
+import expressWs from 'express-ws';
 
 const app = express();
+
+expressWs(app);
 
 app.use(helmet());
 app.use(cors());
