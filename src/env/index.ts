@@ -13,4 +13,5 @@ export const env = {
         password: process.env.DB_PASSWORD || 'postgres',
         name: process.env.DB_NAME || 'postgres',
     },
+    redis: process.env.REDIS_URL || 'redis://localhost:6379',
 };

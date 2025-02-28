@@ -4,6 +4,7 @@ import cors from 'cors';
 import csurf from 'csurf';
 import { logRoutes, errorLogger, errorHandler, notFoundErrorHandler } from '@app/middlewares';
 import expressWs from 'express-ws';
+import { initializeRedis, closeRedisConnection } from '@app/services/redis';
 
 const app = express();
 
@@ -20,5 +21,13 @@ app.use(logRoutes);
 app.use(errorLogger);
 app.use(errorHandler);
 app.use(notFoundErrorHandler);
+
+app.on('listening', async () => {
+    await initializeRedis();
+});
+
+app.on('close', async () => {
+    await closeRedisConnection();
+});
 
 export default app;

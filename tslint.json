@@ -3,6 +3,7 @@
     "rules": {
       "no-namespace": false,
       "only-arrow-functions": false,
-      "no-unused-variable": false
+      "no-unused-variable": false,
+      "max-classes-per-file": false
     }
   }
