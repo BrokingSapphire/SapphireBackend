@@ -1,8 +1,8 @@
 import Joi from 'joi';
-import { CheckpointStep } from './signup.types';
+import { CredentialsType, CheckpointStep } from './signup.types';
 
 const RequestOtpSchema = Joi.object({
-    type: Joi.string().valid('email', 'phone').required(),
+    type: Joi.string().valid(Object.values(CredentialsType)).required(),
     phone: Joi.alternatives().conditional('type', {
         is: 'phone',
         then: Joi.string().required(),
@@ -16,7 +16,7 @@ const RequestOtpSchema = Joi.object({
 });
 
 const VerifyOtpSchema = Joi.object({
-    type: Joi.string().valid('email', 'phone').required(),
+    type: Joi.string().valid(Object.values(CredentialsType)).required(),
     email: Joi.string().required(),
     phone: Joi.alternatives().conditional('type', {
         is: 'phone',
@@ -30,6 +30,12 @@ const CheckpointSchema = Joi.object({
     step: Joi.string().valid(Object.values(CheckpointStep)).required(),
     email: Joi.alternatives().conditional('step', { is: CheckpointStep.CREDENTIALS, then: Joi.string().required() }),
     phone: Joi.alternatives().conditional('step', { is: CheckpointStep.CREDENTIALS, then: Joi.string().required() }),
+    pan_number: Joi.alternatives().conditional('step', { is: CheckpointStep.PAN, then: Joi.string().required() }),
+    dob: Joi.alternatives().conditional('step', { is: CheckpointStep.PAN, then: Joi.string().required() }),
+    investment_segments: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.INVESTMENT_SEGMENT,
+        then: Joi.array().items(Joi.string()),
+    }),
 });
 
 export { RequestOtpSchema, VerifyOtpSchema, CheckpointSchema };

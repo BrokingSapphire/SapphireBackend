@@ -1,10 +1,18 @@
-enum CheckpointStep {
-    CREDENTIALS = 'credentials',
-    ADDRESS = 'address',
-    BANK = 'bank',
-    KYC = 'kyc',
-    DOCUMENTS = 'documents',
-    FINAL = 'final',
+enum CredentialsType {
+    EMAIL = 'email',
+    PHONE = 'phone',
 }
 
-export { CheckpointStep };
+enum CheckpointStep {
+    CREDENTIALS = 'credentials',
+    PAN = 'pan',
+    AADHAAR = 'aadhaar',
+    INVESTMENT_SEGMENT = 'investment_segment',
+}
+
+enum InvestmentSegment {
+    EQUITY = 'equity',
+    DEBT = 'debt',
+}
+
+export { CredentialsType, CheckpointStep };
