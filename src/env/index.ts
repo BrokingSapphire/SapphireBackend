@@ -14,4 +14,8 @@ export const env = {
         name: process.env.DB_NAME || 'postgres',
     },
     redis: process.env.REDIS_URL || 'redis://localhost:6379',
+    jwt: {
+        secret: process.env.JWT_SECRET || 'secret',
+        expiresIn: process.env.JWT_EXPIRES_IN || '1d',
+    },
 };
