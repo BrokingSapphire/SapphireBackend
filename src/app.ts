@@ -4,7 +4,7 @@ import cors from 'cors';
 import csurf from 'csurf';
 import { logRoutes, errorLogger, errorHandler, notFoundErrorHandler } from '@app/middlewares';
 import expressWs from 'express-ws';
-import { initializeRedis, closeRedisConnection } from '@app/services/redis';
+import { initializeRedis, closeRedisConnection } from '@app/services/redis.service';
 
 const app = express();
 

@@ -1,4 +1,4 @@
-import redisClient from '@app/services/redis';
+import redisClient from '@app/services/redis.service';
 import logger from '@app/logger';
 import { UnauthorizedError } from '@app/apiError';
 

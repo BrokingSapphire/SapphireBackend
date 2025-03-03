@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import redisClient from '@app/services/redis';
+import redisClient from '@app/services/redis.service';
 import { EmailOtpVerification, PhoneOtpVerification } from './signup.services';
 import { BadRequestError, UnauthorizedError } from '@app/apiError';
 import { db } from '@app/database';
