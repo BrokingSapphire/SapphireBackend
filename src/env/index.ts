@@ -18,4 +18,11 @@ export const env = {
         secret: process.env.JWT_SECRET || 'secret',
         expiresIn: process.env.JWT_EXPIRES_IN || '1d',
     },
+    sms: {
+        apiKey: process.env.MOBIGLITZ_API_KEY || 'key',
+        senderId: process.env.MOBIGLITZ_SENDER_ID || 'sender_id',
+    },
+    surepass: {
+        apiKey: process.env.SUREPASS_API_KEY || 'key',
+    },
 };
