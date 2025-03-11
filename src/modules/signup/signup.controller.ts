@@ -4,7 +4,7 @@ import redisClient from '@app/services/redis.service';
 import { EmailOtpVerification, PhoneOtpVerification } from './signup.services';
 import { BadRequestError, NotFoundError, UnauthorizedError, UnprocessableEntityError } from '@app/apiError';
 import { db } from '@app/database';
-import { JwtType, CredentialsType, CheckpointStep } from './signup.types';
+import { JwtType, CredentialsType, CheckpointStep, ValidationType } from './signup.types';
 import DigiLockerService from '@app/services/surepass/digilocker.service';
 import AadhaarXMLParser from '@app/utils/aadhaar-xml.parser';
 import { sign } from '@app/utils/jwt';
@@ -13,7 +13,8 @@ import { insertAddresGetId, insertNameGetId, updateCheckpoint } from '@app/datab
 import splitName from '@app/utils/split-name';
 import { NotNull } from 'kysely';
 import PanService from '@app/services/surepass/pan.service';
-import { CREATED, OK } from '@app/utils/httpstatus';
+import { CREATED, NO_CONTENT, NOT_ACCEPTABLE, OK } from '@app/utils/httpstatus';
+import { BankVerification, ReversePenyDrop } from '@app/services/surepass/bank-verification';
 
 const requestOtp = async (req: Request, res: Response) => {
     const { type, phone, email } = req.body;
@@ -191,7 +192,10 @@ const checkpoint = async (req: Request, res: Response) => {
         await redisClient.expireAt(key, digiResponse.data.data.expiry_seconds);
 
         res.status(OK).json({
-            uri: digiResponse.data.data.url,
+            data: {
+                uri: digiResponse.data.data.url,
+            },
+            message: 'Digilocker URI generated',
         });
     } else if (step === CheckpointStep.AADHAAR) {
         const details = await db
@@ -225,20 +229,23 @@ const checkpoint = async (req: Request, res: Response) => {
 
         if (details) {
             res.status(OK).json({
-                name: details.full_name,
-                dob: details.dob,
-                email,
-                father_name: details.co,
-                gender: details.gender,
-                address: {
-                    address1: details.address1,
-                    address2: details.address2,
-                    streetName: details.street_name,
-                    city: details.city,
-                    state: details.state,
-                    country: details.country,
-                    postalCode: details.postalCode,
+                data: {
+                    name: details.full_name,
+                    dob: details.dob,
+                    email,
+                    father_name: details.co,
+                    gender: details.gender,
+                    address: {
+                        address1: details.address1,
+                        address2: details.address2,
+                        streetName: details.street_name,
+                        city: details.city,
+                        state: details.state,
+                        country: details.country,
+                        postalCode: details.postalCode,
+                    },
                 },
+                message: 'Aadhaar details already saved',
             });
             return;
         }
@@ -296,12 +303,15 @@ const checkpoint = async (req: Request, res: Response) => {
         });
 
         res.status(CREATED).json({
-            name: parser.name(),
-            dob: parser.dob(),
-            email,
-            father_name: parser.co(),
-            gender: parser.gender(),
-            address: parser.address(),
+            data: {
+                name: parser.name(),
+                dob: parser.dob(),
+                email,
+                father_name: parser.co(),
+                gender: parser.gender(),
+                address: parser.address(),
+            },
+            message: 'Aadhaar details saved',
         });
     } else if (step === CheckpointStep.INVESTMENT_SEGMENT) {
         const { segments } = req.body;
@@ -365,6 +375,126 @@ const checkpoint = async (req: Request, res: Response) => {
         });
 
         res.status(CREATED).json({ message: 'Occupation saved' });
+    } else if (step === CheckpointStep.BANK_VALIDATION_START) {
+        const { validation_type } = req.body;
+        if (validation_type === ValidationType.UPI) {
+            const rpc = new ReversePenyDrop();
+            const rpcResponse = await rpc.initialize();
+
+            await redisClient.set(`upi-validation:${email}`, rpcResponse.data.data.client_id);
+
+            res.status(OK).json({
+                data: {
+                    payment_link: rpcResponse.data.data.payment_link,
+                    ios_links: {
+                        paytm: rpcResponse.data.data.ios_links.paytm,
+                        phonepe: rpcResponse.data.data.ios_links.phonepe,
+                        gpay: rpcResponse.data.data.ios_links.gpay,
+                        bhim: rpcResponse.data.data.ios_links.bhim,
+                        whatsapp: rpcResponse.data.data.ios_links.whatsapp,
+                    },
+                },
+                message: 'UPI validation started',
+            });
+        } else {
+            res.status(OK).json({ message: 'Bank validation started' });
+        }
+    } else if (step === CheckpointStep.BANK_VALIDATION) {
+        const { validation_type } = req.body;
+        if (validation_type === ValidationType.UPI) {
+            const clientId = await redisClient.get(`upi-validation:${email}`);
+            if (!clientId) throw new UnauthorizedError('UPI validation not authorized or expired.');
+
+            const rpc = new ReversePenyDrop();
+            const rpcResponse = await rpc.status(clientId);
+
+            if (rpcResponse.data.message_code === 'pending') {
+                res.status(NO_CONTENT).json({ message: 'UPI validation pending' });
+                return;
+            }
+
+            if (rpcResponse.data.data.status === 'failed') {
+                res.status(NOT_ACCEPTABLE).json({ message: 'UPI validation failed' });
+                return;
+            }
+
+            await db.transaction().execute(async (tx) => {
+                const checkpointid = await tx
+                    .selectFrom('signup_checkpoints')
+                    .select('id')
+                    .where('email', '=', email)
+                    .executeTakeFirstOrThrow();
+
+                const bankId = await tx
+                    .insertInto('bank_account')
+                    .values({
+                        account_no: rpcResponse.data.data.details.account_number,
+                        ifsc_code: rpcResponse.data.data.details.ifsc,
+                        micr_code: rpcResponse.data.data.details.micr,
+                    })
+                    .onConflict((oc) => oc.constraint('UQ_Bank_Account').doNothing())
+                    .returning('id')
+                    .executeTakeFirstOrThrow();
+
+                await tx
+                    .insertInto('bank_to_checkpoint')
+                    .values({
+                        checkpoint_id: checkpointid.id,
+                        bank_account_id: bankId.id,
+                        is_primary: true,
+                    })
+                    .execute();
+            });
+
+            await redisClient.del(`upi-validation:${email}`);
+
+            res.status(OK).json({ message: 'UPI validation completed' });
+        } else {
+            const { bank } = req.body;
+
+            const verification = new BankVerification();
+            const bankResponse = await verification.verification({
+                id_number: bank.account_number,
+                ifsc: bank.ifsc_code,
+                ifsc_details: true,
+            });
+
+            if (!bankResponse.data.data.account_exists)
+                throw new UnprocessableEntityError('Bank account does not exist');
+
+            if (!bankResponse.data.data.ifsc_details.micr !== bank.micr_code)
+                throw new UnprocessableEntityError('MICR code does not match');
+
+            await db.transaction().execute(async (tx) => {
+                const checkpointid = await tx
+                    .selectFrom('signup_checkpoints')
+                    .select('id')
+                    .where('email', '=', email)
+                    .executeTakeFirstOrThrow();
+
+                const bankId = await tx
+                    .insertInto('bank_account')
+                    .values({
+                        account_no: bank.account_number,
+                        ifsc_code: bank.ifsc_code,
+                        micr_code: bank.micr_code,
+                    })
+                    .onConflict((oc) => oc.constraint('UQ_Bank_Account').doNothing())
+                    .returning('id')
+                    .executeTakeFirstOrThrow();
+
+                await tx
+                    .insertInto('bank_to_checkpoint')
+                    .values({
+                        checkpoint_id: checkpointid.id,
+                        bank_account_id: bankId.id,
+                        is_primary: true,
+                    })
+                    .execute();
+            });
+
+            res.status(OK).json({ message: 'Bank validation completed' });
+        }
     }
 };
 

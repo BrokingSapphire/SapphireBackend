@@ -17,6 +17,8 @@ enum CheckpointStep {
     USER_DETAIL = 'user_detail',
     ACCOUNT_DETAIL = 'account_detail',
     OCCUPATION = 'occupation',
+    BANK_VALIDATION_START = 'bank_validation_start',
+    BANK_VALIDATION = 'bank_validation',
 }
 
 enum InvestmentSegment {
@@ -54,6 +56,11 @@ enum AccountSettlement {
     QUARTERLY = 'Quarterly',
 }
 
+enum ValidationType {
+    BANK = 'bank',
+    UPI = 'upi',
+}
+
 export {
     JwtType,
     CredentialsType,
@@ -63,4 +70,5 @@ export {
     AnnualIncome,
     TradingExperience,
     AccountSettlement,
+    ValidationType,
 };

@@ -24,3 +24,9 @@ export interface PanError {
         info: string;
     };
 }
+
+export interface BankVerificationDetails {
+    id_number: string;
+    ifsc: string;
+    ifsc_details: boolean;
+}

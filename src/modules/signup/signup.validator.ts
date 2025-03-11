@@ -7,6 +7,7 @@ import {
     AnnualIncome,
     TradingExperience,
     AccountSettlement,
+    ValidationType,
 } from './signup.types';
 
 const RequestOtpSchema = Joi.object({
@@ -79,6 +80,25 @@ const CheckpointSchema = Joi.object({
         is: CheckpointStep.OCCUPATION,
         then: Joi.boolean().required(),
     }),
+    validation_type: Joi.alternatives()
+        .conditional('step', {
+            is: CheckpointStep.BANK_VALIDATION,
+            then: Joi.string().valid(Object.values(ValidationType)).required(),
+        })
+        .conditional('step', {
+            is: CheckpointStep.BANK_VALIDATION_START,
+            then: Joi.string().valid(Object.values(ValidationType)).required(),
+        }),
+    bank: Joi.alternatives().conditional(
+        Joi.object({ step: CheckpointStep.BANK_VALIDATION, validation_type: ValidationType.BANK }),
+        {
+            then: Joi.object({
+                account_number: Joi.string().required(),
+                micr_code: Joi.string().required(),
+                ifsc_code: Joi.string().required(),
+            }).required(),
+        },
+    ),
 });
 
 export { RequestOtpSchema, VerifyOtpSchema, CheckpointSchema };
