@@ -11,8 +11,8 @@ enum CredentialsType {
 enum CheckpointStep {
     CREDENTIALS = 'credentials',
     PAN = 'pan',
+    AADHAAR_URI = 'aadhaar_uri',
     AADHAAR = 'aadhaar',
-    KYC_DETAILS = 'kyc_details',
     INVESTMENT_SEGMENT = 'investment_segment',
 }
 

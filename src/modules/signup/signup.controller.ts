@@ -2,7 +2,13 @@ import { Response } from 'express';
 import { Request } from 'express-jwt';
 import redisClient from '@app/services/redis.service';
 import { EmailOtpVerification, PhoneOtpVerification } from './signup.services';
-import { BadRequestError, InternalServerError, UnauthorizedError, UnprocessableEntityError } from '@app/apiError';
+import {
+    BadRequestError,
+    InternalServerError,
+    NotFoundError,
+    UnauthorizedError,
+    UnprocessableEntityError,
+} from '@app/apiError';
 import { db } from '@app/database';
 import { JwtType, CredentialsType, CheckpointStep } from './signup.types';
 import DigiLockerService from '@app/services/surepass/digilocker.service';
@@ -11,6 +17,9 @@ import { sign } from '@app/utils/jwt';
 import axios from 'axios';
 import { insertAddresGetId, insertNameGetId, updateCheckpoint } from '@app/database/transactions';
 import splitName from '@app/utils/split-name';
+import { NotNull } from 'kysely';
+import PanService from '@app/services/surepass/pan.service';
+import { OK } from '@app/utils/httpstatus';
 
 const requestOtp = async (req: Request, res: Response) => {
     const { type, phone, email } = req.body;
@@ -82,16 +91,78 @@ const checkpoint = async (req: Request, res: Response) => {
     const { step } = req.body;
     if (step === CheckpointStep.CREDENTIALS) {
         await db.transaction().execute(async (tx) => {
-            const phoneId = await tx.insertInto('phone_number').values({ phone }).returning('id').executeTakeFirst();
-            await tx.insertInto('signup_checkpoints').values({ email, phone_id: phoneId!!.id }).execute();
+            const phoneId = await tx
+                .insertInto('phone_number')
+                .values({ phone })
+                .returning('id')
+                .executeTakeFirstOrThrow();
+            await tx.insertInto('signup_checkpoints').values({ email, phone_id: phoneId.id }).execute();
         });
 
         res.status(200).json({ message: 'Credentials saved' });
     } else if (step === CheckpointStep.PAN) {
-        const { pan_number, dob } = req.body;
+        const { panNumber, dob } = req.body;
 
-        res.status(200).json({ message: 'PAN saved' });
-    } else if (step === CheckpointStep.AADHAAR) {
+        const panService = new PanService();
+        const response = await panService.getDetails(panNumber);
+
+        if (response.status !== OK) {
+            throw new NotFoundError('Pan details not found.');
+        }
+
+        if (response.data.data.email && response.data.data.email !== email) {
+            throw new UnprocessableEntityError('Email does not match.');
+        }
+
+        if (response.data.data.phone_number && response.data.data.phone_number !== phone) {
+            throw new UnprocessableEntityError('Phone does not match.');
+        }
+
+        if (new Date(response.data.data.dob) !== new Date(dob)) {
+            throw new UnprocessableEntityError('DOB does not match.');
+        }
+
+        await db.transaction().execute(async (tx) => {
+            const nameId = await insertNameGetId(tx, splitName(response.data.data.full_name));
+
+            const address = response.data.data.address;
+            const addressId = await insertAddresGetId(tx, {
+                address1: address.line_1,
+                address2: address.line_2,
+                streetName: address.street_name,
+                city: address.city,
+                state: address.state,
+                country: address.country === '' ? 'India' : address.country,
+                postalCode: address.zip,
+            });
+
+            const panId = await tx
+                .insertInto('pan_detail')
+                .values({
+                    pan_number: response.data.data.pan_number,
+                    name: nameId,
+                    masked_aadhaar: response.data.data.masked_aadhaar.substring(9, 12),
+                    address_id: addressId,
+                    dob: new Date(response.data.data.dob),
+                    gender: response.data.data.gender,
+                    aadhaar_linked: response.data.data.aadhaar_linked,
+                    dob_verified: response.data.data.dob_verified,
+                    dob_check: response.data.data.dob_check,
+                    category: response.data.data.category,
+                    status: response.data.data.status,
+                })
+                .returning('id')
+                .executeTakeFirstOrThrow();
+
+            await updateCheckpoint(tx, email, phone, {
+                name: nameId,
+                dob: new Date(dob),
+                pan_id: panId.id,
+            }).execute();
+        });
+
+        res.status(200).json({ message: 'PAN verified' });
+    } else if (step === CheckpointStep.AADHAAR_URI) {
         const { redirect } = req.body;
 
         const digilocker = new DigiLockerService();
@@ -118,9 +189,19 @@ const checkpoint = async (req: Request, res: Response) => {
         res.status(200).json({
             uri: response.data.data.url,
         });
-    } else if (step === CheckpointStep.KYC_DETAILS) {
+    } else if (step === CheckpointStep.AADHAAR) {
+        const details = await db
+            .selectFrom('signup_checkpoints')
+            .innerJoin('phone_number', 'signup_checkpoints.phone_id', 'phone_number.id')
+            .where('email', '=', email)
+            .where('phone', '=', phone)
+            .where('aadhaar_id', 'is not', null)
+            .$narrowType<{ aadhaar_id: NotNull }>()
+            .executeTakeFirstOrThrow();
+
         const clientId = await redisClient.get(`digilocker:${email}`);
         if (!clientId) throw new UnauthorizedError('Digilocker not authorized or expired.');
+        await redisClient.del(`digilocker:${email}`);
 
         const digilocker = new DigiLockerService();
 
@@ -146,7 +227,9 @@ const checkpoint = async (req: Request, res: Response) => {
 
             const nameId = await insertNameGetId(tx, splitName(parser.name()));
 
-            const coId = await insertNameGetId(tx, splitName(parser.co()));
+            let co = parser.co();
+            if (co.startsWith('C/O')) co = co.substring(4).trim();
+            const coId = await insertNameGetId(tx, splitName(co));
 
             const aadhaarId = await tx
                 .insertInto('aadhaar_detail')
@@ -166,6 +249,8 @@ const checkpoint = async (req: Request, res: Response) => {
                 aadhaar_id: aadhaarId.id,
             }).execute();
         });
+    } else if (step === CheckpointStep.INVESTMENT_SEGMENT) {
+        const { segments } = req.body;
     }
 };
 
