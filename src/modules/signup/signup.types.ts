@@ -1,3 +1,8 @@
+interface JwtType {
+    email: string;
+    phone: string;
+}
+
 enum CredentialsType {
     EMAIL = 'email',
     PHONE = 'phone',
@@ -7,6 +12,7 @@ enum CheckpointStep {
     CREDENTIALS = 'credentials',
     PAN = 'pan',
     AADHAAR = 'aadhaar',
+    KYC_DETAILS = 'kyc_details',
     INVESTMENT_SEGMENT = 'investment_segment',
 }
 
@@ -15,4 +21,4 @@ enum InvestmentSegment {
     DEBT = 'debt',
 }
 
-export { CredentialsType, CheckpointStep };
+export { JwtType, CredentialsType, CheckpointStep };

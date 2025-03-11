@@ -2,11 +2,15 @@ import { Response } from 'express';
 import { Request } from 'express-jwt';
 import redisClient from '@app/services/redis.service';
 import { EmailOtpVerification, PhoneOtpVerification } from './signup.services';
-import { BadRequestError, UnauthorizedError } from '@app/apiError';
+import { BadRequestError, InternalServerError, UnauthorizedError, UnprocessableEntityError } from '@app/apiError';
 import { db } from '@app/database';
-import { CredentialsType, CheckpointStep } from './signup.types';
+import { JwtType, CredentialsType, CheckpointStep } from './signup.types';
 import DigiLockerService from '@app/services/surepass/digilocker.service';
+import AadhaarXMLParser from '@app/utils/aadhaar-xml.parser';
 import { sign } from '@app/utils/jwt';
+import axios from 'axios';
+import { insertAddresGetId, insertNameGetId, updateCheckpoint } from '@app/database/transactions';
+import splitName from '@app/utils/split-name';
 
 const requestOtp = async (req: Request, res: Response) => {
     const { type, phone, email } = req.body;
@@ -53,6 +57,8 @@ const verifyOtp = async (req: Request, res: Response) => {
 
         res.status(200).json({ message: 'OTP verified' });
     } else if (type === CredentialsType.PHONE) {
+        if (!(await redisClient.get(`email-verified:${email}`))) throw new UnauthorizedError('Email not verified.');
+
         const phoneOtp = new PhoneOtpVerification(phone);
         await phoneOtp.verifyOtp(otp);
         await redisClient.del(`email-verified:${email}`);
@@ -71,7 +77,7 @@ const checkpoint = async (req: Request, res: Response) => {
         throw new UnauthorizedError('Request cannot be verified!');
     }
 
-    const { email, phone } = req.auth;
+    const { email, phone } = req.auth as JwtType;
 
     const { step } = req.body;
     if (step === CheckpointStep.CREDENTIALS) {
@@ -84,16 +90,14 @@ const checkpoint = async (req: Request, res: Response) => {
     } else if (step === CheckpointStep.PAN) {
         const { pan_number, dob } = req.body;
 
-        // Call surepass api to verify pan and dob
-
         res.status(200).json({ message: 'PAN saved' });
     } else if (step === CheckpointStep.AADHAAR) {
-        const { name, redirect } = req.body;
+        const { redirect } = req.body;
 
         const digilocker = new DigiLockerService();
         const response = await digilocker.initialize({
             prefill_options: {
-                full_name: name,
+                full_name: email.split('@')[0],
                 mobile_number: phone,
                 user_email: email,
             },
@@ -113,6 +117,54 @@ const checkpoint = async (req: Request, res: Response) => {
 
         res.status(200).json({
             uri: response.data.data.url,
+        });
+    } else if (step === CheckpointStep.KYC_DETAILS) {
+        const clientId = await redisClient.get(`digilocker:${email}`);
+        if (!clientId) throw new UnauthorizedError('Digilocker not authorized or expired.');
+
+        const digilocker = new DigiLockerService();
+
+        const status = await digilocker.getStatus(clientId);
+        if (!status.data.data.completed) throw new UnauthorizedError('Digilocker not authorized or expired.');
+
+        const documents = await digilocker.listDocuments(clientId);
+        const aadhar = documents.data.data.documents.find((d: any) => d.doc_type === 'ADHAR');
+
+        if (!aadhar) throw new UnprocessableEntityError("User doesn't have aadhar linked to his digilocker.");
+
+        const downloadLink = await digilocker.downloadDocument(clientId, aadhar.file_id);
+        if (downloadLink.data.data.mime_type !== 'application/xml')
+            throw new UnprocessableEntityError("Don't know how to process aadhaar file.");
+
+        const file = await axios.get(downloadLink.data.data.download_url);
+        const parser = new AadhaarXMLParser(file.data);
+        parser.load();
+
+        await db.transaction().execute(async (tx) => {
+            const address = parser.address();
+            const addressId = await insertAddresGetId(tx, address);
+
+            const nameId = await insertNameGetId(tx, splitName(parser.name()));
+
+            const coId = await insertNameGetId(tx, splitName(parser.co()));
+
+            const aadhaarId = await tx
+                .insertInto('aadhaar_detail')
+                .values({
+                    masked_aadhaar_no: parser.uid().substring(9, 12),
+                    name: nameId,
+                    dob: parser.dob(),
+                    co: coId,
+                    address_id: addressId,
+                    post_office: parser.postOffice(),
+                    gender: parser.gender(),
+                })
+                .returning('id')
+                .executeTakeFirstOrThrow();
+
+            await updateCheckpoint(tx, email, phone, {
+                aadhaar_id: aadhaarId.id,
+            }).execute();
         });
     }
 };
