@@ -13,7 +13,7 @@ import { insertAddresGetId, insertNameGetId, updateCheckpoint } from '@app/datab
 import splitName from '@app/utils/split-name';
 import { NotNull } from 'kysely';
 import PanService from '@app/services/surepass/pan.service';
-import { OK } from '@app/utils/httpstatus';
+import { CREATED, OK } from '@app/utils/httpstatus';
 
 const requestOtp = async (req: Request, res: Response) => {
     const { type, phone, email } = req.body;
@@ -47,7 +47,7 @@ const requestOtp = async (req: Request, res: Response) => {
         await phoneOtp.sendOtp();
     }
 
-    res.status(200).json({ message: 'OTP sent' });
+    res.status(OK).json({ message: 'OTP sent' });
 };
 
 const verifyOtp = async (req: Request, res: Response) => {
@@ -58,7 +58,7 @@ const verifyOtp = async (req: Request, res: Response) => {
         await redisClient.set(`email-verified:${email}`, 'true');
         await redisClient.expire(`email-verified:${email}`, 10 * 60);
 
-        res.status(200).json({ message: 'OTP verified' });
+        res.status(OK).json({ message: 'OTP verified' });
     } else if (type === CredentialsType.PHONE) {
         if (!(await redisClient.get(`email-verified:${email}`))) throw new UnauthorizedError('Email not verified.');
 
@@ -71,7 +71,7 @@ const verifyOtp = async (req: Request, res: Response) => {
             phone,
         });
 
-        res.status(200).json({ message: 'OTP verified', token });
+        res.status(OK).json({ message: 'OTP verified', token });
     }
 };
 
@@ -93,7 +93,7 @@ const checkpoint = async (req: Request, res: Response) => {
             await tx.insertInto('signup_checkpoints').values({ email, phone_id: phoneId.id }).execute();
         });
 
-        res.status(200).json({ message: 'Credentials saved' });
+        res.status(CREATED).json({ message: 'Credentials saved' });
     } else if (step === CheckpointStep.PAN) {
         const { panNumber, dob } = req.body;
 
@@ -155,7 +155,7 @@ const checkpoint = async (req: Request, res: Response) => {
             }).execute();
         });
 
-        res.status(200).json({ message: 'PAN verified' });
+        res.status(OK).json({ message: 'PAN verified' });
     } else if (step === CheckpointStep.AADHAAR_URI) {
         const { redirect } = req.body;
 
@@ -180,18 +180,58 @@ const checkpoint = async (req: Request, res: Response) => {
         await redisClient.set(key, response.data.data.client_id);
         await redisClient.expireAt(key, response.data.data.expiry_seconds);
 
-        res.status(200).json({
+        res.status(OK).json({
             uri: response.data.data.url,
         });
     } else if (step === CheckpointStep.AADHAAR) {
-        // const details = await db
-        //     .selectFrom('signup_checkpoints')
-        //     .innerJoin('phone_number', 'signup_checkpoints.phone_id', 'phone_number.id')
-        //     .where('email', '=', email)
-        //     .where('phone', '=', phone)
-        //     .where('aadhaar_id', 'is not', null)
-        //     .$narrowType<{ aadhaar_id: NotNull }>()
-        //     .executeTakeFirstOrThrow();
+        const details = await db
+            .selectFrom('signup_checkpoints')
+            .innerJoin('phone_number', 'signup_checkpoints.phone_id', 'phone_number.id')
+            .innerJoin('user_name', 'signup_checkpoints.name', 'user_name.id')
+            .innerJoin('aadhaar_detail', 'signup_checkpoints.aadhaar_id', 'aadhaar_detail.id')
+            .innerJoin('address', 'aadhaar_detail.address_id', 'address.id')
+            .innerJoin('country', 'address.country_id', 'country.iso')
+            .innerJoin('state', 'address.state_id', 'state.id')
+            .innerJoin('city', 'address.city_id', 'city.id')
+            .innerJoin('postal_code', 'address.postal_id', 'postal_code.id')
+            .select([
+                'user_name.full_name',
+                'signup_checkpoints.dob',
+                'aadhaar_detail.co',
+                'aadhaar_detail.gender',
+                'country.name as country',
+                'state.name as state',
+                'city.name as city',
+                'postal_code.postal_code as postalCode',
+                'address.address1',
+                'address.address2',
+                'address.street_name',
+            ])
+            .where('email', '=', email)
+            .where('phone', '=', phone)
+            .where('aadhaar_id', 'is not', null)
+            .$narrowType<{ aadhaar_id: NotNull }>()
+            .executeTakeFirst();
+
+        if (details) {
+            res.status(OK).json({
+                name: details.full_name,
+                dob: details.dob,
+                email,
+                father_name: details.co,
+                gender: details.gender,
+                address: {
+                    address1: details.address1,
+                    address2: details.address2,
+                    streetName: details.street_name,
+                    city: details.city,
+                    state: details.state,
+                    country: details.country,
+                    postalCode: details.postalCode,
+                },
+            });
+            return;
+        }
 
         const clientId = await redisClient.get(`digilocker:${email}`);
         if (!clientId) throw new UnauthorizedError('Digilocker not authorized or expired.');
@@ -241,7 +281,17 @@ const checkpoint = async (req: Request, res: Response) => {
 
             await updateCheckpoint(tx, email, phone, {
                 aadhaar_id: aadhaarId.id,
+                address_id: addressId,
             }).execute();
+        });
+
+        res.status(CREATED).json({
+            name: parser.name(),
+            dob: parser.dob(),
+            email,
+            father_name: parser.co(),
+            gender: parser.gender(),
+            address: parser.address(),
         });
     } else if (step === CheckpointStep.INVESTMENT_SEGMENT) {
         const { segments } = req.body;
@@ -268,7 +318,7 @@ const checkpoint = async (req: Request, res: Response) => {
                 .execute();
         });
 
-        res.status(200).json({ message: 'Investment segment saved' });
+        res.status(CREATED).json({ message: 'Investment segment saved' });
     } else if (step === CheckpointStep.USER_DETAIL) {
         const { marital_status, father_name, mother_name } = req.body;
 
@@ -283,7 +333,7 @@ const checkpoint = async (req: Request, res: Response) => {
             }).execute();
         });
 
-        res.status(200).json({ message: 'User details saved' });
+        res.status(CREATED).json({ message: 'User details saved' });
     } else if (step === CheckpointStep.ACCOUNT_DETAIL) {
         const { annual_income, experience, settlement } = req.body;
         await db.transaction().execute(async (tx) => {
@@ -294,7 +344,7 @@ const checkpoint = async (req: Request, res: Response) => {
             }).execute();
         });
 
-        res.status(200).json({ message: 'Account details saved' });
+        res.status(CREATED).json({ message: 'Account details saved' });
     } else if (step === CheckpointStep.OCCUPATION) {
         const { occupation, politically_exposed } = req.body;
         await db.transaction().execute(async (tx) => {
@@ -304,7 +354,7 @@ const checkpoint = async (req: Request, res: Response) => {
             }).execute();
         });
 
-        res.status(200).json({ message: 'Occupation saved' });
+        res.status(CREATED).json({ message: 'Occupation saved' });
     }
 };
 
