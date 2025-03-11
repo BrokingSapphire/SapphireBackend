@@ -1,4 +1,4 @@
-import { response, Response } from 'express';
+import { Response } from 'express';
 import { Request } from 'express-jwt';
 import redisClient from '@app/services/redis.service';
 import { EmailOtpVerification, PhoneOtpVerification } from './signup.services';
@@ -448,7 +448,7 @@ const checkpoint = async (req: Request, res: Response) => {
 
             await redisClient.del(`upi-validation:${email}`);
 
-            res.status(OK).json({ message: 'UPI validation completed' });
+            res.status(CREATED).json({ message: 'UPI validation completed' });
         } else {
             const { bank } = req.body;
 
@@ -493,8 +493,36 @@ const checkpoint = async (req: Request, res: Response) => {
                     .execute();
             });
 
-            res.status(OK).json({ message: 'Bank validation completed' });
+            res.status(CREATED).json({ message: 'Bank validation completed' });
         }
+    } else if (step === CheckpointStep.ADD_NOMINEES) {
+        // const { nominees } = req.body;
+        // await db.transaction().execute(async (tx) => {
+        //     const checkpointid = await tx
+        //         .selectFrom('signup_checkpoints')
+        //         .select('id')
+        //         .where('email', '=', email)
+        //         .executeTakeFirstOrThrow();
+
+        //     await tx
+        //         .deleteFrom('nominees_to_checkpoint')
+        //         .where('checkpoint_id', '=', checkpointid.id)
+        //         .execute();
+
+        //     for (const nominee of nominees) {
+        //         const nameId = await insertNameGetId(tx, splitName(nominee.name));
+
+        //         await tx
+        //             .insertInto('nominees_to_checkpoint')
+        //             .values({
+        //                 checkpoint_id: checkpointid.id,
+        //                 name_id: nameId,
+        //                 gov_id: nominee.gov_id,
+        //             })
+        //             .execute();
+        //     }
+        // });
+        res.status(CREATED).json({ message: 'Nominees added' });
     }
 };
 

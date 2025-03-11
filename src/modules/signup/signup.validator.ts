@@ -99,6 +99,17 @@ const CheckpointSchema = Joi.object({
             }).required(),
         },
     ),
+    nominees: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.ADD_NOMINEES,
+        then: Joi.array().items(
+            Joi.object({
+                name: Joi.string().required(),
+                gov_id: Joi.date().required(),
+                relation: Joi.string().required(),
+                share: Joi.number().required(),
+            }),
+        ),
+    }),
 });
 
 export { RequestOtpSchema, VerifyOtpSchema, CheckpointSchema };
