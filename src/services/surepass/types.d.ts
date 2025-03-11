@@ -15,3 +15,12 @@ export interface DigiLockerInitializeRequest {
     redirect_url: string;
     state: string;
 }
+
+export interface PanError {
+    error: {
+        message: string;
+        code: string;
+        type: string;
+        info: string;
+    };
+}

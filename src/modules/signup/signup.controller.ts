@@ -1,4 +1,4 @@
-import { Response } from 'express';
+import { response, Response } from 'express';
 import { Request } from 'express-jwt';
 import redisClient from '@app/services/redis.service';
 import { EmailOtpVerification, PhoneOtpVerification } from './signup.services';
@@ -98,28 +98,38 @@ const checkpoint = async (req: Request, res: Response) => {
         const { panNumber, dob } = req.body;
 
         const panService = new PanService();
-        const response = await panService.getDetails(panNumber);
+        let panResponse;
+        try {
+            panResponse = await panService.getDetails(panNumber);
+        } catch (error: any) {
+            if (error.response) {
+                if (error.response.data.error.code === 'INVALID_PAN') {
+                    throw new UnprocessableEntityError('Invalid PAN number');
+                }
+            }
+            throw error;
+        }
 
-        if (response.status !== OK) {
+        if (panResponse.status !== OK) {
             throw new NotFoundError('Pan details not found.');
         }
 
-        if (response.data.data.email && response.data.data.email !== email) {
+        if (panResponse.data.data.email && panResponse.data.data.email !== email) {
             throw new UnprocessableEntityError('Email does not match.');
         }
 
-        if (response.data.data.phone_number && response.data.data.phone_number !== phone) {
+        if (panResponse.data.data.phone_number && panResponse.data.data.phone_number !== phone) {
             throw new UnprocessableEntityError('Phone does not match.');
         }
 
-        if (new Date(response.data.data.dob) !== new Date(dob)) {
+        if (new Date(panResponse.data.data.dob) !== new Date(dob)) {
             throw new UnprocessableEntityError('DOB does not match.');
         }
 
         await db.transaction().execute(async (tx) => {
-            const nameId = await insertNameGetId(tx, splitName(response.data.data.full_name));
+            const nameId = await insertNameGetId(tx, splitName(panResponse.data.data.full_name));
 
-            const address = response.data.data.address;
+            const address = panResponse.data.data.address;
             const addressId = await insertAddresGetId(tx, {
                 address1: address.line_1,
                 address2: address.line_2,
@@ -133,17 +143,17 @@ const checkpoint = async (req: Request, res: Response) => {
             const panId = await tx
                 .insertInto('pan_detail')
                 .values({
-                    pan_number: response.data.data.pan_number,
+                    pan_number: panResponse.data.data.pan_number,
                     name: nameId,
-                    masked_aadhaar: response.data.data.masked_aadhaar.substring(9, 12),
+                    masked_aadhaar: panResponse.data.data.masked_aadhaar.substring(9, 12),
                     address_id: addressId,
-                    dob: new Date(response.data.data.dob),
-                    gender: response.data.data.gender,
-                    aadhaar_linked: response.data.data.aadhaar_linked,
-                    dob_verified: response.data.data.dob_verified,
-                    dob_check: response.data.data.dob_check,
-                    category: response.data.data.category,
-                    status: response.data.data.status,
+                    dob: new Date(panResponse.data.data.dob),
+                    gender: panResponse.data.data.gender,
+                    aadhaar_linked: panResponse.data.data.aadhaar_linked,
+                    dob_verified: panResponse.data.data.dob_verified,
+                    dob_check: panResponse.data.data.dob_check,
+                    category: panResponse.data.data.category,
+                    status: panResponse.data.data.status,
                 })
                 .returning('id')
                 .executeTakeFirstOrThrow();
@@ -160,7 +170,7 @@ const checkpoint = async (req: Request, res: Response) => {
         const { redirect } = req.body;
 
         const digilocker = new DigiLockerService();
-        const response = await digilocker.initialize({
+        const digiResponse = await digilocker.initialize({
             prefill_options: {
                 full_name: email.split('@')[0],
                 mobile_number: phone,
@@ -177,11 +187,11 @@ const checkpoint = async (req: Request, res: Response) => {
         });
 
         const key = `digilocker:${email}`;
-        await redisClient.set(key, response.data.data.client_id);
-        await redisClient.expireAt(key, response.data.data.expiry_seconds);
+        await redisClient.set(key, digiResponse.data.data.client_id);
+        await redisClient.expireAt(key, digiResponse.data.data.expiry_seconds);
 
         res.status(OK).json({
-            uri: response.data.data.url,
+            uri: digiResponse.data.data.url,
         });
     } else if (step === CheckpointStep.AADHAAR) {
         const details = await db
