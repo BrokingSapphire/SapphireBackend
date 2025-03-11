@@ -1,3 +1,4 @@
+import 'module-alias/register';
 import http from 'http';
 import stoppable from 'stoppable';
 import app from '@app/app';
