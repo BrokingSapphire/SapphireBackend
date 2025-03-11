@@ -2,13 +2,7 @@ import { Response } from 'express';
 import { Request } from 'express-jwt';
 import redisClient from '@app/services/redis.service';
 import { EmailOtpVerification, PhoneOtpVerification } from './signup.services';
-import {
-    BadRequestError,
-    InternalServerError,
-    NotFoundError,
-    UnauthorizedError,
-    UnprocessableEntityError,
-} from '@app/apiError';
+import { BadRequestError, NotFoundError, UnauthorizedError, UnprocessableEntityError } from '@app/apiError';
 import { db } from '@app/database';
 import { JwtType, CredentialsType, CheckpointStep } from './signup.types';
 import DigiLockerService from '@app/services/surepass/digilocker.service';
@@ -190,14 +184,14 @@ const checkpoint = async (req: Request, res: Response) => {
             uri: response.data.data.url,
         });
     } else if (step === CheckpointStep.AADHAAR) {
-        const details = await db
-            .selectFrom('signup_checkpoints')
-            .innerJoin('phone_number', 'signup_checkpoints.phone_id', 'phone_number.id')
-            .where('email', '=', email)
-            .where('phone', '=', phone)
-            .where('aadhaar_id', 'is not', null)
-            .$narrowType<{ aadhaar_id: NotNull }>()
-            .executeTakeFirstOrThrow();
+        // const details = await db
+        //     .selectFrom('signup_checkpoints')
+        //     .innerJoin('phone_number', 'signup_checkpoints.phone_id', 'phone_number.id')
+        //     .where('email', '=', email)
+        //     .where('phone', '=', phone)
+        //     .where('aadhaar_id', 'is not', null)
+        //     .$narrowType<{ aadhaar_id: NotNull }>()
+        //     .executeTakeFirstOrThrow();
 
         const clientId = await redisClient.get(`digilocker:${email}`);
         if (!clientId) throw new UnauthorizedError('Digilocker not authorized or expired.');
@@ -251,6 +245,66 @@ const checkpoint = async (req: Request, res: Response) => {
         });
     } else if (step === CheckpointStep.INVESTMENT_SEGMENT) {
         const { segments } = req.body;
+        await db.transaction().execute(async (tx) => {
+            const signupCheckpoint = await tx
+                .selectFrom('signup_checkpoints')
+                .select('id')
+                .where('email', '=', email)
+                .executeTakeFirstOrThrow();
+
+            await tx
+                .deleteFrom('investment_segments_to_checkpoint')
+                .where('checkpoint_id', '=', signupCheckpoint.id)
+                .execute();
+
+            await tx
+                .insertInto('investment_segments_to_checkpoint')
+                .values(
+                    segments.map((segment: string) => ({
+                        checkpoint_id: signupCheckpoint.id,
+                        segment,
+                    })),
+                )
+                .execute();
+        });
+
+        res.status(200).json({ message: 'Investment segment saved' });
+    } else if (step === CheckpointStep.USER_DETAIL) {
+        const { marital_status, father_name, mother_name } = req.body;
+
+        await db.transaction().execute(async (tx) => {
+            const fatherNameId = await insertNameGetId(tx, splitName(father_name));
+            const motherNameId = await insertNameGetId(tx, splitName(mother_name));
+
+            await updateCheckpoint(tx, email, phone, {
+                marital_status,
+                father_name: fatherNameId,
+                mother_name: motherNameId,
+            }).execute();
+        });
+
+        res.status(200).json({ message: 'User details saved' });
+    } else if (step === CheckpointStep.ACCOUNT_DETAIL) {
+        const { annual_income, experience, settlement } = req.body;
+        await db.transaction().execute(async (tx) => {
+            await updateCheckpoint(tx, email, phone, {
+                annual_income,
+                trading_exp: experience,
+                account_settlement: settlement,
+            }).execute();
+        });
+
+        res.status(200).json({ message: 'Account details saved' });
+    } else if (step === CheckpointStep.OCCUPATION) {
+        const { occupation, politically_exposed } = req.body;
+        await db.transaction().execute(async (tx) => {
+            await updateCheckpoint(tx, email, phone, {
+                occupation,
+                is_politically_exposed: politically_exposed,
+            }).execute();
+        });
+
+        res.status(200).json({ message: 'Occupation saved' });
     }
 };
 

@@ -1,5 +1,13 @@
 import Joi from 'joi';
-import { CredentialsType, CheckpointStep } from './signup.types';
+import {
+    CredentialsType,
+    CheckpointStep,
+    InvestmentSegment,
+    MaritalStatus,
+    AnnualIncome,
+    TradingExperience,
+    AccountSettlement,
+} from './signup.types';
 
 const RequestOtpSchema = Joi.object({
     type: Joi.string().valid(Object.values(CredentialsType)).required(),
@@ -31,11 +39,45 @@ const CheckpointSchema = Joi.object({
     email: Joi.alternatives().conditional('step', { is: CheckpointStep.CREDENTIALS, then: Joi.string().required() }),
     phone: Joi.alternatives().conditional('step', { is: CheckpointStep.CREDENTIALS, then: Joi.string().required() }),
     pan_number: Joi.alternatives().conditional('step', { is: CheckpointStep.PAN, then: Joi.string().required() }),
-    dob: Joi.alternatives().conditional('step', { is: CheckpointStep.PAN, then: Joi.string().required() }),
+    dob: Joi.alternatives().conditional('step', { is: CheckpointStep.PAN, then: Joi.date().required() }),
     redirect: Joi.string().optional(),
-    investment_segments: Joi.alternatives().conditional('step', {
+    segments: Joi.alternatives().conditional('step', {
         is: CheckpointStep.INVESTMENT_SEGMENT,
-        then: Joi.array().items(Joi.string()),
+        then: Joi.array()
+            .items(Joi.string().valid(Object.values(InvestmentSegment)))
+            .required(),
+    }),
+    marital_status: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.USER_DETAIL,
+        then: Joi.string().valid(Object.values(MaritalStatus)).required(),
+    }),
+    father_name: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.USER_DETAIL,
+        then: Joi.string().required(),
+    }),
+    mother_name: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.USER_DETAIL,
+        then: Joi.string().required(),
+    }),
+    annual_income: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.USER_DETAIL,
+        then: Joi.string().valid(Object.values(AnnualIncome)).required(),
+    }),
+    experience: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.USER_DETAIL,
+        then: Joi.string().valid(Object.values(TradingExperience)).required(),
+    }),
+    settlement: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.USER_DETAIL,
+        then: Joi.string().valid(Object.values(AccountSettlement)).required(),
+    }),
+    occupation: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.OCCUPATION,
+        then: Joi.string().required(),
+    }),
+    politically_exposed: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.OCCUPATION,
+        then: Joi.boolean().required(),
     }),
 });
 
