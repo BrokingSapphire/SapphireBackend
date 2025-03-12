@@ -25,4 +25,8 @@ export const env = {
     surepass: {
         apiKey: process.env.SUREPASS_API_KEY || 'key',
     },
+    aws: {
+        region: process.env.AWS_REGION || 'region',
+        s3_bucket: process.env.AWS_S3_BUCKET || 'bucket',
+    },
 };

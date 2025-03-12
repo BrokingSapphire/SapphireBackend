@@ -15,6 +15,8 @@ import { NotNull } from 'kysely';
 import PanService from '@app/services/surepass/pan.service';
 import { CREATED, NO_CONTENT, NOT_ACCEPTABLE, OK } from '@app/utils/httpstatus';
 import { BankVerification, ReversePenyDrop } from '@app/services/surepass/bank-verification';
+import { randomUUID } from 'crypto';
+import { imageUpload, wrappedMulterHandler } from '@app/services/multer-s3.service';
 
 const requestOtp = async (req: Request, res: Response) => {
     const { type, phone, email } = req.body;
@@ -430,7 +432,6 @@ const checkpoint = async (req: Request, res: Response) => {
                     .values({
                         account_no: rpcResponse.data.data.details.account_number,
                         ifsc_code: rpcResponse.data.data.details.ifsc,
-                        micr_code: rpcResponse.data.data.details.micr,
                     })
                     .onConflict((oc) => oc.constraint('UQ_Bank_Account').doNothing())
                     .returning('id')
@@ -477,7 +478,6 @@ const checkpoint = async (req: Request, res: Response) => {
                     .values({
                         account_no: bank.account_number,
                         ifsc_code: bank.ifsc_code,
-                        micr_code: bank.micr_code,
                     })
                     .onConflict((oc) => oc.constraint('UQ_Bank_Account').doNothing())
                     .returning('id')
@@ -495,6 +495,18 @@ const checkpoint = async (req: Request, res: Response) => {
 
             res.status(CREATED).json({ message: 'Bank validation completed' });
         }
+    } else if (step === CheckpointStep.IPV) {
+        const uid = randomUUID();
+
+        await redisClient.set(`signup_ipv:${uid}`, email);
+        await redisClient.expire(`signup_ipv:${uid}`, 10 * 60);
+
+        res.status(OK).json({
+            data: {
+                uid,
+            },
+            message: 'IPV started',
+        });
     } else if (step === CheckpointStep.ADD_NOMINEES) {
         // const { nominees } = req.body;
         // await db.transaction().execute(async (tx) => {
@@ -526,4 +538,59 @@ const checkpoint = async (req: Request, res: Response) => {
     }
 };
 
-export { requestOtp, verifyOtp, checkpoint };
+const ipvImageUpload = wrappedMulterHandler(imageUpload.single('image'));
+const ipvPut = async (req: Request, res: Response) => {
+    const { uid } = req.params;
+
+    if (!req.auth?.email || !req.auth?.phone) {
+        throw new UnauthorizedError('Request cannot be verified!');
+    }
+
+    const { email, phone } = req.auth as JwtType;
+    const value = await redisClient.get(`signup_ipv:${uid}`);
+    if (!value || value !== email) throw new UnauthorizedError('IPV not authorized or expired.');
+
+    let uploadResult;
+    try {
+        uploadResult = await ipvImageUpload(req, res);
+    } catch (e: any) {
+        throw new UnprocessableEntityError(e.message);
+    }
+
+    await db.transaction().execute(async (tx) => {
+        await updateCheckpoint(tx, email, phone, {
+            ipv: uploadResult.file.location,
+        }).execute();
+    });
+
+    await redisClient.del(`signup_ipv:${uid}`);
+    res.status(CREATED).json({
+        message: 'IPV completed',
+    });
+};
+
+const ipvGet = async (req: Request, res: Response) => {
+    if (!req.auth?.email || !req.auth?.phone) {
+        throw new UnauthorizedError('Request cannot be verified!');
+    }
+
+    const { email, phone } = req.auth as JwtType;
+
+    const url = await db.transaction().execute(async (tx) => {
+        const ipv = await tx
+            .selectFrom('signup_checkpoints')
+            .select('ipv')
+            .where('email', '=', email)
+            .executeTakeFirstOrThrow();
+
+        return ipv.ipv;
+    });
+
+    if (url === null) {
+        res.status(NO_CONTENT).json({ message: 'IPV not uploaded' });
+    } else {
+        res.status(OK).json({ data: { url }, message: 'IPV completed.' });
+    }
+};
+
+export { requestOtp, verifyOtp, checkpoint, ipvPut, ipvGet };

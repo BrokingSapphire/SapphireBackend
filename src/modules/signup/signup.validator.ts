@@ -94,7 +94,6 @@ const CheckpointSchema = Joi.object({
         {
             then: Joi.object({
                 account_number: Joi.string().required(),
-                micr_code: Joi.string().required(),
                 ifsc_code: Joi.string().required(),
             }).required(),
         },
