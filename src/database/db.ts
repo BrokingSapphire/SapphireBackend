@@ -46,13 +46,7 @@
 //   })
 //   .catch((error) => {
 //     console.error('Database connection failed:', error);
-//   }); 
-
-
-
-
-
-
+//   });
 
 import { Pool } from 'pg';
 import { Kysely, PostgresDialect } from 'kysely';
@@ -63,37 +57,37 @@ dotenv.config();
 
 // Create pool with proper password handling
 const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: Number(process.env.DB_PORT) || 5432,
-  database: process.env.DB_NAME || 'qrtest',
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'sapphire', // Ensure password is string
-  max: 10
+    host: process.env.DB_HOST,
+    port: Number(process.env.DB_PORT),
+    database: process.env.DB_NAME,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD, // Ensure password is string
+    max: 10,
 });
 
 // Test direct pool connection first
 pool.connect()
-  .then(() => {
-    console.log('PostgreSQL connection pool established successfully');
-  })
-  .catch((err) => {
-    console.error('Error establishing PostgreSQL connection:', err.message);
-  });
+    .then(() => {
+        console.log('PostgreSQL connection pool established successfully');
+    })
+    .catch((err) => {
+        console.error('Error establishing PostgreSQL connection:', err.message);
+    });
 
 const dialect = new PostgresDialect({ pool });
 
 export const db = new Kysely<DB>({
-  dialect,
+    dialect,
 });
 
 // Test the Kysely connection
 db.selectFrom('user_funds')
-  .select('id')
-  .limit(1)
-  .execute()
-  .then(() => {
-    console.log('Kysely database connection successful!');
-  })
-  .catch((error) => {
-    console.error('Kysely database connection failed:', error);
-  });
+    .select('id')
+    .limit(1)
+    .execute()
+    .then(() => {
+        console.log('Kysely database connection successful!');
+    })
+    .catch((error) => {
+        console.error('Kysely database connection failed:', error);
+    });

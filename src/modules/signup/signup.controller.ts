@@ -1,3 +1,5 @@
+// signup.controller.ts
+
 import { Response } from 'express';
 import { Request } from 'express-jwt';
 import redisClient from '@app/services/redis.service';
@@ -9,38 +11,64 @@ import DigiLockerService from '@app/services/surepass/digilocker.service';
 import { sign } from '@app/utils/jwt';
 
 const requestOtp = async (req: Request, res: Response) => {
-    const { type, phone, email } = req.body;
-    if (type === CredentialsType.EMAIL) {
-        const userExists = await db.selectFrom('user').where('email', '=', email).executeTakeFirst();
-        if (userExists) {
-            throw new BadRequestError('Email already exists');
+    try {
+        if (!req.body || Object.keys(req.body).length === 0) {
+            throw new BadRequestError('Request body is required');
         }
 
-        const checkpointExists = await db
-            .selectFrom('signup_checkpoints')
-            .where('email', '=', email)
-            .executeTakeFirst();
-        if (checkpointExists) {
-            throw new BadRequestError('Email already exists');
+        const { type, phone, email } = req.body;
+
+        // Validate required fields
+        if (!type) {
+            throw new BadRequestError('Type is required');
         }
 
-        const emailOtp = new EmailOtpVerification(email);
-        await emailOtp.sendOtp();
-    } else if (type === CredentialsType.PHONE) {
-        const phoneExists = await db.selectFrom('phone_number').where('phone', '=', phone).executeTakeFirst();
-        if (phoneExists) {
-            throw new BadRequestError('Phone number already exists');
+        if (type === CredentialsType.EMAIL && !email) {
+            throw new BadRequestError('Email is required');
         }
 
-        if (!(await redisClient.get(`email-verified:${email}`))) {
-            throw new UnauthorizedError('Email not verified');
+        if (type === CredentialsType.PHONE && !phone) {
+            throw new BadRequestError('Phone is required');
         }
 
-        const phoneOtp = new PhoneOtpVerification(phone);
-        await phoneOtp.sendOtp();
+        if (type === CredentialsType.EMAIL) {
+            const userExists = await db.selectFrom('user').where('email', '=', email).executeTakeFirst();
+            if (userExists) {
+                throw new BadRequestError('Email already exists');
+            }
+
+            const checkpointExists = await db
+                .selectFrom('signup_checkpoints')
+                .where('email', '=', email)
+                .executeTakeFirst();
+            if (checkpointExists) {
+                throw new BadRequestError('Email already exists');
+            }
+
+            const emailOtp = new EmailOtpVerification(email);
+            await emailOtp.sendOtp();
+        } else if (type === CredentialsType.PHONE) {
+            const phoneExists = await db.selectFrom('phone_number').where('phone', '=', phone).executeTakeFirst();
+            if (phoneExists) {
+                throw new BadRequestError('Phone number already exists');
+            }
+
+            if (!(await redisClient.get(`email-verified:${email}`))) {
+                throw new UnauthorizedError('Email not verified');
+            }
+
+            const phoneOtp = new PhoneOtpVerification(phone);
+            await phoneOtp.sendOtp();
+        }
+
+        res.status(200).json({ message: 'OTP sent' });
+    } catch (error) {
+        if (error instanceof BadRequestError) {
+            res.status(400).json({ error: error.message });
+        } else {
+            res.status(500).json({ error: 'Internal server error' });
+        }
     }
-
-    res.status(200).json({ message: 'OTP sent' });
 };
 
 const verifyOtp = async (req: Request, res: Response) => {

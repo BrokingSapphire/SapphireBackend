@@ -1,3 +1,5 @@
+// signup.types.ts
+
 enum CredentialsType {
     EMAIL = 'email',
     PHONE = 'phone',

@@ -1,6 +1,10 @@
+// signup.services.ts
+
 import redisClient from '@app/services/redis.service';
 import logger from '@app/logger';
 import { UnauthorizedError } from '@app/apiError';
+import nodemailer from 'nodemailer';
+import axios from 'axios';
 
 abstract class OtpVerification {
     protected id: string; // Unique identifier (email or phone)
@@ -107,9 +111,45 @@ class EmailOtpVerification extends OtpVerification {
     public async sendOtp(): Promise<void> {
         try {
             const otp = await this.storeOtp();
-            // Logic to send the OTP to the user's email
-            logger.info(`Sending OTP ${otp} to ${this.id}`);
-            // Here you would integrate with an email service to send the OTP
+
+            // Validate email format
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(this.id)) {
+                logger.error(`Invalid email format: ${this.id}`);
+                throw new Error('Invalid email format');
+            }
+
+            // Setup nodemailer
+            const transporter = nodemailer.createTransport({
+                host: 'smtp.gmail.com',
+                port: 587,
+                secure: false,
+                auth: {
+                    user: process.env.EMAIL_USER || 'noreply@sapphirebroking.com',
+                    pass: process.env.EMAIL_PASSWORD || 'your-email-password',
+                },
+            });
+
+            // Email content - simple text version only
+            const mailOptions = {
+                from: process.env.EMAIL_FROM || 'Sapphire Broking <noreply@sapphirebroking.com>',
+                to: this.id,
+                subject: 'Your Verification Code - Sapphire Broking',
+                text: `Welcome to Sapphire Broking!
+                
+Your verification code is: ${otp}
+
+This code will expire in 10 minutes. Do not share this code with anyone.
+
+If you did not request this code, please ignore this email.
+
+Regards,
+The Sapphire Broking Team`,
+            };
+
+            // Send email
+            await transporter.sendMail(mailOptions);
+            logger.info(`OTP ${otp} sent via email to ${this.id}`);
         } catch (error) {
             logger.error(`Failed to send OTP to email ${this.id}:`, error);
             throw new Error('Failed to send OTP via email');
@@ -128,9 +168,44 @@ class PhoneOtpVerification extends OtpVerification {
     public async sendOtp(): Promise<void> {
         try {
             const otp = await this.storeOtp();
-            // Logic to send the OTP to the user's phone
-            logger.info(`Sending OTP ${otp} to ${this.id}`);
-            // Here you would integrate with an SMS service to send the OTP
+
+            // Format mobile number (remove country code if needed)
+            let mobileNumber = this.id;
+            if (mobileNumber.startsWith('+91')) {
+                mobileNumber = mobileNumber.substring(3);
+            } else if (mobileNumber.startsWith('91') && mobileNumber.length > 10) {
+                mobileNumber = mobileNumber.substring(2);
+            }
+
+            // Validate mobile number format
+            const mobileRegex = /^[1-9]\d{9}$/;
+            if (!mobileRegex.test(mobileNumber)) {
+                logger.error(`Invalid mobile number format: ${mobileNumber}`);
+                throw new Error('Invalid mobile number format');
+            }
+
+            // Construct message
+            const message = `Welcome to Sapphire! Your OTP for signup is ${otp}. Do not share this OTP with anyone. It is valid for 10 minutes. - Sapphire Broking`;
+
+            // Send SMS using the API
+            const apiUrl = `http://mobiglitz.com/vb/apikey.php`;
+            const params = new URLSearchParams({
+                apikey: process.env.MOBIGLITZ_API_KEY || 'key',
+                senderid: process.env.MOBIGLITZ_SENDER_ID || 'SPHRBK',
+                number: mobileNumber,
+                message: message,
+                templateid: '1007898245699377543', // signup_otp template ID
+            });
+
+            const response = await axios.get(`${apiUrl}?${params.toString()}`);
+            const result = response.data;
+
+            if (!result || result.error) {
+                logger.error(`Failed to send OTP via SMS: ${JSON.stringify(result)}`);
+                throw new Error(result?.error || 'Failed to send SMS');
+            }
+
+            logger.info(`OTP ${otp} sent successfully to ${mobileNumber}`);
         } catch (error) {
             logger.error(`Failed to send OTP to phone ${this.id}:`, error);
             throw new Error('Failed to send OTP via SMS');

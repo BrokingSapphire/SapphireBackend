@@ -1,3 +1,5 @@
+// signup.routes.ts
+
 import { Router } from 'express';
 import { CheckpointSchema, RequestOtpSchema, VerifyOtpSchema } from './signup.validator';
 import { validate } from '@app/middlewares';

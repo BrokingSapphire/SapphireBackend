@@ -31,7 +31,7 @@
 //   wsManager.on('funds:update', (ws: WebSocket, data: any) => {
 //     try {
 //       const { userId } = data;
-      
+
 //       // Broadcast funds update to specific user
 //       wsManager.sendToUser(userId, 'funds:updated', {
 //         success: true,
@@ -52,7 +52,7 @@
 //   wsManager.on('funds:balance:notify', (ws: WebSocket, data: any) => {
 //     try {
 //       const { userId, balance, type } = data;
-      
+
 //       wsManager.sendToUser(userId, 'funds:balance:notification', {
 //         success: true,
 //         data: {
@@ -71,8 +71,7 @@
 //       }));
 //     }
 //   });
-// }; 
-
+// };
 
 // import { WebSocket } from 'ws';
 // import { wsManager } from '../../lib/websocket/wsManager';
@@ -161,27 +160,6 @@
 // // Create and export a singleton instance
 // export const fundsWsHandler = new FundsWebSocketHandler();
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // import { WebSocket } from 'ws';
 // import { wsManager } from '../../lib/websocket/wsManager';
 // import logger from '@app/logger';
@@ -269,10 +247,6 @@
 
 // // Create and export a singleton instance
 // export const fundsWsHandler = new FundsWebSocketHandler();
-
-
-
-
 
 // import { WebSocket } from 'ws';
 // import { wsManager } from '../../lib/websocket/wsManager';
@@ -382,18 +356,7 @@
 // // Create and export a singleton instance
 // export const fundsWsHandler = new FundsWebSocketHandler();
 
-
-
-
-
-
-
-
-
-
-
 // funds.ws.ts
-
 
 import { WebSocket } from 'ws';
 import { wsManager } from '../../lib/websocket/wsManager';
@@ -404,100 +367,100 @@ import { FundTransaction, WithdrawalRequest } from './funds.types';
  * Handles all WebSocket events related to funds operations
  */
 export class FundsWebSocketHandler {
-  /**
-   * Initialize WebSocket event listeners for funds operations
-   */
-  initialize(): void {
-    this.setupEventListeners();
-    logger.info('Funds WebSocket handler initialized');
-  }
-
-  /**
-   * Set up event listeners for funds-related WebSocket events
-   */
-  private setupEventListeners(): void {
-    // Example: If you need to handle any incoming fund-specific events
-    wsManager.on('FUND_DEPOSIT_REQUEST', this.handleDepositRequest);
-    wsManager.on('FUND_WITHDRAWAL_REQUEST', this.handleWithdrawalRequest);
-  }
-
-  /**
-   * Handle deposit request events from clients (if needed)
-   */
-  private handleDepositRequest(ws: WebSocket, data: any): void {
-    // Example handler - implement if needed
-    logger.info('Received deposit request via WebSocket', data);
-    // Process the deposit request
-  }
-
-  /**
-   * Handle withdrawal request events from clients (if needed)
-   */
-  private handleWithdrawalRequest(ws: WebSocket, data: any): void {
-    // Example handler - implement if needed
-    logger.info('Received withdrawal request via WebSocket', data);
-    // Process the withdrawal request
-  }
-
-  /**
-   * Notify user about fund deposit being processed
-   */
-  notifyFundDepositCompleted(userId: string, transactionData: Partial<FundTransaction>): void {
-    try {
-      wsManager.sendToUser(userId, 'FUND_DEPOSIT_COMPLETED', transactionData);
-      logger.debug(`Notified user ${userId} about completed deposit`, { transactionId: transactionData.id });
-    } catch (error) {
-      logger.error(`Error notifying user ${userId} about deposit completion:`, error);
+    /**
+     * Initialize WebSocket event listeners for funds operations
+     */
+    initialize(): void {
+        this.setupEventListeners();
+        logger.info('Funds WebSocket handler initialized');
     }
-  }
 
-  /**
-   * Notify user about fund withdrawal being initiated
-   */
-  notifyFundWithdrawalInitiated(userId: string, transactionData: Partial<FundTransaction>): void {
-    try {
-      wsManager.sendToUser(userId, 'FUND_WITHDRAWAL_INITIATED', transactionData);
-      logger.debug(`Notified user ${userId} about initiated withdrawal`, { transactionId: transactionData.id });
-    } catch (error) {
-      logger.error(`Error notifying user ${userId} about withdrawal initiation:`, error);
+    /**
+     * Set up event listeners for funds-related WebSocket events
+     */
+    private setupEventListeners(): void {
+        // Example: If you need to handle any incoming fund-specific events
+        wsManager.on('FUND_DEPOSIT_REQUEST', this.handleDepositRequest);
+        wsManager.on('FUND_WITHDRAWAL_REQUEST', this.handleWithdrawalRequest);
     }
-  }
 
-  /**
-   * Notify user about fund withdrawal being completed
-   */
-  notifyFundWithdrawalCompleted(userId: string, transactionData: Partial<FundTransaction>): void {
-    try {
-      wsManager.sendToUser(userId, 'FUND_WITHDRAWAL_COMPLETED', transactionData);
-      logger.debug(`Notified user ${userId} about completed withdrawal`, { transactionId: transactionData.id });
-    } catch (error) {
-      logger.error(`Error notifying user ${userId} about withdrawal completion:`, error);
+    /**
+     * Handle deposit request events from clients (if needed)
+     */
+    private handleDepositRequest(ws: WebSocket, data: any): void {
+        // Example handler - implement if needed
+        logger.info('Received deposit request via WebSocket', data);
+        // Process the deposit request
     }
-  }
 
-  /**
-   * Notify user about scheduled withdrawal
-   */
-  notifyWithdrawalScheduled(userId: string, data: WithdrawalRequest): void {
-    try {
-      wsManager.sendToUser(userId, 'WITHDRAWAL_SCHEDULED', data);
-      logger.debug(`Notified user ${userId} about scheduled withdrawal`, { transactionId: data.id });
-    } catch (error) {
-      logger.error(`Error notifying user ${userId} about scheduled withdrawal:`, error);
+    /**
+     * Handle withdrawal request events from clients (if needed)
+     */
+    private handleWithdrawalRequest(ws: WebSocket, data: any): void {
+        // Example handler - implement if needed
+        logger.info('Received withdrawal request via WebSocket', data);
+        // Process the withdrawal request
     }
-  }
 
-  /**
-   * Notify user about withdrawal completion
-   */
-  notifyWithdrawalCompleted(userId: string, data: Partial<FundTransaction>): void {
-    try {
-      wsManager.sendToUser(userId, 'WITHDRAWAL_COMPLETED', data);
-      logger.debug(`Notified user ${userId} about completed withdrawal`, { transactionId: data.id });
-    } catch (error) {
-      logger.error(`Error notifying user ${userId} about withdrawal completion:`, error);
+    /**
+     * Notify user about fund deposit being processed
+     */
+    notifyFundDepositCompleted(userId: string, transactionData: Partial<FundTransaction>): void {
+        try {
+            wsManager.sendToUser(userId, 'FUND_DEPOSIT_COMPLETED', transactionData);
+            logger.debug(`Notified user ${userId} about completed deposit`, { transactionId: transactionData.id });
+        } catch (error) {
+            logger.error(`Error notifying user ${userId} about deposit completion:`, error);
+        }
     }
-  }
+
+    /**
+     * Notify user about fund withdrawal being initiated
+     */
+    notifyFundWithdrawalInitiated(userId: string, transactionData: Partial<FundTransaction>): void {
+        try {
+            wsManager.sendToUser(userId, 'FUND_WITHDRAWAL_INITIATED', transactionData);
+            logger.debug(`Notified user ${userId} about initiated withdrawal`, { transactionId: transactionData.id });
+        } catch (error) {
+            logger.error(`Error notifying user ${userId} about withdrawal initiation:`, error);
+        }
+    }
+
+    /**
+     * Notify user about fund withdrawal being completed
+     */
+    notifyFundWithdrawalCompleted(userId: string, transactionData: Partial<FundTransaction>): void {
+        try {
+            wsManager.sendToUser(userId, 'FUND_WITHDRAWAL_COMPLETED', transactionData);
+            logger.debug(`Notified user ${userId} about completed withdrawal`, { transactionId: transactionData.id });
+        } catch (error) {
+            logger.error(`Error notifying user ${userId} about withdrawal completion:`, error);
+        }
+    }
+
+    /**
+     * Notify user about scheduled withdrawal
+     */
+    notifyWithdrawalScheduled(userId: string, data: WithdrawalRequest): void {
+        try {
+            wsManager.sendToUser(userId, 'WITHDRAWAL_SCHEDULED', data);
+            logger.debug(`Notified user ${userId} about scheduled withdrawal`, { transactionId: data.id });
+        } catch (error) {
+            logger.error(`Error notifying user ${userId} about scheduled withdrawal:`, error);
+        }
+    }
+
+    /**
+     * Notify user about withdrawal completion
+     */
+    notifyWithdrawalCompleted(userId: string, data: Partial<FundTransaction>): void {
+        try {
+            wsManager.sendToUser(userId, 'WITHDRAWAL_COMPLETED', data);
+            logger.debug(`Notified user ${userId} about completed withdrawal`, { transactionId: data.id });
+        } catch (error) {
+            logger.error(`Error notifying user ${userId} about withdrawal completion:`, error);
+        }
+    }
 }
 
 // Create and export a singleton instance
