@@ -7,6 +7,7 @@ import { logRoutes, errorLogger, errorHandler, notFoundErrorHandler } from '@app
 import expressWs from 'express-ws';
 import { initializeRedis, closeRedisConnection } from '@app/services/redis.service';
 import { setupSwagger } from '@app/swagger';
+import router from '@app/modules';
 
 const app = express();
 
@@ -18,6 +19,8 @@ app.use(cookieParser());
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+app.use(router);
 
 // Setup Swagger before routes
 setupSwagger(app);
