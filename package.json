@@ -20,6 +20,7 @@
   "dependencies": {
     "@types/multer-s3": "^3.0.3",
     "axios": "^1.8.1",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "csurf": "^1.11.0",
     "dotenv": "^16.4.7",
@@ -31,6 +32,7 @@
     "helmet": "^8.0.0",
     "i18n-iso-countries": "^7.14.0",
     "joi": "^17.13.3",
+    "joi-to-swagger": "^6.2.0",
     "jsonwebtoken": "^9.0.2",
     "kysely": "^0.27.5",
     "multer": "^1.4.5-lts.1",
@@ -38,6 +40,7 @@
     "pg": "^8.13.3",
     "redis": "^4.7.0",
     "stoppable": "^1.1.0",
+    "swagger-ui-express": "^5.0.1",
     "winston": "^3.17.0"
   },
   "devDependencies": {
@@ -49,6 +52,7 @@
     "@eslint/js": "^9.21.0",
     "@jest/globals": "^29.7.0",
     "@types/axios": "^0.14.4",
+    "@types/cookie-parser": "^1.4.8",
     "@types/cors": "^2.8.17",
     "@types/csurf": "^1.11.5",
     "@types/express": "^5.0.0",
@@ -66,6 +70,7 @@
     "@types/redis": "^4.0.11",
     "@types/stoppable": "^1.1.3",
     "@types/supertest": "^6.0.2",
+    "@types/swagger-ui-express": "^4.1.8",
     "@types/winston": "^2.4.4",
     "babel-jest": "^29.7.0",
     "husky": "^9.1.7",
