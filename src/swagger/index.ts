@@ -1,8 +1,9 @@
-import { Express } from 'express';
+import { Router } from 'express';
 import swaggerUi from 'swagger-ui-express';
 import j2s from 'joi-to-swagger';
 import { RequestOtpSchema, VerifyOtpSchema } from '@app/modules/signup/signup.validator';
 import { CheckpointStep, ValidationType } from '@app/modules/signup/signup.types';
+import { env } from '@app/env';
 
 const { swagger: requestOtpSwagger } = j2s(RequestOtpSchema);
 const { swagger: verifyOtpSwagger } = j2s(VerifyOtpSchema);
@@ -16,7 +17,7 @@ const swaggerDocument = {
     },
     servers: [
         {
-            url: '/api/v1',
+            url: `${env.apiPath}`,
             description: 'API v1',
         },
     ],
@@ -284,6 +285,8 @@ const swaggerDocument = {
     },
 };
 
-export function setupSwagger(app: Express): void {
-    app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
-}
+const router = Router();
+
+router.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
+export default router;

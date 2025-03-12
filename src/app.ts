@@ -6,7 +6,6 @@ import cookieParser from 'cookie-parser';
 import { logRoutes, errorLogger, errorHandler, notFoundErrorHandler } from '@app/middlewares';
 import expressWs from 'express-ws';
 import { initializeRedis, closeRedisConnection } from '@app/services/redis.service';
-import { setupSwagger } from '@app/swagger';
 
 const app = express();
 
@@ -18,9 +17,6 @@ app.use(cookieParser());
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Setup Swagger before routes
-setupSwagger(app);
 
 app.use(logRoutes);
 app.use(errorLogger);
