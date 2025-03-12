@@ -2,7 +2,7 @@ import { Express } from 'express';
 import swaggerUi from 'swagger-ui-express';
 import j2s from 'joi-to-swagger';
 import { RequestOtpSchema, VerifyOtpSchema } from '@app/modules/signup/signup.validator';
-import { CheckpointStep, CredentialsType, ValidationType } from '@app/modules/signup/signup.types';
+import { CheckpointStep, ValidationType } from '@app/modules/signup/signup.types';
 
 const { swagger: requestOtpSwagger } = j2s(RequestOtpSchema);
 const { swagger: verifyOtpSwagger } = j2s(VerifyOtpSchema);
@@ -148,7 +148,6 @@ const swaggerDocument = {
                                         properties: {
                                             account_number: { type: 'string' },
                                             ifsc_code: { type: 'string' },
-                                            micr_code: { type: 'string' },
                                         },
                                     },
                                 },
