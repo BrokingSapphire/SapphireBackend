@@ -9,14 +9,24 @@ import { db } from '@app/database';
 import { CredentialsType, CheckpointStep } from './signup.types';
 import DigiLockerService from '@app/services/surepass/digilocker.service';
 import { sign } from '@app/utils/jwt';
+import logger from '@app/logger';
 
 const requestOtp = async (req: Request, res: Response) => {
     try {
+        logger.info('Received OTP request with body:', JSON.stringify(req.body));
+        console.log("Raw Request Body:", req.body);
+        logger.info('Headers:', JSON.stringify(req.headers));
+
+        logger.info('Request body check passed');
+
         if (!req.body || Object.keys(req.body).length === 0) {
+            logger.error('Empty request body received');
             throw new BadRequestError('Request body is required');
         }
 
         const { type, phone, email } = req.body;
+
+        logger.info('Request body:', req.body);
 
         // Validate required fields
         if (!type) {
@@ -27,15 +37,24 @@ const requestOtp = async (req: Request, res: Response) => {
             throw new BadRequestError('Email is required');
         }
 
+        logger.info('Type:', type);
+        logger.info('Phone:', phone);
+        logger.info('Email:', email);   
+
         if (type === CredentialsType.PHONE && !phone) {
             throw new BadRequestError('Phone is required');
         }
 
+        logger.info('Phone:', phone);
+
         if (type === CredentialsType.EMAIL) {
+            logger.info('Processing email OTP for:', email);
             const userExists = await db.selectFrom('user').where('email', '=', email).executeTakeFirst();
             if (userExists) {
                 throw new BadRequestError('Email already exists');
             }
+
+            logger.info('User exists:', userExists);
 
             const checkpointExists = await db
                 .selectFrom('signup_checkpoints')
@@ -45,13 +64,18 @@ const requestOtp = async (req: Request, res: Response) => {
                 throw new BadRequestError('Email already exists');
             }
 
+            logger.info('Checkpoint exists:', checkpointExists);
+
             const emailOtp = new EmailOtpVerification(email);
             await emailOtp.sendOtp();
-        } else if (type === CredentialsType.PHONE) {
+        } 
+            else if (type === CredentialsType.PHONE) {
             const phoneExists = await db.selectFrom('phone_number').where('phone', '=', phone).executeTakeFirst();
             if (phoneExists) {
                 throw new BadRequestError('Phone number already exists');
             }
+
+            logger.info('Phone exists:', phoneExists);
 
             if (!(await redisClient.get(`email-verified:${email}`))) {
                 throw new UnauthorizedError('Email not verified');
@@ -61,8 +85,11 @@ const requestOtp = async (req: Request, res: Response) => {
             await phoneOtp.sendOtp();
         }
 
+        logger.info('OTP sent successfully');
+
         res.status(200).json({ message: 'OTP sent' });
     } catch (error) {
+        logger.error('Error in requestOtp:', error);
         if (error instanceof BadRequestError) {
             res.status(400).json({ error: error.message });
         } else {

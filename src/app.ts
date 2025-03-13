@@ -1,3 +1,5 @@
+// app.ts
+
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
@@ -16,6 +18,12 @@ app.use(cors());
 // Test route
 app.get('/test', (req, res) => {
     res.json({ message: 'API is working!' });
+});
+
+// Add this to your app.ts before your other routes
+app.post('/test-json', (req, res) => {
+    console.log('Request body:', req.body);
+    res.json({ received: req.body });
 });
 
 // Mount routes
