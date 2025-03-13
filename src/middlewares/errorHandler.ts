@@ -2,12 +2,14 @@ import { DatabaseError } from 'pg';
 import { Request, Response, NextFunction } from 'express';
 import logger from '@app/logger';
 import { APIError } from '@app/apiError';
-import { BAD_REQUEST, INTERNAL_SERVER_ERROR } from '@app/utils/httpstatus';
+import { BAD_REQUEST, INTERNAL_SERVER_ERROR, UNPROCESSABLE_ENTITY } from '@app/utils/httpstatus';
+import { ValidationError } from 'joi';
 
 interface ErrorResponse {
     error: {
         code: number;
         message: string;
+        details?: string[];
     };
 }
 
@@ -21,6 +23,22 @@ interface ErrorResponse {
  */
 const errorHandler = (error: unknown, _req: Request, res: Response<ErrorResponse>, next: NextFunction): void => {
     logger.error(error);
+
+    if (res.headersSent) {
+        return next(error);
+    }
+
+    // catch joi validation error
+    if (error instanceof ValidationError) {
+        res.status(UNPROCESSABLE_ENTITY).json({
+            error: {
+                code: UNPROCESSABLE_ENTITY,
+                message: 'Validation failed',
+                details: error.details.map((detail) => detail.message),
+            },
+        });
+        return;
+    }
 
     // catch api error
     if (error instanceof APIError) {

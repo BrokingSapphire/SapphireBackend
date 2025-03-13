@@ -1,10 +1,6 @@
 import winston from 'winston';
 import { env } from '@app/env';
 
-interface PackageJson {
-    name: string;
-}
-
 // Log formatter function
 const logFormatter = winston.format.printf((info) => {
     const { timestamp, level, stack, message } = info;

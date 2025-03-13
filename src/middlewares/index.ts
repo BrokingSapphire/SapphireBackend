@@ -1,7 +1,8 @@
 import logRoutes from '@app/middlewares/logRoutes';
-import errorLogger from '@app/middlewares/errorLogger';
+import logError from '@app/middlewares/errorLogger';
 import errorHandler from '@app/middlewares/errorHandler';
 import notFoundErrorHandler from '@app/middlewares/notFoundError';
 import validate from '@app/middlewares/validator';
+import { routeLogger, errorLogger, responseCapture } from './morgan';
 
-export { logRoutes, errorLogger, errorHandler, notFoundErrorHandler, validate };
+export { logRoutes, logError, errorHandler, notFoundErrorHandler, validate, routeLogger, errorLogger, responseCapture };
