@@ -1,6 +1,7 @@
 import { db } from '@app/database';
 import logger from '@app/logger';
 import { Server } from 'http';
+import { closeRedisConnection } from '@app/services/redis.service';
 /**
  * Close the server and database connections and exit the process.
  * @param {import('http').Server} server - The server object to close.
@@ -8,9 +9,10 @@ import { Server } from 'http';
  */
 const gracefulShutdown = async (server: Server) => {
     try {
+        await closeRedisConnection();
         await db.destroy();
         logger.info('Closed database connection!');
-        await server.close();
+        server.close();
         process.exit();
     } catch (error: any) {
         logger.error(error.message);

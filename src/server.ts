@@ -5,6 +5,7 @@ import normalizePort from '@app/utils/normalize-port';
 import gracefulShutdown from '@app/utils/graceful-shutdown';
 import logger from '@app/logger';
 import { env } from '@app/env';
+import { initializeRedis } from '@app/services/redis.service';
 
 /**
  * Get port from environment and store in Express.
@@ -50,12 +51,14 @@ function onError(error: NodeJS.ErrnoException): void {
 /**
  * Event listener for HTTP server "listening" event.
  */
-function onListening(): void {
+async function onListening() {
     const addr = server.address();
     if (!addr) return;
 
     const bind = typeof addr === 'string' ? `pipe ${addr}` : `port ${addr.port}`;
     logger.info(`Listening on ${bind} in ${env.env} environment`);
+
+    await initializeRedis();
 }
 
 server.on('error', onError);

@@ -6,7 +6,6 @@ import csurf from 'csurf';
 import bodyParser from 'body-parser';
 import { routeLogger, errorLogger, responseCapture, errorHandler } from '@app/middlewares';
 import expressWs from 'express-ws';
-import { initializeRedis, closeRedisConnection } from '@app/services/redis.service';
 import { setupSwagger } from '@app/swagger';
 import router from '@app/modules';
 import { env } from './env';
@@ -36,13 +35,5 @@ logger.info(`API routes registered at ${env.apiPath}`);
 // Error handling
 app.use(errorHandler);
 app.use(csurf());
-
-app.on('listening', async () => {
-    await initializeRedis();
-});
-
-app.on('close', async () => {
-    await closeRedisConnection();
-});
 
 export default app;
