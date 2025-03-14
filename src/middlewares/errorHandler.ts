@@ -28,18 +28,6 @@ const errorHandler = (error: unknown, _req: Request, res: Response<ErrorResponse
         return next(error);
     }
 
-    // catch joi validation error
-    if (error instanceof ValidationError) {
-        res.status(UNPROCESSABLE_ENTITY).json({
-            error: {
-                code: UNPROCESSABLE_ENTITY,
-                message: 'Validation failed',
-                details: error.details.map((detail) => detail.message),
-            },
-        });
-        return;
-    }
-
     // catch api error
     if (error instanceof APIError) {
         res.status(error.status).json({
