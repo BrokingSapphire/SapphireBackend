@@ -98,7 +98,7 @@ const checkpoint = async (req: Request, res: Response) => {
 
         res.status(CREATED).json({ message: 'Credentials saved' });
     } else if (step === CheckpointStep.PAN) {
-        const { panNumber, dob } = req.body;
+        const { panNumber } = req.body;
 
         const panService = new PanService();
         let panResponse;
@@ -123,10 +123,6 @@ const checkpoint = async (req: Request, res: Response) => {
 
         if (panResponse.data.data.phone_number && panResponse.data.data.phone_number !== phone) {
             throw new UnprocessableEntityError('Phone does not match.');
-        }
-
-        if (new Date(panResponse.data.data.dob) !== new Date(dob)) {
-            throw new UnprocessableEntityError('DOB does not match.');
         }
 
         await db.transaction().execute(async (tx) => {
@@ -163,7 +159,7 @@ const checkpoint = async (req: Request, res: Response) => {
 
             await updateCheckpoint(tx, email, phone, {
                 name: nameId,
-                dob: new Date(dob),
+                dob: new Date(panResponse.data.data.dob),
                 pan_id: panId.id,
             }).execute();
         });

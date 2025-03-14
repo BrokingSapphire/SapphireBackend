@@ -49,7 +49,6 @@ const CheckpointSchema = Joi.object({
         then: Joi.string().regex(PHONE_REGEX).required(),
     }),
     pan_number: Joi.alternatives().conditional('step', { is: CheckpointStep.PAN, then: Joi.string().required() }),
-    dob: Joi.alternatives().conditional('step', { is: CheckpointStep.PAN, then: Joi.date().required() }),
     redirect: Joi.string().optional(),
     segments: Joi.alternatives().conditional('step', {
         is: CheckpointStep.INVESTMENT_SEGMENT,
