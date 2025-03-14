@@ -9,8 +9,8 @@ import {
     AccountSettlement,
     ValidationType,
 } from './signup.types';
+import { OTP_LENGTH } from './signup.services';
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_REGEX = /^[1-9]\d{9}$/;
 
 const RequestOtpSchema = Joi.object({
@@ -21,19 +21,19 @@ const RequestOtpSchema = Joi.object({
         is: CredentialsType.PHONE,
         then: Joi.string().regex(PHONE_REGEX).required(),
     }),
-    email: Joi.string().regex(EMAIL_REGEX).required(),
+    email: Joi.string().email().required(),
 });
 
 const VerifyOtpSchema = Joi.object({
     type: Joi.string()
         .valid(...Object.values(CredentialsType))
         .required(),
-    email: Joi.string().regex(EMAIL_REGEX).required(),
+    email: Joi.string().email().required(),
     phone: Joi.alternatives().conditional('type', {
         is: CredentialsType.PHONE,
         then: Joi.string().regex(PHONE_REGEX).required(),
     }),
-    otp: Joi.string().required(),
+    otp: Joi.string().length(OTP_LENGTH).required(),
 });
 
 const CheckpointSchema = Joi.object({
@@ -42,13 +42,16 @@ const CheckpointSchema = Joi.object({
         .required(),
     email: Joi.alternatives().conditional('step', {
         is: CheckpointStep.CREDENTIALS,
-        then: Joi.string().regex(EMAIL_REGEX).required(),
+        then: Joi.string().email().required(),
     }),
     phone: Joi.alternatives().conditional('step', {
         is: CheckpointStep.CREDENTIALS,
         then: Joi.string().regex(PHONE_REGEX).required(),
     }),
-    pan_number: Joi.alternatives().conditional('step', { is: CheckpointStep.PAN, then: Joi.string().required() }),
+    pan_number: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.PAN,
+        then: Joi.string().length(10).required(),
+    }),
     redirect: Joi.string().optional(),
     segments: Joi.alternatives().conditional('step', {
         is: CheckpointStep.INVESTMENT_SEGMENT,

@@ -5,6 +5,8 @@ import { env } from '@app/env';
 import transporter from '@app/services/email.service';
 import smsService from '@app/services/sms.service';
 
+export const OTP_LENGTH = 6;
+
 abstract class OtpVerification {
     protected id: string; // Unique identifier (email or phone)
     protected otpExpiry: number = 10 * 60; // 10 minutes in seconds
@@ -17,8 +19,10 @@ abstract class OtpVerification {
      * Generates a random 6-digit OTP
      */
     private generateOtp(): string {
-        // Generate a 6-digit OTP
-        return Math.floor(100000 + Math.random() * 900000).toString();
+        // Generate OTP with specified length
+        const min = Math.pow(10, OTP_LENGTH - 1);
+        const max = Math.pow(10, OTP_LENGTH) - 1;
+        return Math.floor(min + Math.random() * (max - min)).toString();
     }
 
     /**
