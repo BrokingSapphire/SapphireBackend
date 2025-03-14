@@ -4,15 +4,7 @@ import { Kysely, PostgresDialect } from 'kysely';
 import { env } from '@app/env';
 
 const dialect = new PostgresDialect({
-    pool: new Pool({
-        database: env.db.name,
-        host: env.db.host,
-        user: env.db.user,
-        port: Number(env.db.port),
-        password: env.db.password,
-        max: 10,
-    }),
-    // pool: new Pool({ connectionString: `postgres://${env.db.user}:${env.db.password}@${env.db.host}:${env.db.port}/${env.db.name}` }),
+    pool: new Pool({ connectionString: env.database }),
 });
 
 // Database interface is passed to Kysely's constructor, and from now on, Kysely
