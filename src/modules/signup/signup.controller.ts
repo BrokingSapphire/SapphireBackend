@@ -4,7 +4,7 @@ import redisClient from '@app/services/redis.service';
 import { EmailOtpVerification, PhoneOtpVerification } from './signup.services';
 import { BadRequestError, NotFoundError, UnauthorizedError, UnprocessableEntityError } from '@app/apiError';
 import { db } from '@app/database';
-import { JwtType, CredentialsType, CheckpointStep, ValidationType } from './signup.types';
+import { CheckpointStep, CredentialsType, JwtType, ValidationType } from './signup.types';
 import DigiLockerService from '@app/services/surepass/digilocker.service';
 import AadhaarXMLParser from '@app/utils/aadhaar-xml.parser';
 import { sign } from '@app/utils/jwt';

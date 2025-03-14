@@ -16,33 +16,6 @@ abstract class OtpVerification {
     }
 
     /**
-     * Generates a random 6-digit OTP
-     */
-    private generateOtp(): string {
-        // Generate OTP with specified length
-        const min = Math.pow(10, OTP_LENGTH - 1);
-        const max = Math.pow(10, OTP_LENGTH) - 1;
-        return Math.floor(min + Math.random() * (max - min)).toString();
-    }
-
-    /**
-     * Stores OTP in Redis with expiration
-     */
-    protected async storeOtp(): Promise<string> {
-        const otp = this.generateOtp();
-        const key = `otp:${this.id}`;
-
-        try {
-            await redisClient.set(key, otp);
-            await redisClient.expire(key, this.otpExpiry);
-            return otp;
-        } catch (error) {
-            logger.error('Error storing OTP in Redis:', error);
-            throw new Error('Failed to generate OTP');
-        }
-    }
-
-    /**
      * Send OTP to the user - to be implemented by subclasses
      */
     public abstract sendOtp(): Promise<void>;
@@ -95,6 +68,33 @@ abstract class OtpVerification {
             logger.debug('Error getting OTP TTL:', error);
             return 0;
         }
+    }
+
+    /**
+     * Stores OTP in Redis with expiration
+     */
+    protected async storeOtp(): Promise<string> {
+        const otp = this.generateOtp();
+        const key = `otp:${this.id}`;
+
+        try {
+            await redisClient.set(key, otp);
+            await redisClient.expire(key, this.otpExpiry);
+            return otp;
+        } catch (error) {
+            logger.error('Error storing OTP in Redis:', error);
+            throw new Error('Failed to generate OTP');
+        }
+    }
+
+    /**
+     * Generates a random 6-digit OTP
+     */
+    private generateOtp(): string {
+        // Generate OTP with specified length
+        const min = Math.pow(10, OTP_LENGTH - 1);
+        const max = Math.pow(10, OTP_LENGTH) - 1;
+        return Math.floor(min + Math.random() * (max - min)).toString();
     }
 }
 

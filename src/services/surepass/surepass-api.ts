@@ -4,8 +4,8 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 const BASE_URL: string = 'https://kyc-api.surepass.io/api/v1';
 
 abstract class SurepassApi {
-    private readonly apiKey: string;
     protected readonly axiosInstance: AxiosInstance;
+    private readonly apiKey: string;
 
     protected constructor(subPath: string) {
         this.apiKey = env.surepass.apiKey;

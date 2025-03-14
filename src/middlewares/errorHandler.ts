@@ -1,9 +1,8 @@
 import { DatabaseError } from 'pg';
-import { Request, Response, NextFunction } from 'express';
+import { NextFunction, Request, Response } from 'express';
 import logger from '@app/logger';
 import { APIError } from '@app/apiError';
-import { BAD_REQUEST, INTERNAL_SERVER_ERROR, UNPROCESSABLE_ENTITY } from '@app/utils/httpstatus';
-import { ValidationError } from 'joi';
+import { BAD_REQUEST, INTERNAL_SERVER_ERROR } from '@app/utils/httpstatus';
 
 interface ErrorResponse {
     error: {

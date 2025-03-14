@@ -1,6 +1,7 @@
-import { WebSocket, RawData } from 'ws';
+import { RawData, WebSocket } from 'ws';
 import { Request } from 'express';
 import logger from '@app/logger';
+
 /**
  * WebSocket route for handling signup process
  * Provides real-time updates on signup progress

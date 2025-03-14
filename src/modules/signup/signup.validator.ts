@@ -1,17 +1,18 @@
 import Joi from 'joi';
 import {
-    CredentialsType,
+    AccountSettlement,
+    AnnualIncome,
     CheckpointStep,
+    CredentialsType,
     InvestmentSegment,
     MaritalStatus,
-    AnnualIncome,
     TradingExperience,
-    AccountSettlement,
     ValidationType,
 } from './signup.types';
 import { OTP_LENGTH } from './signup.services';
 
-const PHONE_REGEX = /^[1-9]\d{9}$/;
+const PHONE_REGEX: RegExp = /^[1-9]\d{9}$/;
+const PAN_REGEX: RegExp = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 
 const RequestOtpSchema = Joi.object({
     type: Joi.string()
@@ -50,7 +51,7 @@ const CheckpointSchema = Joi.object({
     }),
     pan_number: Joi.alternatives().conditional('step', {
         is: CheckpointStep.PAN,
-        then: Joi.string().length(10).required(),
+        then: Joi.string().length(10).regex(PAN_REGEX).required(),
     }),
     redirect: Joi.string().optional(),
     segments: Joi.alternatives().conditional('step', {

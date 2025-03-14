@@ -4,7 +4,7 @@ import helmet from 'helmet';
 import cors from 'cors';
 import csurf from 'csurf';
 import bodyParser from 'body-parser';
-import { routeLogger, errorLogger, responseCapture, errorHandler } from '@app/middlewares';
+import { errorHandler, errorLogger, responseCapture, routeLogger } from '@app/middlewares';
 import expressWs from 'express-ws';
 import { setupSwagger } from '@app/swagger';
 import router from '@app/modules';

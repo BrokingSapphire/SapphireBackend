@@ -7,7 +7,6 @@ const ALGORITHM: Algorithm = 'HS256';
 /**
  * Signs a JWT token with the given payload
  * @param payload - Data to be signed
- * @param secret - Secret key to sign with
  * @param options - JWT sign options
  * @returns Signed JWT token string
  */

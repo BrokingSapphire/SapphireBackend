@@ -1,7 +1,7 @@
 import { BadRequestError } from '@app/apiError';
 import { env } from '@app/env';
 import { S3Client } from '@aws-sdk/client-s3';
-import { Request, Response, RequestHandler } from 'express';
+import { Request, RequestHandler, Response } from 'express';
 import multer from 'multer';
 import multerS3 from 'multer-s3';
 import path from 'path';

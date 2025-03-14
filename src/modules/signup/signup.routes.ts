@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { CheckpointSchema, RequestOtpSchema, VerifyOtpSchema } from './signup.validator';
 import { validate } from '@app/middlewares';
-import { requestOtp, verifyOtp, checkpoint, ipvPut, ipvGet } from './signup.controller';
+import { checkpoint, ipvGet, ipvPut, requestOtp, verifyOtp } from './signup.controller';
 import { jwtMiddleware } from '@app/utils/jwt';
 
 const router = Router();
