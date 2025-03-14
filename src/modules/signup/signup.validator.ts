@@ -10,31 +10,28 @@ import {
     ValidationType,
 } from './signup.types';
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_REGEX = /^[1-9]\d{9}$/;
+
 const RequestOtpSchema = Joi.object({
     type: Joi.string()
         .valid(...Object.values(CredentialsType))
         .required(),
     phone: Joi.alternatives().conditional('type', {
-        is: 'phone',
-        then: Joi.string().required(),
-        otherwise: Joi.string().optional(),
+        is: CredentialsType.PHONE,
+        then: Joi.string().regex(PHONE_REGEX).required(),
     }),
-    email: Joi.alternatives().conditional('type', {
-        is: 'email',
-        then: Joi.string().required(),
-        otherwise: Joi.string().optional(),
-    }),
+    email: Joi.string().regex(EMAIL_REGEX).required(),
 });
 
 const VerifyOtpSchema = Joi.object({
     type: Joi.string()
         .valid(...Object.values(CredentialsType))
         .required(),
-    email: Joi.string().required(),
+    email: Joi.string().regex(EMAIL_REGEX).required(),
     phone: Joi.alternatives().conditional('type', {
-        is: 'phone',
-        then: Joi.string().required(),
-        otherwise: Joi.string().optional(),
+        is: CredentialsType.PHONE,
+        then: Joi.string().regex(PHONE_REGEX).required(),
     }),
     otp: Joi.string().required(),
 });
@@ -43,8 +40,14 @@ const CheckpointSchema = Joi.object({
     step: Joi.string()
         .valid(...Object.values(CheckpointStep))
         .required(),
-    email: Joi.alternatives().conditional('step', { is: CheckpointStep.CREDENTIALS, then: Joi.string().required() }),
-    phone: Joi.alternatives().conditional('step', { is: CheckpointStep.CREDENTIALS, then: Joi.string().required() }),
+    email: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.CREDENTIALS,
+        then: Joi.string().regex(EMAIL_REGEX).required(),
+    }),
+    phone: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.CREDENTIALS,
+        then: Joi.string().regex(PHONE_REGEX).required(),
+    }),
     pan_number: Joi.alternatives().conditional('step', { is: CheckpointStep.PAN, then: Joi.string().required() }),
     dob: Joi.alternatives().conditional('step', { is: CheckpointStep.PAN, then: Joi.date().required() }),
     redirect: Joi.string().optional(),

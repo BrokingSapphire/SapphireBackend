@@ -1,12 +1,15 @@
 import redisClient from '@app/services/redis.service';
 import logger from '@app/logger';
 import { UnauthorizedError } from '@app/apiError';
+import { env } from '@app/env';
+import transporter from '@app/services/email.service';
+import smsService from '@app/services/sms.service';
 
 abstract class OtpVerification {
     protected id: string; // Unique identifier (email or phone)
     protected otpExpiry: number = 10 * 60; // 10 minutes in seconds
 
-    constructor(id: string) {
+    protected constructor(id: string) {
         this.id = id;
     }
 
@@ -43,27 +46,23 @@ abstract class OtpVerification {
     /**
      * Verify the OTP provided by the user
      */
-    public async verifyOtp(inputOtp: string): Promise<boolean> {
+    public async verifyOtp(inputOtp: string): Promise<void> {
         const key = `otp:${this.id}`;
 
-        try {
-            const storedOtp = await redisClient.get(key);
+        const storedOtp = await redisClient.get(key);
 
-            if (storedOtp === inputOtp) {
-                // Delete the OTP after successful verification to prevent reuse
-                await redisClient.del(key);
-                logger.info(`OTP verified successfully for ${this.id}`);
-                return true;
-            } else {
-                logger.error(`Invalid OTP for ${this.id}`);
-                throw new UnauthorizedError('Invalid OTP provided');
-            }
-        } catch (error) {
-            logger.error('Error verifying OTP:', error);
-            if (error instanceof UnauthorizedError) {
-                throw error;
-            }
-            throw new Error('Failed to verify OTP');
+        if (!storedOtp) {
+            logger.error(`No OTP found for ${this.id}`);
+            throw new UnauthorizedError('No OTP found for this ID');
+        }
+
+        if (storedOtp === inputOtp) {
+            // Delete the OTP after successful verification to prevent reuse
+            await redisClient.del(key);
+            logger.debug(`OTP verified successfully for ${this.id}`);
+        } else {
+            logger.debug(`Invalid OTP for ${this.id}`);
+            throw new UnauthorizedError('Invalid OTP provided');
         }
     }
 
@@ -76,7 +75,7 @@ abstract class OtpVerification {
             const exists = await redisClient.exists(key);
             return exists === 1;
         } catch (error) {
-            logger.error('Error checking OTP existence:', error);
+            logger.debug('Error checking OTP existence:', error);
             return false;
         }
     }
@@ -87,10 +86,9 @@ abstract class OtpVerification {
     public async getOtpTtl(): Promise<number> {
         const key = `otp:${this.id}`;
         try {
-            const ttl = await redisClient.ttl(key);
-            return ttl;
+            return await redisClient.ttl(key);
         } catch (error) {
-            logger.error('Error getting OTP TTL:', error);
+            logger.debug('Error getting OTP TTL:', error);
             return 0;
         }
     }
@@ -107,9 +105,22 @@ class EmailOtpVerification extends OtpVerification {
     public async sendOtp(): Promise<void> {
         try {
             const otp = await this.storeOtp();
-            // Logic to send the OTP to the user's email
-            logger.info(`Sending OTP ${otp} to ${this.id}`);
-            // Here you would integrate with an email service to send the OTP
+
+            const mailOptions = {
+                from: env.email.from,
+                to: this.id,
+                subject: 'Your Verification Code - Sapphire Broking',
+                text: `Welcome to Sapphire Broking!
+                
+Your verification code is: ${otp}
+This code will expire in 10 minutes. Do not share this code with anyone.
+If you did not request this code, please ignore this email.
+Regards,
+The Sapphire Broking Team`,
+            };
+
+            await transporter.sendMail(mailOptions);
+            logger.debug(`Sent OTP ${otp} to ${this.id}`);
         } catch (error) {
             logger.error(`Failed to send OTP to email ${this.id}:`, error);
             throw new Error('Failed to send OTP via email');
@@ -128,9 +139,10 @@ class PhoneOtpVerification extends OtpVerification {
     public async sendOtp(): Promise<void> {
         try {
             const otp = await this.storeOtp();
-            // Logic to send the OTP to the user's phone
-            logger.info(`Sending OTP ${otp} to ${this.id}`);
-            // Here you would integrate with an SMS service to send the OTP
+
+            const message = `Welcome to Sapphire! Your OTP for signup is ${otp}. Do not share this OTP with anyone. It is valid for 10 minutes. - Sapphire Broking`;
+            await smsService.sendSms(this.id, message, '1007898245699377543'); // FIXME: Remove raw template ID
+            logger.debug(`Sent OTP ${otp} to ${this.id}`);
         } catch (error) {
             logger.error(`Failed to send OTP to phone ${this.id}:`, error);
             throw new Error('Failed to send OTP via SMS');

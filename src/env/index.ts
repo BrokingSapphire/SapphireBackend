@@ -12,6 +12,14 @@ export const env = {
         secret: process.env.JWT_SECRET || 'secret',
         expiresIn: process.env.JWT_EXPIRES_IN || '1d',
     },
+    email: {
+        host: process.env.EMAIL_HOST || 'smtp.email.com',
+        port: process.env.EMAIL_PORT || 587,
+        secure: process.env.EMAIL_SECURE === 'true',
+        user: process.env.EMAIL_USER || 'noreply@email.com',
+        password: process.env.EMAIL_PASSWORD || 'password',
+        from: process.env.EMAIL_FROM || 'Email Sender <noreply@email.com>',
+    },
     sms: {
         apiKey: process.env.MOBIGLITZ_API_KEY || 'key',
         senderId: process.env.MOBIGLITZ_SENDER_ID || 'sender_id',
