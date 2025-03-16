@@ -269,6 +269,64 @@ const swaggerDocument = {
                 },
             },
         },
+        '/auth/signup/checkpoint/{step}': {
+            get: {
+                tags: ['Auth'],
+                security: [{ BearerAuth: [] }],
+                summary: 'Get signup checkpoint',
+                parameters: [
+                    {
+                        in: 'path',
+                        name: 'step',
+                        required: true,
+                        schema: {
+                            type: 'string',
+                            enum: [
+                                CheckpointStep.PAN,
+                                CheckpointStep.INVESTMENT_SEGMENT,
+                                CheckpointStep.USER_DETAIL,
+                                CheckpointStep.ACCOUNT_DETAIL,
+                                CheckpointStep.OCCUPATION,
+                                CheckpointStep.BANK_VALIDATION,
+                            ],
+                        },
+                    },
+                ],
+                responses: {
+                    '200': {
+                        description: 'Checkpoint retrieved successfully',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        data: {
+                                            type: 'object',
+                                            properties: {
+                                                uri: { type: 'string' },
+                                                payment_link: { type: 'string' },
+                                                ios_links: {
+                                                    type: 'object',
+                                                    properties: {
+                                                        paytm: { type: 'string' },
+                                                        phonepe: { type: 'string' },
+                                                        gpay: { type: 'string' },
+                                                        bhim: { type: 'string' },
+                                                        whatsapp: { type: 'string' },
+                                                    },
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    '401': { $ref: '#/components/schemas/Error' },
+                    '422': { $ref: '#/components/schemas/Error' },
+                },
+            },
+        },
         '/auth/signup/ipv/{uid}': {
             put: {
                 tags: ['Auth'],

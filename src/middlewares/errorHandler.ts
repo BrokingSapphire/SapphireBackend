@@ -2,8 +2,9 @@ import { DatabaseError } from 'pg';
 import { NextFunction, Request, Response } from 'express';
 import logger from '@app/logger';
 import { APIError } from '@app/apiError';
-import { BAD_REQUEST, INTERNAL_SERVER_ERROR } from '@app/utils/httpstatus';
+import { BAD_REQUEST, INTERNAL_SERVER_ERROR, NOT_FOUND } from '@app/utils/httpstatus';
 import { env } from '@app/env';
+import { NoResultError } from 'kysely';
 
 interface ErrorResponse {
     error: {
@@ -34,6 +35,16 @@ const errorHandler = (error: unknown, _req: Request, res: Response<ErrorResponse
             error: {
                 code: error.status,
                 message: error.message,
+            },
+        });
+        return;
+    }
+
+    if (error instanceof NoResultError) {
+        res.status(NOT_FOUND).json({
+            error: {
+                code: NOT_FOUND,
+                message: 'No result found',
             },
         });
         return;

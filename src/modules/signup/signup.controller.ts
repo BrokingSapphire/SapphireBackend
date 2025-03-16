@@ -12,9 +12,8 @@ import { sign } from '@app/utils/jwt';
 import axios from 'axios';
 import { insertAddresGetId, insertNameGetId, updateCheckpoint } from '@app/database/transactions';
 import splitName from '@app/utils/split-name';
-import { NotNull } from 'kysely';
 import PanService from '@app/services/surepass/pan.service';
-import { CREATED, NO_CONTENT, NOT_ACCEPTABLE, OK } from '@app/utils/httpstatus';
+import { CREATED, NO_CONTENT, NOT_ACCEPTABLE, NOT_FOUND, OK } from '@app/utils/httpstatus';
 import { BankVerification, ReversePenyDrop } from '@app/services/surepass/bank-verification';
 import { randomUUID } from 'crypto';
 import { imageUpload, wrappedMulterHandler } from '@app/services/multer-s3.service';
@@ -80,7 +79,96 @@ const verifyOtp = async (req: Request, res: Response) => {
     }
 };
 
-const checkpoint = async (req: Request, res: Response) => {
+const getCheckpoint = async (req: Request, res: Response) => {
+    if (!req.auth?.email || !req.auth?.phone) {
+        throw new UnauthorizedError('Request cannot be verified!');
+    }
+
+    const { email } = req.auth as JwtType;
+
+    const { step } = req.params;
+    if (step === CheckpointStep.PAN) {
+        const { pan_number } = await db
+            .selectFrom('signup_checkpoints')
+            .innerJoin('pan_detail', 'signup_checkpoints.pan_id', 'pan_detail.id')
+            .select('pan_detail.pan_number')
+            .where('email', '=', email)
+            .executeTakeFirstOrThrow();
+
+        res.status(OK).json({ data: { pan_number }, message: 'PAN number fetched' });
+    } else if (step === CheckpointStep.INVESTMENT_SEGMENT) {
+        const segments = await db
+            .selectFrom('signup_checkpoints')
+            .innerJoin(
+                'investment_segments_to_checkpoint',
+                'signup_checkpoints.id',
+                'investment_segments_to_checkpoint.checkpoint_id',
+            )
+            .select('investment_segments_to_checkpoint.segment')
+            .where('email', '=', email)
+            .execute();
+
+        res.status(OK).json({
+            data: { segments: segments.map((s) => s.segment) },
+            message: 'Investment segment fetched',
+        });
+    } else if (step === CheckpointStep.USER_DETAIL) {
+        const { father_name, mother_name, marital_status } = await db
+            .selectFrom('signup_checkpoints')
+            .innerJoin('user_name as father', 'signup_checkpoints.father_name', 'father.id')
+            .innerJoin('user_name as mother', 'signup_checkpoints.mother_name', 'mother.id')
+            .select([
+                'father.full_name as father_name',
+                'mother.full_name as mother_name',
+                'signup_checkpoints.marital_status',
+            ])
+            .where('email', '=', email)
+            .where('father_name', 'is not', null)
+            .where('mother_name', 'is not', null)
+            .where('marital_status', 'is not', null)
+            .executeTakeFirstOrThrow();
+
+        res.status(OK).json({ data: { father_name, mother_name, marital_status }, message: 'User details fetched' });
+    } else if (step === CheckpointStep.ACCOUNT_DETAIL) {
+        const { annual_income, trading_exp, account_settlement } = await db
+            .selectFrom('signup_checkpoints')
+            .select(['annual_income', 'trading_exp', 'account_settlement'])
+            .where('email', '=', email)
+            .where('annual_income', 'is not', null)
+            .where('trading_exp', 'is not', null)
+            .where('account_settlement', 'is not', null)
+            .executeTakeFirstOrThrow();
+
+        res.status(OK).json({
+            data: { annual_income, trading_exp, account_settlement },
+            message: 'Account details fetched',
+        });
+    } else if (step === CheckpointStep.OCCUPATION) {
+        const { occupation, is_politically_exposed } = await db
+            .selectFrom('signup_checkpoints')
+            .select(['occupation', 'is_politically_exposed'])
+            .where('email', '=', email)
+            .where('occupation', 'is not', null)
+            .where('is_politically_exposed', 'is not', null)
+            .executeTakeFirstOrThrow();
+
+        res.status(OK).json({ data: { occupation, is_politically_exposed }, message: 'Occupation fetched' });
+    } else if (step === CheckpointStep.BANK_VALIDATION) {
+        const bank = await db
+            .selectFrom('signup_checkpoints')
+            .innerJoin('bank_to_checkpoint', 'signup_checkpoints.id', 'bank_to_checkpoint.checkpoint_id')
+            .innerJoin('bank_account', 'bank_to_checkpoint.bank_account_id', 'bank_account.id')
+            .select(['bank_account.account_no', 'bank_account.ifsc_code'])
+            .where('email', '=', email)
+            .executeTakeFirstOrThrow();
+
+        res.status(OK).json({ data: { bank }, message: 'Bank details fetched' });
+    } else {
+        res.status(NOT_FOUND).json({ message: 'Checkpoint data not found' });
+    }
+};
+
+const postCheckpoint = async (req: Request, res: Response) => {
     if (!req.auth?.email || !req.auth?.phone) {
         throw new UnauthorizedError('Request cannot be verified!');
     }
@@ -196,57 +284,57 @@ const checkpoint = async (req: Request, res: Response) => {
             message: 'Digilocker URI generated',
         });
     } else if (step === CheckpointStep.AADHAAR) {
-        const details = await db
-            .selectFrom('signup_checkpoints')
-            .innerJoin('phone_number', 'signup_checkpoints.phone_id', 'phone_number.id')
-            .innerJoin('user_name', 'signup_checkpoints.name', 'user_name.id')
-            .innerJoin('aadhaar_detail', 'signup_checkpoints.aadhaar_id', 'aadhaar_detail.id')
-            .innerJoin('address', 'aadhaar_detail.address_id', 'address.id')
-            .innerJoin('country', 'address.country_id', 'country.iso')
-            .innerJoin('state', 'address.state_id', 'state.id')
-            .innerJoin('city', 'address.city_id', 'city.id')
-            .innerJoin('postal_code', 'address.postal_id', 'postal_code.id')
-            .select([
-                'user_name.full_name',
-                'signup_checkpoints.dob',
-                'aadhaar_detail.co',
-                'aadhaar_detail.gender',
-                'country.name as country',
-                'state.name as state',
-                'city.name as city',
-                'postal_code.postal_code as postalCode',
-                'address.address1',
-                'address.address2',
-                'address.street_name',
-            ])
-            .where('email', '=', email)
-            .where('phone', '=', phone)
-            .where('aadhaar_id', 'is not', null)
-            .$narrowType<{ aadhaar_id: NotNull }>()
-            .executeTakeFirst();
-
-        if (details) {
-            res.status(OK).json({
-                data: {
-                    name: details.full_name,
-                    dob: details.dob,
-                    email,
-                    father_name: details.co,
-                    gender: details.gender,
-                    address: {
-                        address1: details.address1,
-                        address2: details.address2,
-                        streetName: details.street_name,
-                        city: details.city,
-                        state: details.state,
-                        country: details.country,
-                        postalCode: details.postalCode,
-                    },
-                },
-                message: 'Aadhaar details already saved',
-            });
-            return;
-        }
+        // const details = await db
+        //     .selectFrom('signup_checkpoints')
+        //     .innerJoin('phone_number', 'signup_checkpoints.phone_id', 'phone_number.id')
+        //     .innerJoin('user_name', 'signup_checkpoints.name', 'user_name.id')
+        //     .innerJoin('aadhaar_detail', 'signup_checkpoints.aadhaar_id', 'aadhaar_detail.id')
+        //     .innerJoin('address', 'aadhaar_detail.address_id', 'address.id')
+        //     .innerJoin('country', 'address.country_id', 'country.iso')
+        //     .innerJoin('state', 'address.state_id', 'state.id')
+        //     .innerJoin('city', 'address.city_id', 'city.id')
+        //     .innerJoin('postal_code', 'address.postal_id', 'postal_code.id')
+        //     .select([
+        //         'user_name.full_name',
+        //         'signup_checkpoints.dob',
+        //         'aadhaar_detail.co',
+        //         'aadhaar_detail.gender',
+        //         'country.name as country',
+        //         'state.name as state',
+        //         'city.name as city',
+        //         'postal_code.postal_code as postalCode',
+        //         'address.address1',
+        //         'address.address2',
+        //         'address.street_name',
+        //     ])
+        //     .where('email', '=', email)
+        //     .where('phone', '=', phone)
+        //     .where('aadhaar_id', 'is not', null)
+        //     .$narrowType<{ aadhaar_id: NotNull }>()
+        //     .executeTakeFirst();
+        //
+        // if (details) {
+        //     res.status(OK).json({
+        //         data: {
+        //             name: details.full_name,
+        //             dob: details.dob,
+        //             email,
+        //             father_name: details.co,
+        //             gender: details.gender,
+        //             address: {
+        //                 address1: details.address1,
+        //                 address2: details.address2,
+        //                 streetName: details.street_name,
+        //                 city: details.city,
+        //                 state: details.state,
+        //                 country: details.country,
+        //                 postalCode: details.postalCode,
+        //             },
+        //         },
+        //         message: 'Aadhaar details already saved',
+        //     });
+        //     return;
+        // }
 
         const clientId = await redisClient.get(`digilocker:${email}`);
         if (!clientId) throw new UnauthorizedError('Digilocker not authorized or expired.');
@@ -300,16 +388,16 @@ const checkpoint = async (req: Request, res: Response) => {
             }).execute();
         });
 
-        res.status(CREATED).json({
-            data: {
-                name: parser.name(),
-                dob: parser.dob(),
-                email,
-                father_name: parser.co(),
-                gender: parser.gender(),
-                address: parser.address(),
-            },
-            message: 'Aadhaar details saved',
+        res.status(OK).json({
+            // data: {
+            //     name: parser.name(),
+            //     dob: parser.dob(),
+            //     email,
+            //     father_name: parser.co(),
+            //     gender: parser.gender(),
+            //     address: parser.address(),
+            // },
+            message: 'Aadhaar verified',
         });
     } else if (step === CheckpointStep.INVESTMENT_SEGMENT) {
         const { segments } = req.body;
@@ -417,11 +505,26 @@ const checkpoint = async (req: Request, res: Response) => {
             }
 
             await db.transaction().execute(async (tx) => {
-                const checkpointid = await tx
+                const checkpointId = await tx
                     .selectFrom('signup_checkpoints')
                     .select('id')
                     .where('email', '=', email)
                     .executeTakeFirstOrThrow();
+
+                const deleted = await tx
+                    .deleteFrom('bank_to_checkpoint')
+                    .where('checkpoint_id', '=', checkpointId.id)
+                    .returning('bank_account_id')
+                    .execute();
+
+                await tx
+                    .deleteFrom('bank_account')
+                    .where(
+                        'id',
+                        'in',
+                        deleted.map((d) => d.bank_account_id),
+                    )
+                    .execute();
 
                 const bankId = await tx
                     .insertInto('bank_account')
@@ -436,7 +539,7 @@ const checkpoint = async (req: Request, res: Response) => {
                 await tx
                     .insertInto('bank_to_checkpoint')
                     .values({
-                        checkpoint_id: checkpointid.id,
+                        checkpoint_id: checkpointId.id,
                         bank_account_id: bankId.id,
                         is_primary: true,
                     })
@@ -463,11 +566,26 @@ const checkpoint = async (req: Request, res: Response) => {
                 throw new UnprocessableEntityError('MICR code does not match');
 
             await db.transaction().execute(async (tx) => {
-                const checkpointid = await tx
+                const checkpointId = await tx
                     .selectFrom('signup_checkpoints')
                     .select('id')
                     .where('email', '=', email)
                     .executeTakeFirstOrThrow();
+
+                const deleted = await tx
+                    .deleteFrom('bank_to_checkpoint')
+                    .where('checkpoint_id', '=', checkpointId.id)
+                    .returning('bank_account_id')
+                    .execute();
+
+                await tx
+                    .deleteFrom('bank_account')
+                    .where(
+                        'id',
+                        'in',
+                        deleted.map((d) => d.bank_account_id),
+                    )
+                    .execute();
 
                 const bankId = await tx
                     .insertInto('bank_account')
@@ -482,7 +600,7 @@ const checkpoint = async (req: Request, res: Response) => {
                 await tx
                     .insertInto('bank_to_checkpoint')
                     .values({
-                        checkpoint_id: checkpointid.id,
+                        checkpoint_id: checkpointId.id,
                         bank_account_id: bankId.id,
                         is_primary: true,
                     })
@@ -535,7 +653,7 @@ const checkpoint = async (req: Request, res: Response) => {
 };
 
 const ipvImageUpload = wrappedMulterHandler(imageUpload.single('image'));
-const ipvPut = async (req: Request, res: Response) => {
+const putIpv = async (req: Request, res: Response) => {
     const { uid } = req.params;
 
     if (!req.auth?.email || !req.auth?.phone) {
@@ -565,7 +683,7 @@ const ipvPut = async (req: Request, res: Response) => {
     });
 };
 
-const ipvGet = async (req: Request, res: Response) => {
+const getIpv = async (req: Request, res: Response) => {
     if (!req.auth?.email || !req.auth?.phone) {
         throw new UnauthorizedError('Request cannot be verified!');
     }
@@ -589,4 +707,4 @@ const ipvGet = async (req: Request, res: Response) => {
     }
 };
 
-export { requestOtp, verifyOtp, checkpoint, ipvPut, ipvGet };
+export { requestOtp, verifyOtp, postCheckpoint, getCheckpoint, putIpv, getIpv };
