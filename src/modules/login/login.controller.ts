@@ -5,6 +5,8 @@ import { db } from '@app/database';
 import { NotFoundError } from '@app/apiError';
 import { EmailOtpVerification, PhoneOtpVerification } from '@app/modules/signup/signup.services';
 import { OK } from '@app/utils/httpstatus';
+import { sign } from '@app/utils/jwt';
+import { NotNull } from 'kysely';
 
 const requestOtp = async (req: Request, res: Response) => {
     const { type, phone, email } = req.body;
@@ -52,7 +54,25 @@ const verifyOtp = async (req: Request, res: Response) => {
         await phoneOtp.verifyOtp(otp);
     }
 
-    res.status(OK).json({ message: 'OTP verified' });
+    let query = db
+        .selectFrom('signup_checkpoints')
+        .innerJoin('phone_number', 'signup_checkpoints.phone_id', 'phone_number.id')
+        .select(['signup_checkpoints.email', 'phone_number.phone']);
+    if (email) {
+        query = query.where('signup_checkpoints.email', '=', email);
+    } else {
+        query = query.where('phone_number.phone', '=', phone);
+    }
+
+    const { email: e, phone: p } = await query
+        .$narrowType<{ email: NotNull; phone: NotNull }>()
+        .executeTakeFirstOrThrow();
+
+    const token = sign({
+        e,
+        p,
+    });
+    res.status(OK).json({ message: 'OTP verified', token });
 };
 
 export { requestOtp, verifyOtp };
