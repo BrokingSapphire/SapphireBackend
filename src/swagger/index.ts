@@ -9,6 +9,109 @@ const { swagger: requestOtpSwagger } = j2s(RequestOtpSchema);
 const { swagger: verifyOtpSwagger } = j2s(VerifyOtpSchema);
 const { swagger: checkpointSwagger } = j2s(CheckpointSchema);
 
+const checkpointSchemaDestructed = {
+    [CheckpointStep.CREDENTIALS]: {
+        type: 'object',
+        properties: {
+            step: { type: 'string', enum: [CheckpointStep.CREDENTIALS] },
+            email: { type: 'string', format: 'email' },
+            phone: { type: 'string' },
+        },
+        required: ['step', 'email', 'phone'],
+    },
+    [CheckpointStep.PAN]: {
+        type: 'object',
+        properties: {
+            step: { type: 'string', enum: [CheckpointStep.PAN] },
+            pan_number: { type: 'string' },
+        },
+        required: ['step', 'pan_number'],
+    },
+    [CheckpointStep.AADHAAR_URI]: {
+        type: 'object',
+        properties: {
+            step: { type: 'string', enum: [CheckpointStep.AADHAAR_URI] },
+            redirect: { type: 'string', format: 'uri' },
+        },
+        required: ['step'],
+    },
+    [CheckpointStep.INVESTMENT_SEGMENT]: {
+        type: 'object',
+        properties: {
+            step: { type: 'string', enum: [CheckpointStep.INVESTMENT_SEGMENT] },
+            segments: {
+                type: 'array',
+                items: { type: 'string' },
+                minItems: 0,
+            },
+        },
+        required: ['step', 'segments'],
+    },
+    [CheckpointStep.USER_DETAIL]: {
+        type: 'object',
+        properties: {
+            step: { type: 'string', enum: [CheckpointStep.USER_DETAIL] },
+            marital_status: { type: 'string' },
+            father_name: { type: 'string' },
+            mother_name: { type: 'string' },
+        },
+        required: ['step', 'marital_status', 'father_name', 'mother_name'],
+    },
+    [CheckpointStep.OCCUPATION]: {
+        type: 'object',
+        properties: {
+            step: { type: 'string', enum: [CheckpointStep.OCCUPATION] },
+            occupation: { type: 'string' },
+            politically_exposed: { type: 'boolean' },
+        },
+        required: ['step', 'occupation', 'politically_exposed'],
+    },
+    [CheckpointStep.BANK_VALIDATION]: {
+        type: 'object',
+        properties: {
+            step: { type: 'string', enum: [CheckpointStep.BANK_VALIDATION] },
+            validation_type: { type: 'string', enum: Object.values(ValidationType) },
+            bank: {
+                type: 'object',
+                properties: {
+                    account_number: { type: 'string' },
+                    ifsc_code: { type: 'string' },
+                },
+                required: ['account_number', 'ifsc_code'],
+            },
+        },
+        required: ['step', 'validation_type'],
+    },
+    [CheckpointStep.BANK_VALIDATION_START]: {
+        type: 'object',
+        properties: {
+            step: { type: 'string', enum: [CheckpointStep.BANK_VALIDATION_START] },
+            validation_type: { type: 'string', enum: Object.values(ValidationType) },
+        },
+        required: ['step', 'validation_type'],
+    },
+    [CheckpointStep.ADD_NOMINEES]: {
+        type: 'object',
+        properties: {
+            step: { type: 'string', enum: [CheckpointStep.ADD_NOMINEES] },
+            nominees: {
+                type: 'array',
+                items: {
+                    type: 'object',
+                    properties: {
+                        name: { type: 'string' },
+                        gov_id: { type: 'string' },
+                        relation: { type: 'string' },
+                        share: { type: 'number' },
+                    },
+                    required: ['name', 'gov_id', 'relation', 'share'],
+                },
+            },
+        },
+        required: ['step', 'nominees'],
+    },
+};
+
 const swaggerDocument = {
     openapi: '3.0.0',
     info: {
@@ -50,6 +153,9 @@ const swaggerDocument = {
             RequestOtp: requestOtpSwagger,
             VerifyOtp: verifyOtpSwagger,
             Checkpoint: checkpointSwagger,
+            ...Object.fromEntries(
+                Object.entries(checkpointSchemaDestructed).map(([key, value]) => [`Checkpoint-${key}`, value]),
+            ),
         },
     },
     paths: {
