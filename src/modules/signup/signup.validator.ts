@@ -21,6 +21,7 @@ const RequestOtpSchema = Joi.object({
     phone: Joi.alternatives().conditional('type', {
         is: CredentialsType.PHONE,
         then: Joi.string().regex(PHONE_REGEX).required(),
+        otherwise: Joi.forbidden(),
     }),
     email: Joi.string().email().required(),
 });
@@ -33,6 +34,7 @@ const VerifyOtpSchema = Joi.object({
     phone: Joi.alternatives().conditional('type', {
         is: CredentialsType.PHONE,
         then: Joi.string().regex(PHONE_REGEX).required(),
+        otherwise: Joi.forbidden(),
     }),
     otp: Joi.string().length(OTP_LENGTH).required(),
 });
@@ -44,14 +46,17 @@ const CheckpointSchema = Joi.object({
     email: Joi.alternatives().conditional('step', {
         is: CheckpointStep.CREDENTIALS,
         then: Joi.string().email().required(),
+        otherwise: Joi.forbidden(),
     }),
     phone: Joi.alternatives().conditional('step', {
         is: CheckpointStep.CREDENTIALS,
         then: Joi.string().regex(PHONE_REGEX).required(),
+        otherwise: Joi.forbidden(),
     }),
     pan_number: Joi.alternatives().conditional('step', {
         is: CheckpointStep.PAN,
         then: Joi.string().length(10).regex(PAN_REGEX).required(),
+        otherwise: Joi.forbidden(),
     }),
     redirect: Joi.string().optional(),
     segments: Joi.alternatives().conditional('step', {
@@ -59,46 +64,55 @@ const CheckpointSchema = Joi.object({
         then: Joi.array()
             .items(Joi.string().valid(...Object.values(InvestmentSegment)))
             .required(),
+        otherwise: Joi.forbidden(),
     }),
     marital_status: Joi.alternatives().conditional('step', {
         is: CheckpointStep.USER_DETAIL,
         then: Joi.string()
             .valid(...Object.values(MaritalStatus))
             .required(),
+        otherwise: Joi.forbidden(),
     }),
     father_name: Joi.alternatives().conditional('step', {
         is: CheckpointStep.USER_DETAIL,
         then: Joi.string().required(),
+        otherwise: Joi.forbidden(),
     }),
     mother_name: Joi.alternatives().conditional('step', {
         is: CheckpointStep.USER_DETAIL,
         then: Joi.string().required(),
+        otherwise: Joi.forbidden(),
     }),
     annual_income: Joi.alternatives().conditional('step', {
         is: CheckpointStep.USER_DETAIL,
         then: Joi.string()
             .valid(...Object.values(AnnualIncome))
             .required(),
+        otherwise: Joi.forbidden(),
     }),
     experience: Joi.alternatives().conditional('step', {
         is: CheckpointStep.USER_DETAIL,
         then: Joi.string()
             .valid(...Object.values(TradingExperience))
             .required(),
+        otherwise: Joi.forbidden(),
     }),
     settlement: Joi.alternatives().conditional('step', {
         is: CheckpointStep.USER_DETAIL,
         then: Joi.string()
             .valid(...Object.values(AccountSettlement))
             .required(),
+        otherwise: Joi.forbidden(),
     }),
     occupation: Joi.alternatives().conditional('step', {
         is: CheckpointStep.OCCUPATION,
         then: Joi.string().required(),
+        otherwise: Joi.forbidden(),
     }),
     politically_exposed: Joi.alternatives().conditional('step', {
         is: CheckpointStep.OCCUPATION,
         then: Joi.boolean().required(),
+        otherwise: Joi.forbidden(),
     }),
     validation_type: Joi.alternatives()
         .conditional('step', {
@@ -106,12 +120,14 @@ const CheckpointSchema = Joi.object({
             then: Joi.string()
                 .valid(...Object.values(ValidationType))
                 .required(),
+            otherwise: Joi.forbidden(),
         })
         .conditional('step', {
             is: CheckpointStep.BANK_VALIDATION_START,
             then: Joi.string()
                 .valid(...Object.values(ValidationType))
                 .required(),
+            otherwise: Joi.forbidden(),
         }),
     bank: Joi.alternatives().conditional(
         Joi.object({ step: CheckpointStep.BANK_VALIDATION, validation_type: ValidationType.BANK }),
@@ -120,6 +136,7 @@ const CheckpointSchema = Joi.object({
                 account_number: Joi.string().required(),
                 ifsc_code: Joi.string().required(),
             }).required(),
+            otherwise: Joi.forbidden(),
         },
     ),
     nominees: Joi.alternatives().conditional('step', {
@@ -132,6 +149,7 @@ const CheckpointSchema = Joi.object({
                 share: Joi.number().required(),
             }),
         ),
+        otherwise: Joi.forbidden(),
     }),
 });
 
