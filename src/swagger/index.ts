@@ -66,6 +66,14 @@ const checkpointSchemaDestructed = {
         },
         required: ['step', 'occupation', 'politically_exposed'],
     },
+    [CheckpointStep.BANK_VALIDATION_START]: {
+        type: 'object',
+        properties: {
+            step: { type: 'string', enum: [CheckpointStep.BANK_VALIDATION_START] },
+            validation_type: { type: 'string', enum: Object.values(ValidationType) },
+        },
+        required: ['step', 'validation_type'],
+    },
     [CheckpointStep.BANK_VALIDATION]: {
         type: 'object',
         properties: {
@@ -79,14 +87,6 @@ const checkpointSchemaDestructed = {
                 },
                 required: ['account_number', 'ifsc_code'],
             },
-        },
-        required: ['step', 'validation_type'],
-    },
-    [CheckpointStep.BANK_VALIDATION_START]: {
-        type: 'object',
-        properties: {
-            step: { type: 'string', enum: [CheckpointStep.BANK_VALIDATION_START] },
-            validation_type: { type: 'string', enum: Object.values(ValidationType) },
         },
         required: ['step', 'validation_type'],
     },
@@ -269,9 +269,9 @@ const swaggerDocument = {
                 },
             },
         },
-        '/signup/ipv/{uid}': {
+        '/auth/signup/ipv/{uid}': {
             put: {
-                tags: ['Signup'],
+                tags: ['Auth'],
                 security: [{ BearerAuth: [] }],
                 summary: 'Upload IPV image',
                 parameters: [
@@ -318,9 +318,9 @@ const swaggerDocument = {
                 },
             },
         },
-        '/signup/ipv': {
+        '/auth/signup/ipv': {
             get: {
-                tags: ['Signup'],
+                tags: ['Auth'],
                 security: [{ BearerAuth: [] }],
                 summary: 'Get IPV image URL',
                 parameters: [
