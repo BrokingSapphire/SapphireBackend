@@ -18,6 +18,7 @@ import { CREATED, NO_CONTENT, NOT_ACCEPTABLE, OK } from '@app/utils/httpstatus';
 import { BankVerification, ReversePenyDrop } from '@app/services/surepass/bank-verification';
 import { randomUUID } from 'crypto';
 import { imageUpload, wrappedMulterHandler } from '@app/services/multer-s3.service';
+import logger from '@app/logger';
 
 const requestOtp = async (req: Request, res: Response) => {
     const { type, phone, email } = req.body;
@@ -107,9 +108,7 @@ const checkpoint = async (req: Request, res: Response) => {
             panResponse = await panService.getDetails(panNumber);
         } catch (error: any) {
             if (error.response) {
-                if (error.response.data.error.code === 'INVALID_PAN') {
-                    throw new UnprocessableEntityError('Invalid PAN number');
-                }
+                logger.error(error.response.data);
             }
             throw error;
         }
