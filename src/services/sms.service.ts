@@ -3,6 +3,7 @@ import axios from 'axios';
 import { InternalServerError } from '@app/apiError';
 
 const BASE_URL = 'http://mobiglitz.com/vb';
+export const PHONE_REGEX: RegExp = /^(\+91)?\d{10}$/;
 
 /**
  * Service for handling SMS notifications and OTP functionality

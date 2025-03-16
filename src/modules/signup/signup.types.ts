@@ -3,11 +3,6 @@ interface JwtType {
     phone: string;
 }
 
-enum CredentialsType {
-    EMAIL = 'email',
-    PHONE = 'phone',
-}
-
 enum CheckpointStep {
     CREDENTIALS = 'credentials',
     PAN = 'pan',
@@ -65,7 +60,6 @@ enum ValidationType {
 
 export {
     JwtType,
-    CredentialsType,
     CheckpointStep,
     InvestmentSegment,
     MaritalStatus,

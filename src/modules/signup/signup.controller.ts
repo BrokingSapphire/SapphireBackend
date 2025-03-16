@@ -4,7 +4,8 @@ import redisClient from '@app/services/redis.service';
 import { EmailOtpVerification, PhoneOtpVerification } from './signup.services';
 import { BadRequestError, NotFoundError, UnauthorizedError, UnprocessableEntityError } from '@app/apiError';
 import { db } from '@app/database';
-import { CheckpointStep, CredentialsType, JwtType, ValidationType } from './signup.types';
+import { CheckpointStep, JwtType, ValidationType } from './signup.types';
+import { CredentialsType } from '@app/modules/types';
 import DigiLockerService from '@app/services/surepass/digilocker.service';
 import AadhaarXMLParser from '@app/utils/aadhaar-xml.parser';
 import { sign } from '@app/utils/jwt';
@@ -570,7 +571,7 @@ const ipvGet = async (req: Request, res: Response) => {
         throw new UnauthorizedError('Request cannot be verified!');
     }
 
-    const { email, phone } = req.auth as JwtType;
+    const { email } = req.auth as JwtType;
 
     const url = await db.transaction().execute(async (tx) => {
         const ipv = await tx

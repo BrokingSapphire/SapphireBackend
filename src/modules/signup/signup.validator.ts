@@ -3,16 +3,15 @@ import {
     AccountSettlement,
     AnnualIncome,
     CheckpointStep,
-    CredentialsType,
     InvestmentSegment,
     MaritalStatus,
     TradingExperience,
     ValidationType,
 } from './signup.types';
+import { CredentialsType } from '@app/modules/types';
 import { OTP_LENGTH } from './signup.services';
-
-const PHONE_REGEX: RegExp = /^[1-9]\d{9}$/;
-const PAN_REGEX: RegExp = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
+import { PHONE_REGEX } from '@app/services/sms.service';
+import { PAN_REGEX } from '@app/services/surepass/pan.service';
 
 const RequestOtpSchema = Joi.object({
     type: Joi.string()
