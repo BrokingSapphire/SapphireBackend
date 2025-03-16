@@ -17,7 +17,7 @@ export const env = {
         port: process.env.EMAIL_PORT || 587,
         secure: process.env.EMAIL_SECURE === 'true',
         user: process.env.EMAIL_USER || 'noreply@email.com',
-        password: process.env.EMAIL_PASSWORD || 'password',
+        password: process.env.EMAIL_PASS || 'password',
         from: process.env.EMAIL_FROM || 'Email Sender <noreply@email.com>',
     },
     sms: {
