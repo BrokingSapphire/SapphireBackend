@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import { CredentialsType } from '@app/modules/types';
+import { CredentialsType } from '@app/modules/common.types';
 import { OTP_LENGTH } from '@app/modules/signup/signup.services';
 import { PHONE_REGEX } from '@app/services/sms.service';
 

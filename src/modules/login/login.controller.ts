@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { Request } from 'express-jwt';
-import { CredentialsType } from '@app/modules/types';
+import { CredentialsType } from '@app/modules/common.types';
 import { db } from '@app/database';
 import { NotFoundError } from '@app/apiError';
 import { EmailOtpVerification, PhoneOtpVerification } from '@app/modules/signup/signup.services';

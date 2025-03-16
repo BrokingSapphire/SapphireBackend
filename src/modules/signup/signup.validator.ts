@@ -8,7 +8,7 @@ import {
     TradingExperience,
     ValidationType,
 } from './signup.types';
-import { CredentialsType } from '@app/modules/types';
+import { CredentialsType } from '@app/modules/common.types';
 import { OTP_LENGTH } from './signup.services';
 import { PHONE_REGEX } from '@app/services/sms.service';
 import { PAN_REGEX } from '@app/services/surepass/pan.service';

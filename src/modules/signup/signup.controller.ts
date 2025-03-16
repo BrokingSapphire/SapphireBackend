@@ -5,7 +5,7 @@ import { EmailOtpVerification, PhoneOtpVerification } from './signup.services';
 import { BadRequestError, NotFoundError, UnauthorizedError, UnprocessableEntityError } from '@app/apiError';
 import { db } from '@app/database';
 import { CheckpointStep, JwtType, ValidationType } from './signup.types';
-import { CredentialsType } from '@app/modules/types';
+import { CredentialsType } from '@app/modules/common.types';
 import DigiLockerService from '@app/services/surepass/digilocker.service';
 import AadhaarXMLParser from '@app/utils/aadhaar-xml.parser';
 import { sign } from '@app/utils/jwt';
