@@ -247,6 +247,7 @@ const swaggerDocument = {
                                             properties: {
                                                 uri: { type: 'string' },
                                                 payment_link: { type: 'string' },
+                                                uid: { type: 'string', format: 'uuid' },
                                                 ios_links: {
                                                     type: 'object',
                                                     properties: {
@@ -303,16 +304,24 @@ const swaggerDocument = {
                                         data: {
                                             type: 'object',
                                             properties: {
-                                                uri: { type: 'string' },
-                                                payment_link: { type: 'string' },
-                                                ios_links: {
+                                                pan_number: { type: 'string' },
+                                                segments: {
+                                                    type: 'array',
+                                                    items: { type: 'string' },
+                                                },
+                                                father_name: { type: 'string' },
+                                                mother_name: { type: 'string' },
+                                                marital_status: { type: 'string' },
+                                                annual_income: { type: 'string' },
+                                                trading_exp: { type: 'string' },
+                                                account_settlement: { type: 'string' },
+                                                occupation: { type: 'string' },
+                                                is_politically_exposed: { type: 'boolean' },
+                                                bank: {
                                                     type: 'object',
                                                     properties: {
-                                                        paytm: { type: 'string' },
-                                                        phonepe: { type: 'string' },
-                                                        gpay: { type: 'string' },
-                                                        bhim: { type: 'string' },
-                                                        whatsapp: { type: 'string' },
+                                                        account_number: { type: 'string' },
+                                                        ifsc_code: { type: 'string' },
                                                     },
                                                 },
                                             },
