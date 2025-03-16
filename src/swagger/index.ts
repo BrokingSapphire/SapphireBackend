@@ -1,12 +1,13 @@
 import { Express } from 'express';
 import swaggerUi from 'swagger-ui-express';
 import j2s from 'joi-to-swagger';
-import { RequestOtpSchema, VerifyOtpSchema } from '@app/modules/signup/signup.validator';
+import { RequestOtpSchema, VerifyOtpSchema, CheckpointSchema } from '@app/modules/signup/signup.validator';
 import { CheckpointStep, ValidationType } from '@app/modules/signup/signup.types';
 import { env } from '@app/env';
 
 const { swagger: requestOtpSwagger } = j2s(RequestOtpSchema);
 const { swagger: verifyOtpSwagger } = j2s(VerifyOtpSchema);
+const { swagger: checkpointSwagger } = j2s(CheckpointSchema);
 
 const swaggerDocument = {
     openapi: '3.0.0',
@@ -38,12 +39,17 @@ const swaggerDocument = {
                         properties: {
                             code: { type: 'number' },
                             message: { type: 'string' },
+                            details: {
+                                type: 'array',
+                                items: { type: 'string' },
+                            },
                         },
                     },
                 },
             },
             RequestOtp: requestOtpSwagger,
             VerifyOtp: verifyOtpSwagger,
+            Checkpoint: checkpointSwagger,
         },
     },
     paths: {
@@ -110,50 +116,14 @@ const swaggerDocument = {
         },
         '/auth/signup/checkpoint': {
             post: {
-                tags: ['Signup'],
+                tags: ['Auth'],
                 security: [{ BearerAuth: [] }],
                 summary: 'Save signup checkpoint',
                 requestBody: {
                     required: true,
                     content: {
                         'application/json': {
-                            schema: {
-                                type: 'object',
-                                properties: {
-                                    step: {
-                                        type: 'string',
-                                        enum: Object.values(CheckpointStep),
-                                    },
-                                    // Dynamic properties based on step
-                                    panNumber: { type: 'string' },
-                                    dob: { type: 'string', format: 'date' },
-                                    redirect: { type: 'string' },
-                                    segments: {
-                                        type: 'array',
-                                        items: { type: 'string' },
-                                    },
-                                    marital_status: { type: 'string' },
-                                    father_name: { type: 'string' },
-                                    mother_name: { type: 'string' },
-                                    annual_income: { type: 'number' },
-                                    experience: { type: 'string' },
-                                    settlement: { type: 'string' },
-                                    occupation: { type: 'string' },
-                                    politically_exposed: { type: 'boolean' },
-                                    validation_type: {
-                                        type: 'string',
-                                        enum: Object.values(ValidationType),
-                                    },
-                                    bank: {
-                                        type: 'object',
-                                        properties: {
-                                            account_number: { type: 'string' },
-                                            ifsc_code: { type: 'string' },
-                                        },
-                                    },
-                                },
-                                required: ['step'],
-                            },
+                            schema: { $ref: '#/components/schemas/Checkpoint' },
                         },
                     },
                 },
@@ -188,8 +158,8 @@ const swaggerDocument = {
                             },
                         },
                     },
-                    '401': { $ref: '#/components/responses/Unauthorized' },
-                    '422': { $ref: '#/components/responses/UnprocessableEntity' },
+                    '401': { $ref: '#/components/schemas/Error' },
+                    '422': { $ref: '#/components/schemas/Error' },
                 },
             },
         },

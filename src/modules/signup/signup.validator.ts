@@ -113,15 +113,16 @@ const CheckpointSchema = Joi.object({
                 .valid(...Object.values(ValidationType))
                 .required(),
         }),
-    bank: Joi.alternatives().conditional(
-        Joi.object({ step: CheckpointStep.BANK_VALIDATION, validation_type: ValidationType.BANK }),
-        {
+    bank: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.BANK_VALIDATION,
+        then: Joi.alternatives().conditional('validation_type', {
+            is: ValidationType.BANK,
             then: Joi.object({
                 account_number: Joi.string().required(),
                 ifsc_code: Joi.string().required(),
             }).required(),
-        },
-    ),
+        }),
+    }),
     nominees: Joi.alternatives().conditional('step', {
         is: CheckpointStep.ADD_NOMINEES,
         then: Joi.array().items(
