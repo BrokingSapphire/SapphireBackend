@@ -3,6 +3,7 @@ import { NextFunction, Request, Response } from 'express';
 import logger from '@app/logger';
 import { APIError } from '@app/apiError';
 import { BAD_REQUEST, INTERNAL_SERVER_ERROR } from '@app/utils/httpstatus';
+import { env } from '@app/env';
 
 interface ErrorResponse {
     error: {
@@ -94,6 +95,7 @@ const errorHandler = (error: unknown, _req: Request, res: Response<ErrorResponse
         error: {
             code: INTERNAL_SERVER_ERROR,
             message: 'Something went wrong!',
+            details: env.env === 'development' ? [error instanceof Error ? error.message : ''] : undefined,
         },
     });
 };
