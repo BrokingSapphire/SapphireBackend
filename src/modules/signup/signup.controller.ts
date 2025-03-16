@@ -100,12 +100,12 @@ const checkpoint = async (req: Request, res: Response) => {
 
         res.status(CREATED).json({ message: 'Credentials saved' });
     } else if (step === CheckpointStep.PAN) {
-        const { panNumber } = req.body;
+        const { pan_number } = req.body;
 
         const panService = new PanService();
         let panResponse;
         try {
-            panResponse = await panService.getDetails(panNumber);
+            panResponse = await panService.getDetails(pan_number);
         } catch (error: any) {
             if (error.response) {
                 logger.error(error.response.data);
