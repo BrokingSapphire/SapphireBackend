@@ -1,11 +1,12 @@
 // funds.controller.ts
 
 import { Request, Response } from 'express';
-import { fundsService } from './funds.services';
-import { fundsWsHandler } from './funds.ws';
-import { DepositRequest, WithdrawalProcessRequest, FundsResponse } from './funds.types';
+import  {fundsService}  from './funds.services';
+import { APIError, BadRequestError, ForbiddenError, NotFoundError } from '@app/apiError';
+import { db } from '@app/database';
+import { DepositRequest, WithdrawalProcessRequest } from './funds.types';
 import logger from '@app/logger';
-
+import { CREATED, OK } from '@app/utils/httpstatus';
 /**
  * Get user funds
  */
@@ -13,35 +14,54 @@ const getUserFunds = async (req: Request, res: Response): Promise<void> => {
     try {
         const userId = parseInt(req.params.userId);
 
-        // Get user funds
-        let userFunds = await fundsService.getUserFunds(userId);
-
-        // Initialize funds if they don't exist
-        if (!userFunds) {
-            const newFunds = await fundsService.initializeUserFunds(userId);
-
-            res.status(200).json({
-                success: true,
-                data: newFunds,
-                message: 'User funds initialized',
-            });
-            return;
+        if (isNaN(userId)) {
+            throw new BadRequestError('Invalid user ID');
         }
 
-        res.status(200).json({
-            success: true,
-            data: userFunds,
+        let userFunds = await db
+        .selectFrom('user_funds')
+        .where('user_id', '=', userId)
+        .selectAll()
+        .executeTakeFirst();
+
+        if(!userFunds){
+           userFunds = await db.transaction().execute(async(tx)=>{
+            const inserted = await tx
+            .insertInto('user_funds')
+            .values({
+                user_id: userId,
+                total_funds: 0,
+                available_funds: 0,
+                blocked_funds: 0,
+                used_funds: 0,
+                created_at: new Date(),
+                updated_at: new Date(),
+            })
+            .returningAll()
+            .executeTakeFirst();
+
+            return inserted;
+           });
+        }
+        
+        res.status(OK).json({
+            message: 'User funds fetched successfully',
+            data: userFunds
         });
     } catch (error) {
         logger.error('Error fetching user funds:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch user funds',
-            error: error instanceof Error ? error.message : 'Unknown error',
-        });
+        
+        if (error instanceof APIError) {
+            res.status(error.status).json({
+                message: error.message
+            });
+        } else {
+            res.status(500).json({
+                error: "Internal server error"
+            });
+        }
     }
 };
-
 /**
  * Add funds (deposit) - MODIFIED for immediate deposit
  */
@@ -50,34 +70,92 @@ const addFunds = async (req: Request, res: Response): Promise<void> => {
         const userId = parseInt(req.params.userId);
         const { amount, bankAccountId, remarks } = req.body as DepositRequest;
 
-        // Check if bank account exists and belongs to the user
-        const bankExists = await fundsService.verifyBankAccount(userId, bankAccountId);
-        if (!bankExists) {
-            res.status(404).json({
-                success: false,
-                message: 'Bank account not found or does not belong to user',
-            });
-            return;
+        // checking for valid input
+        if (!amount || amount <= 0) {
+            throw new BadRequestError('Invalid deposit amount');
         }
 
-        // Process deposit immediately
-        const result = await fundsService.addFunds(userId, amount, bankAccountId, remarks);
+        if (!bankAccountId) {
+            throw new APIError(400, 'Bank account ID is required');
+        }
 
-        // Notify user via WebSocket if connected
-        fundsWsHandler.notifyFundDepositCompleted(userId.toString(), result);
+        // Check bank account verification status in transaction
+        const bankAccount = await db
+            .selectFrom('bank_account')
+            .where('id', '=', bankAccountId)
+            .select(['verification_status', 'account_no', 'ifsc_code'])
+            .executeTakeFirst();
 
-        res.status(201).json({
-            success: true,
-            data: result,
+        if (!bankAccount) {
+            throw new NotFoundError( 'Bank account not found');
+        }
+
+        if (bankAccount.verification_status !== 'verified') {
+            throw new ForbiddenError('Bank account is not verified');
+        }
+
+        // Check if bank account belongs to the user
+        const bankToUser = await db
+            .selectFrom('bank_to_user')
+            .where('user_id', '=', userId)
+            .where('bank_account_id', '=', bankAccountId)
+            .executeTakeFirst();
+
+        if (!bankToUser) {
+            throw new ForbiddenError('Bank account does not belong to this user');
+        }
+
+        const bankBelongsToUser = await fundsService.verifyBankAccount(userId, bankAccountId);
+    if (!bankBelongsToUser) {
+    throw new ForbiddenError('Bank account does not belong to this user');
+    }
+
+        // Depositing Funds 
+        const result = await db.transaction().execute(async (tx) => {
+            const fundTransaction = await tx
+                .insertInto('fund_transactions')
+                .values({
+                    user_id: userId,
+                    bank_account_id: bankAccountId,
+                    amount: amount,
+                    transaction_type: 'deposit',
+                    status: 'completed',
+                    transaction_date: new Date(),
+                    remarks: remarks || 'Deposit',
+                    processed_at: new Date()
+                })
+                .returningAll()
+                .executeTakeFirst();
+            
+            // Update user funds
+            await tx
+                .updateTable('user_funds')
+                .set({
+                    available_funds: eb => eb('available_funds', '+', amount),
+                    total_funds: eb => eb('total_funds', '+', amount),
+                    updated_at: new Date()
+                })
+                .where('user_id', '=', userId)
+                .execute();
+                
+            return fundTransaction;
+        });
+        res.status(CREATED).json({
             message: 'Deposit processed successfully',
         });
     } catch (error) {
         logger.error('Error processing deposit:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to process deposit',
-            error: error instanceof Error ? error.message : 'Unknown error',
-        });
+        
+        if (error instanceof APIError) {
+            res.status(error.status).json({
+                success: false,
+                message: error.message
+            });
+        } else {
+            res.status(500).json({
+                error: "Internal server error"
+            });
+        }
     }
 };
 
@@ -88,39 +166,69 @@ const completeFundDeposit = async (req: Request, res: Response): Promise<void> =
     try {
         const transactionId = parseInt(req.params.transactionId);
 
-        const result = await fundsService.completeFundDeposit(transactionId);
+        if (isNaN(transactionId)) {
+        throw new BadRequestError('Invalid transaction ID');
+        }
 
-        // Notify user via WebSocket
-        fundsWsHandler.notifyFundDepositCompleted(result.user_id.toString(), result);
+        const result = await db.transaction().execute(async(tx) =>{
+        const transaction = await tx
+            .selectFrom('fund_transactions')
+            .where('id', '=', transactionId)
+            .selectAll()
+            .executeTakeFirst();
 
-        res.status(200).json({
-            success: true,
-            data: result,
+            if(!transaction){
+            throw new NotFoundError('Transaction not found');
+            }
+            if (transaction.transaction_type !== 'deposit') {
+                throw new BadRequestError('Transaction is not a deposit');
+            }
+
+            if (transaction.status !== 'pending') {
+                throw new BadRequestError( 'Transaction is not in pending status');
+            }
+
+            // Update transaction status
+            const updatedTransaction = await tx
+                .updateTable('fund_transactions')
+                .set({
+                    status: 'completed',
+                    processed_at: new Date(),
+                    updated_at: new Date(),
+                })
+                .where('id', '=', transactionId)
+                .returningAll()
+                .executeTakeFirst();
+            
+            // Update user funds
+            await tx
+                .updateTable('user_funds')
+                .set({
+                    total_funds: eb => eb('total_funds', '+', transaction.amount),
+                    available_funds: eb => eb('available_funds', '+', transaction.amount),
+                    updated_at: new Date(),
+                })
+                .where('user_id', '=', transaction.user_id)
+                .execute();
+
+            return updatedTransaction;
+        });
+        res.status(OK).json({
             message: 'Deposit completed successfully',
         });
     } catch (error) {
         logger.error('Error completing deposit:', error);
 
-        // Handle specific errors
-        if (error instanceof Error) {
-            if (
-                error.message === 'Transaction not found' ||
-                error.message === 'Transaction is not a deposit' ||
-                error.message === 'Transaction is not in pending status'
-            ) {
-                res.status(400).json({
-                    success: false,
-                    message: error.message,
-                });
-                return;
-            }
+        if (error instanceof APIError) {
+            res.status(400).json({
+                success: false,
+                message: error.message
+            });
+        } else {
+            res.status(500).json({
+                error: "Internal server error"
+            });
         }
-
-        res.status(500).json({
-            success: false,
-            message: 'Failed to complete deposit',
-            error: error instanceof Error ? error.message : 'Unknown error',
-        });
     }
 };
 
@@ -132,42 +240,85 @@ const withdrawFunds = async (req: Request, res: Response): Promise<void> => {
         const userId = parseInt(req.params.userId);
         const { amount, bankAccountId, remarks } = req.body as WithdrawalProcessRequest;
 
+        if (!amount || amount <= 0) {
+            throw new BadRequestError('Invalid withdrawal amount');
+        }
+
+        if (!bankAccountId) {
+            throw new BadRequestError('Bank account ID is required');
+        }
+
         // Create withdrawal request and update funds
-        const result = await fundsService.withdrawFunds(userId, amount, bankAccountId, remarks);
+         const result = await db.transaction().execute(async (trx) =>{
+            const bankToUser = await trx
+            .selectFrom('bank_to_user')
+            .where('user_id', '=', userId)
+            .where('bank_account_id', '=', bankAccountId)
+            .executeTakeFirst();
 
-        // Notify user via WebSocket
-        fundsWsHandler.notifyFundWithdrawalInitiated(userId.toString(), result);
+            if (!bankToUser) {
+                throw new ForbiddenError('Bank account does not belong to this user');
+            }
 
-        res.status(201).json({
-            success: true,
-            data: result,
+             // Get user funds
+            const userFunds = await trx
+                .selectFrom('user_funds')
+                .where('user_id', '=', userId)
+                .selectAll()
+                .executeTakeFirst();
+
+            if (!userFunds) {
+                throw new NotFoundError('User funds not found');
+            }
+            // Check if user has sufficient funds
+            if (userFunds.available_funds < amount) {
+                throw new BadRequestError( 'Insufficient funds for withdrawal');
+            }
+            const fundTransaction = await trx
+                .insertInto('fund_transactions')
+                .values({
+                    user_id: userId,
+                    bank_account_id: bankAccountId,
+                    amount: amount,
+                    transaction_type: 'withdrawal',
+                    status: 'pending',
+                    transaction_date: new Date(),
+                    remarks: remarks || 'Withdrawal request',
+                    scheduled_processing_time: new Date(Date.now() + 24 * 60 * 60 * 1000) // Schedule for next day
+                })
+                .returningAll()
+                .executeTakeFirst();
+
+                // Updating User funds after withdrawl 
+                await trx
+                .updateTable('user_funds')
+                .set({
+                    available_funds: eb => eb('available_funds', '-', amount),
+                    blocked_funds: eb => eb('blocked_funds', '+', amount),
+                    updated_at: new Date()
+                })
+                .where('user_id', '=', userId)
+                .execute();
+
+            return fundTransaction;
+        });
+
+        res.status(CREATED).json({
             message: 'Withdrawal request created successfully',
         });
     } catch (error) {
         logger.error('Error creating withdrawal request:', error);
 
-        // Handle specific errors
-        if (error instanceof Error) {
-            if (error.message === 'User funds not found') {
-                res.status(404).json({
-                    success: false,
-                    message: error.message,
-                });
-                return;
-            } else if (error.message === 'Insufficient funds for withdrawal') {
-                res.status(400).json({
-                    success: false,
-                    message: error.message,
-                });
-                return;
-            }
+        if (error instanceof APIError) {
+            res.status(error.status).json({
+                success: false,
+                message: error.message
+            });
+        } else {
+            res.status(500).json({
+                error: 'Failed to create withdrawal request'
+            });
         }
-
-        res.status(500).json({
-            success: false,
-            message: 'Failed to create withdrawal request',
-            error: error instanceof Error ? error.message : 'Unknown error',
-        });
     }
 };
 
@@ -178,39 +329,67 @@ const completeWithdrawal = async (req: Request, res: Response): Promise<void> =>
     try {
         const transactionId = parseInt(req.params.transactionId);
 
-        const result = await fundsService.completeWithdrawal(transactionId);
+      if(isNaN(transactionId)){
+        throw new BadRequestError('Invalid transaction ID');
+      }
 
-        // Notify user via WebSocket
-        fundsWsHandler.notifyFundWithdrawalCompleted(result.user_id.toString(), result);
+      const result = await db.transaction().execute(async(tx) =>{
+        const transaction = await tx
+        .selectFrom('fund_transactions')
+        .where('id' ,'=' ,transactionId )
+        .selectAll()
+        .executeTakeFirst();
 
-        res.status(200).json({
-            success: true,
-            data: result,
+        if(!transaction){
+            throw new NotFoundError('Transaction Not Found');
+        }
+        if (transaction.status !== 'pending') {
+            throw new BadRequestError('Transaction is not in pending status');
+        }
+         // updating transaction status
+
+         const updatedTransaction = await tx
+            .updateTable('fund_transactions')
+            .set({
+                status: 'completed',
+                processed_at: new Date(),
+                updated_at: new Date(),
+            })
+            .where('id', '=', transactionId)
+            .returningAll()
+            .executeTakeFirst();
+
+            // reducing funds of user
+            await tx
+            .updateTable('user_funds')
+            .set({
+                total_funds: eb => eb('total_funds', '-', transaction.amount),
+                blocked_funds: eb => eb('blocked_funds', '-', transaction.amount),
+                updated_at: new Date(),
+            })
+            .where('user_id', '=', transaction.user_id)
+            .execute();
+
+        return updatedTransaction;
+      });
+
+        res.status(OK).json({
             message: 'Withdrawal completed successfully',
         });
     } catch (error) {
         logger.error('Error completing withdrawal:', error);
 
         // Handle specific errors
-        if (error instanceof Error) {
-            if (
-                error.message === 'Transaction not found' ||
-                error.message === 'Transaction is not a withdrawal' ||
-                error.message === 'Transaction is not in pending status'
-            ) {
-                res.status(400).json({
-                    success: false,
-                    message: error.message,
-                });
-                return;
-            }
+        if (error instanceof APIError) {
+            res.status(error.status).json({
+                success: false,
+                message: error.message
+            });
+        } else {
+            res.status(500).json({
+                error: 'Failed to complete withdrawal'
+            });
         }
-
-        res.status(500).json({
-            success: false,
-            message: 'Failed to complete withdrawal',
-            error: error instanceof Error ? error.message : 'Unknown error',
-        });
     }
 };
 
@@ -220,22 +399,52 @@ const completeWithdrawal = async (req: Request, res: Response): Promise<void> =>
 const getUserTransactions = async (req: Request, res: Response): Promise<void> => {
     try {
         const userId = parseInt(req.params.userId);
+        
+        if(isNaN(userId)){
+            throw new BadRequestError("Invalid User ID");
+        }
         const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
         const offset = req.query.offset ? parseInt(req.query.offset as string) : 0;
 
-        const transactions = await fundsService.getUserTransactions(userId, limit, offset);
+        if(isNaN(limit) || limit <=0 || isNaN(offset) || offset < 0){
+            throw new BadRequestError('Invalid pagination parameters');
+        }
+        
+        // fetching transactions
+        const transactions = await db 
+        .selectFrom('fund_transactions')
+        .where('user_id', '=', userId)
+        .orderBy('created_at','desc')
+        .limit(limit)
+        .offset(offset)
+        .selectAll()
+        .execute();
 
-        res.status(200).json({
-            success: true,
-            data: transactions,
+
+        const countResult = await db
+        .selectFrom('fund_transactions')
+        .where('user_id', '=', userId)
+        .select(db.fn.count('id').as('total'))
+        .executeTakeFirst();
+            
+        const total = countResult ? Number(countResult.total) : 0;
+
+
+        res.status(OK).json({
+            message:'Users Transaction Fetched Successfully'
         });
-    } catch (error) {
+    } catch(error) {
         logger.error('Error fetching user transactions:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch user transactions',
-            error: error instanceof Error ? error.message : 'Unknown error',
-        });
+        if (error instanceof APIError) {
+            res.status(error.status).json({
+                success: false,
+                message: error.message
+            });
+        } else {
+            res.status(500).json({
+                error: 'Internal server Error'
+            });
+        }
     }
 };
 
@@ -246,27 +455,59 @@ const getTransactionById = async (req: Request, res: Response): Promise<void> =>
     try {
         const transactionId = parseInt(req.params.transactionId);
 
-        const transaction = await fundsService.getTransactionById(transactionId);
+        if(isNaN(transactionId)){
+            throw new BadRequestError('Invalid transaction ID');
+        }
+
+        const transaction = await db
+        .selectFrom('fund_transactions')
+        .where('id', '=', transactionId)
+        .selectAll()
+        .executeTakeFirst();
 
         if (!transaction) {
-            res.status(404).json({
-                success: false,
-                message: 'Transaction not found',
+            throw new NotFoundError('Transaction Req. not found');
+        }
+
+        if (req.query.includeBankDetails === 'true') {
+            const bankDetails = await db
+                .selectFrom('bank_account')
+                .where('id', '=', transaction.bank_account_id)
+                .select([
+                    'account_holder_name', 
+                    'account_no', 
+                    'ifsc_code',
+                    'bank_name',
+                    'branch_name'
+                ])
+                .executeTakeFirst();
+                
+            res.status(OK).json({
+                message: 'Transaction details fetched successfully',
+                data: {
+                    ...transaction,
+                    bankDetails
+                }
             });
             return;
         }
 
-        res.status(200).json({
-            success: true,
-            data: transaction,
+        res.status(OK).json({
+            message: 'Transaction details fetched successfully',
+            data: transaction
         });
     } catch (error) {
         logger.error('Error fetching transaction:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch transaction',
-            error: error instanceof Error ? error.message : 'Unknown error',
-        });
+        
+        if (error instanceof APIError) {
+            res.status(error.status).json({
+                message: error.message
+            });
+        } else {
+            res.status(500).json({
+                error: 'Internal server error'
+            });
+        }
     }
 };
 
@@ -276,108 +517,341 @@ const getTransactionById = async (req: Request, res: Response): Promise<void> =>
 const processWithdrawal = async (req: Request, res: Response): Promise<void> => {
     try {
         const userId = parseInt(req.params.userId);
+
+        if (isNaN(userId)) {
+            throw new BadRequestError('Invalid user ID');
+        }
+
         const { amount, bankAccountId, remarks } = req.body as WithdrawalProcessRequest;
 
-        // Process withdrawal with safety cut logic
-        const result = await fundsService.processWithdrawal(userId, amount, bankAccountId, remarks);
+        if (!amount || amount <= 0) {
+            throw new BadRequestError('Invalid withdrawal amount');
+        }
+        
+        if (!bankAccountId) {
+            throw new BadRequestError('Bank account ID is required');
+        }
 
-        // Notify user via WebSocket
-        const wsData = {
-            ...result,
-            processingTime: result.scheduled_processing_time,
-            window: result.processing_window,
-            safetyCut: result.safetyCut,
+        // Check if bank account belongs to the user
+        const bankToUser = await db
+            .selectFrom('bank_to_user')
+            .where('user_id', '=', userId)
+            .where('bank_account_id', '=', bankAccountId)
+            .executeTakeFirst();
+            
+        if (!bankToUser) {
+            throw new ForbiddenError('Bank account does not belong to this user');
+        }
+
+        // checking available USers fund
+        const userFunds = await db
+            .selectFrom('user_funds')
+            .where('user_id', '=', userId)
+            .selectAll()
+            .executeTakeFirst();
+            
+        if (!userFunds) {
+            throw new NotFoundError('User funds not found');
+        }
+        
+        if (userFunds.available_funds < amount) {
+            throw new BadRequestError( 'Insufficient funds for withdrawal');
+        }
+
+        // Check for F&O positions to determine if safety cut is needed
+        const hasActivePositions = await db
+            .selectFrom('trading_positions')
+            .where('user_id', '=', userId)
+            .where(eb => 
+                eb.or([
+                    eb('trade_type', '=', 'equity_futures'),
+                    eb('trade_type', '=', 'equity_options'),
+                    eb('trade_type', '=', 'currency_futures'),
+                    eb('trade_type', '=', 'currency_options'),
+                    eb('trade_type', '=', 'commodity_futures'),
+                    eb('trade_type', '=', 'commodity_options')
+                ])
+            )
+            .executeTakeFirst();
+
+             // Apply safety cut logic
+        let finalAmount = amount;
+        let safetyCut = {
+            applied: false,
+            amount: 0,
+            percentage: 5,
+            finalAmount: amount
         };
 
-        fundsWsHandler.notifyWithdrawalScheduled(userId.toString(), wsData);
+        if (hasActivePositions) {
+            // Apply 5% safety cut for users with F&O positions
+            safetyCut.applied = true;
+            safetyCut.amount = amount * 0.05;
+            finalAmount = amount - safetyCut.amount;
+            safetyCut.finalAmount = finalAmount;
+        }
 
-        res.status(200).json({
-            success: true,
-            data: {
-                ...result,
-                safetyCut: result.safetyCut,
-            },
-            message: `Withdrawal of ${result.safetyCut?.finalAmount} scheduled for processing on ${result.scheduled_processing_time?.toLocaleDateString()} at ${result.processing_window === 'NOON' ? '12:00 PM' : '6:00 PM'}${
-                result.safetyCut?.amount && Number(result.safetyCut.amount) > 0
-                    ? ` (5% safety cut of ${result.safetyCut.amount} applied due to F&O positions)`
-                    : ''
-            }`,
+        const currentHour = new Date().getHours();
+        const processingWindow = currentHour < 12 ? 'NOON' : 'EOD';
+
+        const now = new Date();
+        let scheduledTime = new Date();
+        
+        if (processingWindow === 'NOON') {
+            // Set to noon today
+            scheduledTime.setHours(12, 0, 0, 0);
+            
+            // If it's already past noon, schedule for next day
+            if (now > scheduledTime) {
+                scheduledTime.setDate(scheduledTime.getDate() + 1);
+            }
+        }else{
+            scheduledTime.setHours(18, 0, 0, 0);
+            
+            // If it's already past 6 PM, schedule for next day
+            if (now > scheduledTime) {
+                scheduledTime.setDate(scheduledTime.getDate() + 1);
+            }
+        }
+        const result = await db.transaction().execute(async (trx) => {
+            // Create fund transaction record
+            const fundTransaction = await trx
+                .insertInto('fund_transactions')
+                .values({
+                    user_id: userId,
+                    bank_account_id: bankAccountId,
+                    amount: finalAmount,
+                    original_amount: amount,
+                    transaction_type: 'withdrawal',
+                    status: 'pending',
+                    transaction_date: new Date(),
+                    remarks: remarks || 'Withdrawal request',
+                    scheduled_processing_time: scheduledTime,
+                    processing_window: processingWindow,
+                    safety_cut_amount: safetyCut.applied ? safetyCut.amount : null,
+                    safety_cut_percentage: safetyCut.applied ? safetyCut.percentage : null
+                })
+                .returningAll()
+                .executeTakeFirst();
+            
+            await trx
+            .updateTable('user_funds')
+            .set({
+                available_funds: eb => eb('available_funds', '-', amount),
+                blocked_funds: eb => eb('blocked_funds', '+', finalAmount),
+                updated_at: new Date()
+            })
+            .where('user_id', '=', userId)
+            .execute();
+            return {
+                ...fundTransaction,
+                safetyCut
+            };
+        });
+
+        res.status(CREATED).json({
+            message: 'Withdrawal request processed successfully',
+            data: result
         });
     } catch (error) {
         logger.error('Error processing withdrawal:', error);
-
-        if (error instanceof Error && error.message === 'Insufficient funds for withdrawal') {
-            res.status(400).json({
-                success: false,
-                message: 'Insufficient funds for withdrawal',
-                error: error.message,
+        
+        if (error instanceof APIError) {
+            res.status(error.status).json({
+                message: error.message
             });
-            return;
+        } else {
+            res.status(500).json({
+                error: 'Internal server error'
+            });
         }
-
-        res.status(500).json({
-            success: false,
-            message: 'Failed to process withdrawal',
-            error: error instanceof Error ? error.message : 'Unknown error',
-        });
     }
 };
 
 /**
- * Get user withdrawals
- */
+* Get user withdrawals
+*/
 const getUserWithdrawals = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const userId = parseInt(req.params.userId);
-        const withdrawals = await fundsService.getUserWithdrawals(userId);
+   try {
+       const userId = parseInt(req.params.userId);
 
-        res.status(200).json({
-            success: true,
-            data: withdrawals,
-        });
-    } catch (error) {
-        logger.error('Error fetching withdrawals:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch withdrawals',
-            error: error instanceof Error ? error.message : 'Unknown error',
-        });
-    }
+       if (isNaN(userId)) {
+           throw new BadRequestError('Invalid user ID');
+       }
+
+       const page = req.query.page ? parseInt(req.query.page as string) : 1;
+       const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+
+       if (isNaN(page) || page < 1 || isNaN(limit) || limit < 1) {
+           throw new BadRequestError('Invalid pagination parameters');
+       }
+
+       const offset = (page - 1) * limit;
+
+       const withdrawals = await db
+           .selectFrom('fund_transactions')
+           .where('user_id', '=', userId)
+           .where('transaction_type', '=', 'withdrawal')
+           .orderBy('created_at', 'desc')
+           .limit(limit)
+           .offset(offset)
+           .selectAll()
+           .execute();
+
+       const countResult = await db
+           .selectFrom('fund_transactions')
+           .where('user_id', '=', userId)
+           .where('transaction_type', '=', 'withdrawal')
+           .select(db.fn.count('id').as('total'))
+           .executeTakeFirst();
+
+       const total = countResult ? Number(countResult.total) : 0;
+
+       res.status(OK).json({
+           message: 'User withdrawals fetched successfully',
+           data: {
+               withdrawals,
+               pagination: {
+                   total,
+                   page,
+                   limit,
+                   pages: Math.ceil(total / limit),
+                   hasMore: offset + withdrawals.length < total
+               }
+           }
+       });
+   } catch (error) {
+       logger.error('Error fetching withdrawals:', error);
+       if (error instanceof APIError) {
+           res.status(error.status).json({
+               message: error.message
+           });
+       } else {
+           res.status(500).json({
+               error: 'Internal server error'
+           });
+       }
+   }
 };
-
 /**
  * Get withdrawal by ID
  */
 const getWithdrawalById = async (req: Request, res: Response): Promise<void> => {
     try {
         const withdrawalId = parseInt(req.params.withdrawalId);
-        const withdrawal = await fundsService.getWithdrawalById(withdrawalId);
+
+        if (isNaN(withdrawalId)) {
+            throw new BadRequestError('Invalid withdrawal ID');
+        }
+
+        const withdrawal = await db
+            .selectFrom('fund_transactions')
+            .where('id', '=', withdrawalId)
+            .where('transaction_type', '=', 'withdrawal')
+            .selectAll()
+            .executeTakeFirst();
 
         if (!withdrawal) {
-            res.status(404).json({
-                success: false,
-                message: 'Withdrawal not found',
+            throw new NotFoundError('Withdrawal Not found');
+        }
+
+        // If the request includes bankDetails=true, include bank information
+        if (req.query.includeBankDetails === 'true') {
+            const bankDetails = await db
+                .selectFrom('bank_account')
+                .where('id', '=', withdrawal.bank_account_id)
+                .select([
+                    'account_holder_name', 
+                    'account_no', 
+                    'ifsc_code',
+                    'bank_name',
+                    'branch_name'
+                ])
+                .executeTakeFirst();
+                
+            res.status(OK).json({
+                message: 'Withdrawal details fetched successfully',
+                data: {
+                    ...withdrawal,
+                    bankDetails
+                }
             });
             return;
         }
 
-        res.status(200).json({
-            success: true,
-            data: withdrawal,
+        res.status(OK).json({
+            message: 'Withdrawal details fetched successfully',
+            data: withdrawal
         });
     } catch (error) {
         logger.error('Error fetching withdrawal:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch withdrawal',
-            error: error instanceof Error ? error.message : 'Unknown error',
-        });
+        
+        if (error instanceof APIError) {
+            res.status(error.status).json({
+                message: error.message
+            });
+        } else {
+            res.status(500).json({
+                error: 'Internal server error'
+            });
+        }
     }
 };
 
-// Process scheduled withdrawals
+/**
+ * Process scheduled withdrawals
+ */
 const processScheduledWithdrawals = async (): Promise<void> => {
-    await fundsService.processScheduledWithdrawals();
+    try {
+        logger.info('Processing scheduled withdrawals');
+        
+        const now = new Date();
+        
+        // Finding all pending withdrawals scheduled for processing
+        const pendingWithdrawals = await db
+            .selectFrom('fund_transactions')
+            .where('transaction_type', '=', 'withdrawal')
+            .where('status', '=', 'pending')
+            .where('scheduled_processing_time', '<=', now)
+            .selectAll()
+            .execute();
+            
+        logger.info(`Found ${pendingWithdrawals.length} withdrawals to process`);
+        
+        for (const withdrawal of pendingWithdrawals) {
+            try {
+                await db.transaction().execute(async (tx) => {
+                    // Update transaction status
+                    await tx
+                        .updateTable('fund_transactions')
+                        .set({
+                            status: 'completed',
+                            processed_at: new Date(),
+                            updated_at: new Date()
+                        })
+                        .where('id', '=', withdrawal.id)
+                        .execute();
+                        
+                    // Update user funds
+                    await tx
+                        .updateTable('user_funds')
+                        .set({
+                            total_funds: eb => eb('total_funds', '-', withdrawal.amount),
+                            blocked_funds: eb => eb('blocked_funds', '-', withdrawal.amount),
+                            updated_at: new Date()
+                        })
+                        .where('user_id', '=', withdrawal.user_id)
+                        .execute();
+                });
+                
+                logger.info(`Successfully processed withdrawal ID: ${withdrawal.id}`);
+            } catch (error) {
+                logger.error(`Error processing withdrawal ID: ${withdrawal.id}`, error);
+            }
+        }
+    } catch (error) {
+        logger.error('Error in scheduled withdrawal processing:', error);
+    }
 };
 
 // Schedule the job to run every hour

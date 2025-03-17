@@ -121,18 +121,18 @@ class EmailOtpVerification extends OtpVerification {
 
             // Setup nodemailer
             const transporter = nodemailer.createTransport({
-                host: 'smtp.gmail.com',
-                port: 587,
-                secure: false,
+                host: process.env.HOST_SERVER ,
+                port: process.env.SERVER_PORT ,
+                secure: process.env.SERVER_SEC,
                 auth: {
-                    user: process.env.EMAIL_USER || 'noreply@sapphirebroking.com',
-                    pass: process.env.EMAIL_PASSWORD || 'your-email-password',
+                    user: process.env.EMAIL_USER ,
+                    pass: process.env.EMAIL_PASSWORD ,
                 },
             });
 
             // Email content - simple text version only
             const mailOptions = {
-                from: process.env.EMAIL_FROM || 'Sapphire Broking <noreply@sapphirebroking.com>',
+                from: process.env.EMAIL_FROM,
                 to: this.id,
                 subject: 'Your Verification Code - Sapphire Broking',
                 text: `Welcome to Sapphire Broking!
@@ -190,11 +190,11 @@ class PhoneOtpVerification extends OtpVerification {
             // Send SMS using the API
             const apiUrl = `http://mobiglitz.com/vb/apikey.php`;
             const params = new URLSearchParams({
-                apikey: process.env.MOBIGLITZ_API_KEY || 'key',
-                senderid: process.env.MOBIGLITZ_SENDER_ID || 'SPHRBK',
+                apikey: process.env.MOBIGLITZ_API_KEY ,
+                senderid: process.env.MOBIGLITZ_SENDER_ID ,
                 number: mobileNumber,
                 message: message,
-                templateid: '1007898245699377543', // signup_otp template ID
+                templateid: process.env.MOBIGLITZ_SENDER_ID, // signup_otp template ID
             });
 
             const response = await axios.get(`${apiUrl}?${params.toString()}`);
