@@ -3,7 +3,7 @@ import axios from 'axios';
 import { InternalServerError } from '@app/apiError';
 
 const BASE_URL = 'http://mobiglitz.com/vb';
-export const PHONE_REGEX: RegExp = /^(\+91)?\d{10}$/;
+export const PHONE_REGEX: RegExp = /^\d{10}$/;
 
 /**
  * Service for handling SMS notifications and OTP functionality
@@ -21,14 +21,12 @@ export class SmsService {
      * Send SMS
      */
     public async sendSms(mobile: string, message: string, templateId: string) {
-        const formattedMobile = this.formatMobile(mobile);
-
         const url = `${BASE_URL}/apikey.php`;
         const response = await axios.get(url, {
             params: {
                 apikey: this.apiKey,
                 senderid: this.senderId,
-                number: formattedMobile,
+                number: mobile,
                 message,
                 templateid: templateId,
             },

@@ -27,19 +27,26 @@ const requestOtp = async (req: Request, res: Response) => {
             throw new BadRequestError('Email already exists');
         }
 
-        const checkpointExists = await db
-            .selectFrom('signup_checkpoints')
-            .where('email', '=', email)
-            .executeTakeFirst();
-        if (checkpointExists) {
-            throw new BadRequestError('Email already exists');
-        }
-
         const emailOtp = new EmailOtpVerification(email);
         await emailOtp.sendOtp();
     } else if (type === CredentialsType.PHONE) {
-        const phoneExists = await db.selectFrom('phone_number').where('phone', '=', phone).executeTakeFirst();
+        const phoneExists = await db
+            .selectFrom('user')
+            .innerJoin('phone_number', 'user.phone', 'phone_number.id')
+            .select('user.email')
+            .where('phone_number.phone', '=', phone)
+            .executeTakeFirst();
         if (phoneExists) {
+            throw new BadRequestError('Phone number already exists');
+        }
+
+        const checkpointExists = await db
+            .selectFrom('signup_checkpoints')
+            .innerJoin('phone_number', 'signup_checkpoints.phone_id', 'phone_number.id')
+            .select('signup_checkpoints.email')
+            .where('phone_number.phone', '=', phone)
+            .executeTakeFirst();
+        if (checkpointExists && checkpointExists.email !== email) {
             throw new BadRequestError('Phone number already exists');
         }
 
@@ -69,6 +76,31 @@ const verifyOtp = async (req: Request, res: Response) => {
         const phoneOtp = new PhoneOtpVerification(phone);
         await phoneOtp.verifyOtp(otp);
         await redisClient.del(`email-verified:${email}`);
+
+        await db.transaction().execute(async (tx) => {
+            const existingCheckpoint = await tx
+                .selectFrom('signup_checkpoints')
+                .leftJoin('phone_number', 'signup_checkpoints.phone_id', 'phone_number.id')
+                .select(['signup_checkpoints.id', 'signup_checkpoints.phone_id', 'phone_number.phone'])
+                .where('email', '=', email)
+                .executeTakeFirst();
+
+            if (existingCheckpoint && existingCheckpoint.phone !== phone) {
+                const phoneId = await tx
+                    .insertInto('phone_number')
+                    .values({ phone })
+                    .returning('id')
+                    .executeTakeFirstOrThrow();
+
+                await tx
+                    .updateTable('signup_checkpoints')
+                    .set({ phone_id: phoneId.id })
+                    .where('id', '=', existingCheckpoint.id)
+                    .execute();
+
+                await tx.deleteFrom('phone_number').where('id', '=', existingCheckpoint.phone_id).execute();
+            }
+        });
 
         const token = sign({
             email,
