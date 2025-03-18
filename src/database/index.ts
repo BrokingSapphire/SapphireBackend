@@ -9,8 +9,10 @@ const dialect = new PostgresDialect({
         host: env.db.host,
         user: env.db.user,
         port: Number(env.db.port),
+        password: env.db.password,
         max: 10,
     }),
+    // pool: new Pool({ connectionString: `postgres://${env.db.user}:${env.db.password}@${env.db.host}:${env.db.port}/${env.db.name}` }),
 });
 
 // Database interface is passed to Kysely's constructor, and from now on, Kysely

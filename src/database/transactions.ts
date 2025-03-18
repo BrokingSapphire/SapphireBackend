@@ -1,5 +1,5 @@
 import { Transaction, UpdateQueryBuilder, UpdateResult } from 'kysely';
-import { DB } from './db';
+import { DB } from './db.d';
 import countries from 'i18n-iso-countries';
 import { UpdateObjectExpression } from 'kysely/dist/cjs/parser/update-set-parser';
 
