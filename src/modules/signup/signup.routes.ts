@@ -1,11 +1,5 @@
 import { Router } from 'express';
-import {
-    CheckpointSchema,
-    PaymentVerifySchema,
-    RequestOtpSchema,
-    VerifyOtpSchema,
-    VerifySchema,
-} from './signup.validator';
+import { CheckpointSchema, PaymentVerifySchema, RequestOtpSchema, VerifyOtpSchema } from './signup.validator';
 import { validate } from '@app/middlewares';
 import {
     getCheckpoint,
@@ -72,7 +66,7 @@ router.post('/request-otp', validate(RequestOtpSchema), requestOtp);
  */
 router.post('/verify-otp', validate(VerifyOtpSchema), verifyOtp);
 
-router.post('/verify', validate(VerifySchema), verify);
+router.post('/verify', jwtMiddleware, verify);
 
 router.post('payment/initiate', jwtMiddleware, initiatePayment);
 

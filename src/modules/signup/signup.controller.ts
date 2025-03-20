@@ -13,7 +13,7 @@ import axios from 'axios';
 import { insertAddresGetId, insertNameGetId, updateCheckpoint } from '@app/database/transactions';
 import splitName from '@app/utils/split-name';
 import PanService from '@app/services/surepass/pan.service';
-import { CREATED, NO_CONTENT, NOT_ACCEPTABLE, NOT_FOUND, OK } from '@app/utils/httpstatus';
+import { CREATED, NO_CONTENT, NOT_ACCEPTABLE, NOT_FOUND, OK, PAYMENT_REQUIRED } from '@app/utils/httpstatus';
 import { BankVerification, ReversePenyDrop } from '@app/services/surepass/bank-verification';
 import { randomUUID } from 'crypto';
 import { imageUpload, wrappedMulterHandler } from '@app/services/multer-s3.service';
@@ -114,14 +114,16 @@ const verifyOtp = async (req: Request, res: Response) => {
             }
         });
 
-        res.status(OK).json({ message: 'OTP verified' });
+        const token = sign({ email, phone });
+
+        res.status(OK).json({ message: 'OTP verified', token });
     }
 };
 
 const verify = async (req: Request, res: Response) => {
-    const { email, phone } = req.body;
+    const { email } = req.auth as JwtType;
     if (await redisClient.get(`need-payment:${email}`)) {
-        res.status(OK).json({ message: 'Needs verification' });
+        res.status(PAYMENT_REQUIRED).json({ message: 'Needs verification' });
         return;
     }
 
@@ -135,12 +137,7 @@ const verify = async (req: Request, res: Response) => {
         throw new UnauthorizedError('Invalid session');
     }
 
-    const token = sign({
-        email,
-        phone,
-    });
-
-    res.status(OK).json({ message: 'Account verified', token });
+    res.status(OK).json({ message: 'Account verified' });
 };
 
 const initiatePayment = async (req: Request, res: Response) => {
@@ -184,9 +181,7 @@ const verifyPayment = async (req: Request, res: Response) => {
 
     await redisClient.del(`need-payment:${email}`);
 
-    const token = sign({ email, phone });
-
-    res.status(OK).json({ message: 'Payment verified', token });
+    res.status(OK).json({ message: 'Payment verified' });
 };
 
 const getCheckpoint = async (req: Request, res: Response) => {

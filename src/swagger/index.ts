@@ -261,6 +261,7 @@ const swaggerDocument = {
                 },
             },
         },
+        '/auth/signup/verify': {},
         '/auth/signup/checkpoint/{step}': {
             get: {
                 tags: ['Auth'],
