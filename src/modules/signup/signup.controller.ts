@@ -190,10 +190,6 @@ const verifyPayment = async (req: Request, res: Response) => {
 };
 
 const getCheckpoint = async (req: Request, res: Response) => {
-    if (!req.auth?.email || !req.auth?.phone) {
-        throw new UnauthorizedError('Request cannot be verified!');
-    }
-
     const { email } = req.auth as JwtType;
 
     const { step } = req.params;
@@ -279,10 +275,6 @@ const getCheckpoint = async (req: Request, res: Response) => {
 };
 
 const postCheckpoint = async (req: Request, res: Response) => {
-    if (!req.auth?.email || !req.auth?.phone) {
-        throw new UnauthorizedError('Request cannot be verified!');
-    }
-
     const { email, phone } = req.auth as JwtType;
 
     const { step } = req.body;
@@ -755,10 +747,6 @@ const ipvImageUpload = wrappedMulterHandler(imageUpload.single('image'));
 const putIpv = async (req: Request, res: Response) => {
     const { uid } = req.params;
 
-    if (!req.auth?.email || !req.auth?.phone) {
-        throw new UnauthorizedError('Request cannot be verified!');
-    }
-
     const { email, phone } = req.auth as JwtType;
     const value = await redisClient.get(`signup_ipv:${uid}`);
     if (!value || value !== email) throw new UnauthorizedError('IPV not authorized or expired.');
@@ -783,10 +771,6 @@ const putIpv = async (req: Request, res: Response) => {
 };
 
 const getIpv = async (req: Request, res: Response) => {
-    if (!req.auth?.email || !req.auth?.phone) {
-        throw new UnauthorizedError('Request cannot be verified!');
-    }
-
     const { email } = req.auth as JwtType;
 
     const url = await db.transaction().execute(async (tx) => {
@@ -806,4 +790,4 @@ const getIpv = async (req: Request, res: Response) => {
     }
 };
 
-export { requestOtp, verifyOtp, postCheckpoint, getCheckpoint, putIpv, getIpv };
+export { requestOtp, verifyOtp, verify, initiatePayment, verifyPayment, postCheckpoint, getCheckpoint, putIpv, getIpv };

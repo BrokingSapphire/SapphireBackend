@@ -127,4 +127,15 @@ const CheckpointSchema = Joi.object({
     }),
 });
 
-export { RequestOtpSchema, VerifyOtpSchema, CheckpointSchema };
+const VerifySchema = Joi.object({
+    email: Joi.string().email().required(),
+    phone: Joi.string().regex(PHONE_REGEX).required(),
+});
+
+const PaymentVerifySchema = Joi.object({
+    orderId: Joi.string().required(),
+    paymentId: Joi.string().required(),
+    signature: Joi.string().required(),
+});
+
+export { RequestOtpSchema, VerifyOtpSchema, CheckpointSchema, VerifySchema, PaymentVerifySchema };
