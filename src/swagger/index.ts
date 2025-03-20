@@ -10,15 +10,6 @@ const { swagger: verifyOtpSwagger } = j2s(VerifyOtpSchema);
 const { swagger: checkpointSwagger } = j2s(CheckpointSchema);
 
 const checkpointSchemaDestructed = {
-    [CheckpointStep.CREDENTIALS]: {
-        type: 'object',
-        properties: {
-            step: { type: 'string', enum: [CheckpointStep.CREDENTIALS] },
-            email: { type: 'string', format: 'email' },
-            phone: { type: 'string' },
-        },
-        required: ['step', 'email', 'phone'],
-    },
     [CheckpointStep.PAN]: {
         type: 'object',
         properties: {

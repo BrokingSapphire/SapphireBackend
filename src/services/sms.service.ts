@@ -37,17 +37,6 @@ export class SmsService {
             throw new InternalServerError(data.error);
         }
     }
-
-    /**
-     * Format mobile number by removing special chars and country code
-     */
-    private formatMobile(mobile: string): string {
-        let formatted = mobile.replace(/[\s\-+]/g, '');
-        if (formatted.length > 10) {
-            formatted = formatted.substring(2);
-        }
-        return formatted;
-    }
 }
 
 export default new SmsService();

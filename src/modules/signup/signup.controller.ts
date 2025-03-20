@@ -18,6 +18,7 @@ import { BankVerification, ReversePenyDrop } from '@app/services/surepass/bank-v
 import { randomUUID } from 'crypto';
 import { imageUpload, wrappedMulterHandler } from '@app/services/multer-s3.service';
 import logger from '@app/logger';
+import razorPay from '@app/services/razorpay.service';
 
 const requestOtp = async (req: Request, res: Response) => {
     const { type, phone, email } = req.body;
@@ -77,6 +78,17 @@ const verifyOtp = async (req: Request, res: Response) => {
         await phoneOtp.verifyOtp(otp);
         await redisClient.del(`email-verified:${email}`);
 
+        const isVerified = await db
+            .selectFrom('signup_checkpoints')
+            .select('payment_id')
+            .where('email', '=', email)
+            .executeTakeFirst();
+
+        if (!isVerified) {
+            await redisClient.set(`need-payment:${email}`, 'true');
+            await redisClient.expire(`need-payment:${email}`, 10 * 60);
+        }
+
         await db.transaction().execute(async (tx) => {
             const existingCheckpoint = await tx
                 .selectFrom('signup_checkpoints')
@@ -102,13 +114,79 @@ const verifyOtp = async (req: Request, res: Response) => {
             }
         });
 
-        const token = sign({
-            email,
-            phone,
-        });
-
-        res.status(OK).json({ message: 'OTP verified', token });
+        res.status(OK).json({ message: 'OTP verified' });
     }
+};
+
+const verify = async (req: Request, res: Response) => {
+    const { email, phone } = req.body;
+    if (await redisClient.get(`need-payment:${email}`)) {
+        res.status(OK).json({ message: 'Needs verification' });
+        return;
+    }
+
+    const isVerified = await db
+        .selectFrom('signup_checkpoints')
+        .select('payment_id')
+        .where('email', '=', email)
+        .executeTakeFirst();
+
+    if (!isVerified) {
+        throw new UnauthorizedError('Invalid session');
+    }
+
+    const token = sign({
+        email,
+        phone,
+    });
+
+    res.status(OK).json({ message: 'Account verified', token });
+};
+
+const initiatePayment = async (req: Request, res: Response) => {
+    const { email } = req.auth as JwtType;
+
+    if (!(await redisClient.get(`need-payment:${email}`))) throw new UnauthorizedError('Unauthorized access');
+
+    const order = await razorPay.createSignupOrder(email);
+
+    res.status(OK).json({
+        data: {
+            orderId: order.id,
+        },
+        message: 'Order created',
+    });
+};
+
+const verifyPayment = async (req: Request, res: Response) => {
+    const { email, phone } = req.auth as JwtType;
+    const { orderId, paymentId, signature } = req.body;
+
+    if (!(await redisClient.get(`need-payment:${email}`))) throw new UnauthorizedError('Unauthorized access');
+
+    const isVerified = razorPay.verifyOrder(orderId, paymentId, signature);
+    if (!isVerified) throw new UnprocessableEntityError('Payment not verified');
+
+    await db.transaction().execute(async (tx) => {
+        const phoneId = await tx.insertInto('phone_number').values({ phone }).returning('id').executeTakeFirstOrThrow();
+
+        const razorPayDataId = await tx
+            .insertInto('razorpay_data')
+            .values({ order_id: orderId, payment_id: paymentId, signature })
+            .returning('order_id')
+            .executeTakeFirstOrThrow();
+
+        await tx
+            .insertInto('signup_checkpoints')
+            .values({ email, phone_id: phoneId.id, payment_id: razorPayDataId.order_id })
+            .execute();
+    });
+
+    await redisClient.del(`need-payment:${email}`);
+
+    const token = sign({ email, phone });
+
+    res.status(OK).json({ message: 'Payment verified', token });
 };
 
 const getCheckpoint = async (req: Request, res: Response) => {
@@ -208,18 +286,7 @@ const postCheckpoint = async (req: Request, res: Response) => {
     const { email, phone } = req.auth as JwtType;
 
     const { step } = req.body;
-    if (step === CheckpointStep.CREDENTIALS) {
-        await db.transaction().execute(async (tx) => {
-            const phoneId = await tx
-                .insertInto('phone_number')
-                .values({ phone })
-                .returning('id')
-                .executeTakeFirstOrThrow();
-            await tx.insertInto('signup_checkpoints').values({ email, phone_id: phoneId.id }).execute();
-        });
-
-        res.status(CREATED).json({ message: 'Credentials saved' });
-    } else if (step === CheckpointStep.PAN) {
+    if (step === CheckpointStep.PAN) {
         const { pan_number } = req.body;
 
         const panService = new PanService();

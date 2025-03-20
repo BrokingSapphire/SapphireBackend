@@ -40,14 +40,6 @@ const CheckpointSchema = Joi.object({
     step: Joi.string()
         .valid(...Object.values(CheckpointStep))
         .required(),
-    email: Joi.alternatives().conditional('step', {
-        is: CheckpointStep.CREDENTIALS,
-        then: Joi.string().email().required(),
-    }),
-    phone: Joi.alternatives().conditional('step', {
-        is: CheckpointStep.CREDENTIALS,
-        then: Joi.string().regex(PHONE_REGEX).required(),
-    }),
     pan_number: Joi.alternatives().conditional('step', {
         is: CheckpointStep.PAN,
         then: Joi.string().length(10).regex(PAN_REGEX).required(),

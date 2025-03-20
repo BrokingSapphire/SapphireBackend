@@ -31,4 +31,8 @@ export const env = {
         region: process.env.AWS_REGION || 'region',
         s3_bucket: process.env.AWS_S3_BUCKET || 'bucket',
     },
+    razorpay: {
+        keyId: process.env.RAZORPAY_KEY_ID || 'key',
+        keySecret: process.env.RAZORPAY_KEY_SECRET,
+    },
 };
