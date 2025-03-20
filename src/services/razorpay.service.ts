@@ -10,7 +10,7 @@ class RazorPayService {
 
     createSignupOrder(email: string, referenceId?: string) {
         return this.instance.orders.create({
-            amount: 50000,
+            amount: 9900,
             currency: 'INR',
             receipt: referenceId,
             partial_payment: false,
