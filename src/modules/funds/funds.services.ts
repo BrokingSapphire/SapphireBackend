@@ -37,13 +37,13 @@ export class FundsService {
             .executeTakeFirst();
     
         // Apply safety cut logic
-        let finalAmount = amount;
-        let safetyCut: WithdrawalRequest['safetyCut'] = {
+        let safetyCut: WithdrawalRequest['safetyCut'] & { applied: boolean }  = {
             percentage: 5,
             amount: 0,
             reason: hasActivePositions ? 'Active F&O Positions' : null,
             originalAmount: amount,
-            finalAmount: amount
+            finalAmount: amount,
+            applied: !!hasActivePositions 
         };
     
         if (hasActivePositions) {

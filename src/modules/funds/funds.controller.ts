@@ -716,6 +716,11 @@ const processWithdrawal = async (req: Request, res: Response): Promise<void> => 
 
         // Calculate safety cut
         const { safetyCut } = await fundsService.calculateSafetyCut(userId, amount);
+        console.log('safetyCut: ',safetyCut)
+
+        if (!safetyCut || typeof safetyCut.finalAmount !== 'undefined') {
+            throw new Error('Failed to Calculate Safety Cut');
+        }
 
         // Prepare scheduled processing time
         const { processingWindow, scheduledTime } = fundsService.prepareScheduledProcessingTime();
@@ -727,7 +732,7 @@ const processWithdrawal = async (req: Request, res: Response): Promise<void> => 
                 .values({
                     user_id: userId,
                     bank_account_id: bankAccountId,
-                    amount: safetyCut.finalAmount,
+                    amount: safetyCut!.finalAmount as number,
                     original_amount: amount,
                     transaction_type: 'withdrawal',
                     status: 'pending',
@@ -735,8 +740,8 @@ const processWithdrawal = async (req: Request, res: Response): Promise<void> => 
                     remarks: remarks || 'Withdrawal request',
                     scheduled_processing_time: scheduledTime,
                     processing_window: processingWindow,
-                    safety_cut_amount: safetyCut.applied ? safetyCut.amount : null,
-                    safety_cut_percentage: safetyCut.applied ? safetyCut.percentage : null
+                    safety_cut_amount: safetyCut?.reason ? safetyCut.amount as number : null,
+                    safety_cut_percentage: safetyCut?.reason ? safetyCut.percentage : null
                 })
                 .returningAll()
                 .executeTakeFirst();
@@ -745,7 +750,7 @@ const processWithdrawal = async (req: Request, res: Response): Promise<void> => 
             .updateTable('user_funds')
             .set({
                 available_funds: eb => eb('available_funds', '-', amount),
-                blocked_funds: eb => eb('blocked_funds', '+', safetyCut.finalAmount),
+                blocked_funds: eb => eb('blocked_funds', '+', safetyCut!.finalAmount as number),
                 updated_at: new Date()
             })
             .where('user_id', '=', userId)
