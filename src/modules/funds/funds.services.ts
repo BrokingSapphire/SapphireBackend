@@ -34,6 +34,8 @@ export class FundsService {
                     eb('trade_type', '=', 'commodity_options')
                 ])
             )
+            .select('id')
+            .limit(1)
             .executeTakeFirst();
     
         // Apply safety cut logic

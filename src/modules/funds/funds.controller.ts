@@ -21,7 +21,7 @@ const getUserFunds = async (req: Request, res: Response): Promise<void> => {
         let userFunds = await db
         .selectFrom('user_funds')
         .where('user_id', '=', userId)
-        .selectAll()
+        .select(['id', 'user_id', 'available_funds', 'blocked_funds', 'total_funds', 'used_funds'])
         .executeTakeFirst();
 
         if(!userFunds){
@@ -99,16 +99,12 @@ const addFunds = async (req: Request, res: Response): Promise<void> => {
             .selectFrom('bank_to_user')
             .where('user_id', '=', userId)
             .where('bank_account_id', '=', bankAccountId)
+            .select(['bank_account_id']) 
             .executeTakeFirst();
 
         if (!bankToUser) {
             throw new ForbiddenError('Bank account does not belong to this user');
         }
-
-        const bankBelongsToUser = await fundsService.verifyBankAccount(userId, bankAccountId);
-    if (!bankBelongsToUser) {
-    throw new ForbiddenError('Bank account does not belong to this user');
-    }
 
         // Depositing Funds 
         const result = await db.transaction().execute(async (tx) => {
@@ -215,6 +211,7 @@ const completeFundDeposit = async (req: Request, res: Response): Promise<void> =
         });
         res.status(OK).json({
             message: 'Deposit completed successfully',
+            data:result
         });
     } catch (error) {
         logger.error('Error completing deposit:', error);
@@ -305,6 +302,7 @@ const withdrawFunds = async (req: Request, res: Response): Promise<void> => {
 
         res.status(CREATED).json({
             message: 'Withdrawal request created successfully',
+            data:result
         });
     } catch (error) {
         logger.error('Error creating withdrawal request:', error);
@@ -338,11 +336,8 @@ const completeWithdrawal = async (req: Request, res: Response): Promise<void> =>
         .selectFrom('fund_transactions')
         .where('id' ,'=' ,transactionId )
         .selectAll()
-        .executeTakeFirst();
+        .executeTakeFirstOrThrow();
 
-        if(!transaction){
-            throw new NotFoundError('Transaction Not Found');
-        }
         if (transaction.status !== 'pending') {
             throw new BadRequestError('Transaction is not in pending status');
         }
@@ -375,6 +370,7 @@ const completeWithdrawal = async (req: Request, res: Response): Promise<void> =>
 
         res.status(OK).json({
             message: 'Withdrawal completed successfully',
+            data:result
         });
     } catch (error) {
         logger.error('Error completing withdrawal:', error);
@@ -431,7 +427,16 @@ const getUserTransactions = async (req: Request, res: Response): Promise<void> =
 
 
         res.status(OK).json({
-            message:'Users Transaction Fetched Successfully'
+            message:'Users Transaction Fetched Successfully',
+            data:{
+                transactions,
+                pagination:{
+                    total,
+                    page: Math.floor(offset / limit) + 1,
+                    limit,
+                    pages: Math.ceil(total / limit)
+                }
+            }
         });
     } catch(error) {
         logger.error('Error fetching user transactions:', error);
@@ -462,7 +467,14 @@ const getTransactionById = async (req: Request, res: Response): Promise<void> =>
         const transaction = await db
         .selectFrom('fund_transactions')
         .where('id', '=', transactionId)
-        .selectAll()
+        .select([
+            'id', 
+            'user_id', 
+            'amount', 
+            'transaction_type', 
+            'status',
+            'bank_account_id'
+        ])
         .executeTakeFirst();
 
         if (!transaction) {
@@ -703,7 +715,11 @@ const processWithdrawal = async (req: Request, res: Response): Promise<void> => 
         const userFunds = await db
             .selectFrom('user_funds')
             .where('user_id', '=', userId)
-            .selectAll()
+            .select([
+                'id',
+                'user_id',
+                'available_funds'
+            ])
             .executeTakeFirst();
             
         if (!userFunds) {
@@ -718,7 +734,7 @@ const processWithdrawal = async (req: Request, res: Response): Promise<void> => 
         const { safetyCut } = await fundsService.calculateSafetyCut(userId, amount);
         console.log('safetyCut: ',safetyCut)
 
-        if (!safetyCut || typeof safetyCut.finalAmount !== 'undefined') {
+        if (!safetyCut || typeof safetyCut.finalAmount === 'undefined') {
             throw new Error('Failed to Calculate Safety Cut');
         }
 
@@ -925,7 +941,11 @@ const processScheduledWithdrawals = async (): Promise<void> => {
             .where('transaction_type', '=', 'withdrawal')
             .where('status', '=', 'pending')
             .where('scheduled_processing_time', '<=', now)
-            .selectAll()
+            .select([
+                'id',
+                'user_id',
+                'amount'
+            ])
             .execute();
             
         logger.info(`Found ${pendingWithdrawals.length} withdrawals to process`);
