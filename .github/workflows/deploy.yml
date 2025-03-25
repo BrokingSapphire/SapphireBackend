@@ -34,5 +34,8 @@ jobs:
           REMOTE_HOST: ${{ secrets.EC2_HOST }}
           REMOTE_USER: ${{ secrets.EC2_USER }}
           TARGET: ${{ secrets.REMOTE_TARGET }}
-          EXCLUDE: "/dist/, /node_modules/"
-          SCRIPT_BEFORE: echo """${{ secrets.BACKEND_ENV }}""" > .env
+          SCRIPT_AFTER: |
+            whoami
+            echo "$RSYNC_STDOUT"
+            echo """${{ secrets.BACKEND_ENV }}""" > .env
+          SCRIPT_AFTER_REQUIRED: true
