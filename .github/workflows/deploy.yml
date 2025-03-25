@@ -52,7 +52,7 @@ jobs:
           
           cd "$REPO_DIR"
           
-          echo ${{ secret.BACKEND_ENV }} > .env
+          echo ${{ secrets.BACKEND_ENV }} > .env
           
           yarn install --frozen-lockfile
           yarn codegen
