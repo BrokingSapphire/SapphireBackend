@@ -30,7 +30,7 @@ jobs:
         with:
           SSH_PRIVATE_KEY: ${{ secrets.EC2_PRIVATE_KEY }}
           ARGS: "-rlgoDzvc -i --delete"
-          SOURCE: "dist/ package.json"
+          SOURCE: "dist/ package.json yarn.lock"
           REMOTE_HOST: ${{ secrets.EC2_HOST }}
           REMOTE_USER: ${{ secrets.EC2_USER }}
           TARGET: ${{ secrets.REMOTE_TARGET }}
