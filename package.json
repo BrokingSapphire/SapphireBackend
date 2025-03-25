@@ -11,6 +11,7 @@
     "dev": "ts-node-dev --respawn --transpile-only --clear -r dotenv/config -r tsconfig-paths/register  src/server.ts",
     "clean": "rimraf dist",
     "codegen": "kysely-codegen --dialect postgres --numeric-parser number --log-level debug --env-file .env --out-file ./src/database/db.d.ts",
+    "codegen:no-verbose": "kysely-codegen --dialect postgres --numeric-parser number --log-level warning --env-file .env --out-file ./src/database/db.d.ts",
     "lint": "tslint --project tsconfig.json",
     "format": "prettier --ignore-path .gitignore \"src/**/*.+(ts|js)\" --write",
     "typecheck": "tsc --noEmit",

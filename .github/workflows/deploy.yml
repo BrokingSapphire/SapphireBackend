@@ -14,7 +14,7 @@ jobs:
           echo "Building the repository..."
           echo "DATABASE_URL=$DATABASE_URL" > .env
           yarn install --frozen-lockfile
-          yarn codegen
+          yarn codegen:no-verbose
           yarn build
   deploy:
     needs: build
@@ -28,7 +28,7 @@ jobs:
           HOST: ${{ secrets.EC2_HOST }}
           USER: ${{ secrets.EC2_USER }}
         run: |
-          echo "$PRIVATE_KEY" > github-ec2.pem && chmod 600 github-ec2.pem
+          echo """$PRIVATE_KEY""" > github-ec2.pem && chmod 600 github-ec2.pem
           ssh -o StrictHostKeyChecking=no -i github-ec2.pem '${USER}@${HOST}' << 'EOF'
           if ! command -v nvm &> /dev/null; then
             echo "Installing Node.js..."
@@ -55,10 +55,10 @@ jobs:
           
           cd "$REPO_DIR"
           
-          echo ${{ secrets.BACKEND_ENV }} > .env
+          echo """${{ secrets.BACKEND_ENV }}""" > .env
           
           yarn install --frozen-lockfile
-          yarn codegen
+          yarn codegen:no-verbose
           yarn build
           yarn install --production --frozen-lockfile --ignore-scripts
           
