@@ -8,10 +8,13 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Build Repository
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           echo "Building the repository..."
+          echo "DATABASE_URL=$DATABASE_URL" > .env
           yarn install --frozen-lockfile
-          echo "export const DB: any = {};" > "src/database/db.d.ts"
+          yarn codegen
           yarn build
   deploy:
     needs: build
