@@ -38,6 +38,6 @@ jobs:
             whoami
             echo """${{ secrets.BACKEND_ENV }}""" > .env
             screen -S sapphire -X quit || true
-            yarn
+            yarn install --production --frozen-lockfile --ignore-scripts
             screen -S sapphire -d -m 'node server.js'
           SCRIPT_AFTER_REQUIRED: true
