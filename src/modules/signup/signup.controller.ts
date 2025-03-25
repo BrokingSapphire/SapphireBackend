@@ -618,7 +618,7 @@ const postCheckpoint = async (req: Request, res: Response) => {
                         account_no: rpcResponse.data.data.details.account_number,
                         ifsc_code: rpcResponse.data.data.details.ifsc,
                     })
-                    .onConflict((oc) => oc.constraint('UQ_Bank_Account').doNothing())
+                    .onConflict((oc) => oc.constraint('uq_bank_account').doNothing())
                     .returning('id')
                     .executeTakeFirstOrThrow();
 
@@ -679,7 +679,7 @@ const postCheckpoint = async (req: Request, res: Response) => {
                         account_no: bank.account_number,
                         ifsc_code: bank.ifsc_code,
                     })
-                    .onConflict((oc) => oc.constraint('UQ_Bank_Account').doNothing())
+                    .onConflict((oc) => oc.constraint('uq_bank_account').doNothing())
                     .returning('id')
                     .executeTakeFirstOrThrow();
 
