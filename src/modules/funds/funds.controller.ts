@@ -633,8 +633,26 @@ const processWithdrawal = async (req: Request, res: Response): Promise<void> => 
         throw new BadRequestError('Insufficient funds for withdrawal');
     }
 
+    // checking for F&O 
+    const hasActivePositions = await db
+    .selectFrom('trading_positions')
+    .where('user_id', '=', userId)
+    .where(eb => 
+        eb.or([
+            eb('trade_type', '=', 'equity_futures'),
+            eb('trade_type', '=', 'equity_options'),
+            eb('trade_type', '=', 'currency_futures'),
+            eb('trade_type', '=', 'currency_options'),
+            eb('trade_type', '=', 'commodity_futures'),
+            eb('trade_type', '=', 'commodity_options')
+        ])
+    )
+    .select('id')
+    .limit(1)
+    .executeTakeFirst();
+
     // Calculate safety cut
-    const { safetyCut } = await fundsService.calculateSafetyCut(userId, amount);
+    const { safetyCut } = fundsService.calculateSafetyCut(!!hasActivePositions, amount);
 
     if (!safetyCut || typeof safetyCut.finalAmount === 'undefined') {
         throw new Error('Failed to Calculate Safety Cut');

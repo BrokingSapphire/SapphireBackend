@@ -1,51 +1,22 @@
 // funds.services.ts
 
-import { db } from '@app/database';
-import {WithdrawalRequest} from './funds.types'
+import { WithdrawalRequest } from './funds.types';
+
 export class FundsService {
     /**
-     * Verify Bank Account of a particular User
-     */
-    async verifyBankAccount(userId: number, bankAccountId: number): Promise<boolean> {
-        const bankAccount = await db
-            .selectFrom('bank_to_user')
-            .where('user_id', '=', userId)
-            .where('bank_account_id', '=', bankAccountId)
-            .executeTakeFirst();
-
-        return !!bankAccount;
-    }
-
-    /**
      * Calculate safety cut for withdrawal based on F&O positions
+     * @param hasActivePositions Whether the user has active F&O positions
+     * @param amount The withdrawal amount
      */
-    async calculateSafetyCut(userId: number, amount: number): Promise<{ safetyCut: WithdrawalRequest['safetyCut'] }> {
-        // Checking F&O pos. if safety cut is needed
-        const hasActivePositions = await db
-            .selectFrom('trading_positions')
-            .where('user_id', '=', userId)
-            .where(eb => 
-                eb.or([
-                    eb('trade_type', '=', 'equity_futures'),
-                    eb('trade_type', '=', 'equity_options'),
-                    eb('trade_type', '=', 'currency_futures'),
-                    eb('trade_type', '=', 'currency_options'),
-                    eb('trade_type', '=', 'commodity_futures'),
-                    eb('trade_type', '=', 'commodity_options')
-                ])
-            )
-            .select('id')
-            .limit(1)
-            .executeTakeFirst();
-    
+    calculateSafetyCut(hasActivePositions: boolean, amount: number): { safetyCut: WithdrawalRequest['safetyCut'] } {
         // Apply safety cut logic
-        let safetyCut: WithdrawalRequest['safetyCut'] & { applied: boolean }  = {
+        let safetyCut: WithdrawalRequest['safetyCut'] & { applied: boolean } = {
             percentage: 5,
             amount: 0,
             reason: hasActivePositions ? 'Active F&O Positions' : null,
             originalAmount: amount,
             finalAmount: amount,
-            applied: !!hasActivePositions 
+            applied: hasActivePositions
         };
     
         if (hasActivePositions) {
@@ -57,8 +28,9 @@ export class FundsService {
         return { safetyCut };
     }
     
-    //  * Prepare scheduled processing time for withdrawal
-
+    /**
+     * Prepare scheduled processing time for withdrawal
+     */
     prepareScheduledProcessingTime(): { 
         processingWindow: string, 
         scheduledTime: Date 
@@ -86,6 +58,21 @@ export class FundsService {
         }
 
         return { processingWindow, scheduledTime };
+    }
+    
+    /**
+     * Utility function to calculate processing windows based on current time
+     */
+    getProcessingWindow(): string {
+        const currentHour = new Date().getHours();
+        return currentHour < 12 ? 'NOON' : 'EOD';
+    }
+    
+    /**
+     * Format a currency value with 2 decimal places
+     */
+    formatCurrency(amount: number): string {
+        return amount.toFixed(2);
     }
 }
 
