@@ -35,12 +35,30 @@ jobs:
           REMOTE_USER: ${{ secrets.EC2_USER }}
           TARGET: ${{ secrets.REMOTE_TARGET }}
           EXCLUDE: "/dist/, /node_modules/"
-          SCRIPT_AFTER: |
+          SCRIPT_BEFORE: |
             whoami
+            mkdir -p ${{ secrets.REMOTE_TARGET }}
+          SCRIPT_AFTER: |
             cd "${{ secrets.REMOTE_TARGET }}"
-            pwd
-            echo """${{ secrets.BACKEND_ENV }}""" > .env
             screen -S sapphire -X quit || true
+            
+            if ! command -v nvm &> /dev/null; then
+              echo "Installing Node.js..."
+              curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
+              export NVM_DIR="$HOME/.nvm"
+              [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+            fi
+            nvm install 20
+            nvm use 20
+            
+            if ! command -v yarn &> /dev/null; then
+              echo "Installing Yarn..."
+              npm install -g yarn
+            fi
+            
+            echo """${{ secrets.BACKEND_ENV }}""" > .env
             yarn install --production --frozen-lockfile --ignore-scripts
+            
+            echo "Starting server..."
             screen -S sapphire -d -m 'node server.js'
           SCRIPT_AFTER_REQUIRED: true
