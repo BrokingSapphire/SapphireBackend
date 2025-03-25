@@ -1,0 +1,63 @@
+name: Deploy to EC2
+on:
+  push:
+    branches: [ main ]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build Repository
+        run: |
+          echo "Building the repository..."
+          yarn install --frozen-lockfile
+          echo "export const DB: any = {};" > "src/database/db.d.ts"
+          yarn build
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Deploy to EC2
+        env:
+          PRIVATE_KEY: ${{ secrets.EC2_PRIVATE_KEY }}
+          HOST: ${{ secrets.EC2_HOST }}
+          USER: ${{ secrets.EC2_USER }}
+        run: |
+          echo "$PRIVATE_KEY" > github-ec2.pem && chmod 600 github-ec2.pem
+          ssh -o StrictHostKeyChecking=no -i github-ec2.pem '${USER}@${HOST}' << 'EOF'
+          if ! command -v nvm &> /dev/null; then
+            echo "Installing Node.js..."
+            curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
+            export NVM_DIR="$HOME/.nvm"
+            [ -s
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+          fi
+          nvm install node
+          
+          echo "Installing Yarn..."
+          npm install -g yarn
+          
+          REPO_URL="https://github.com/BrokingSapphire/SapphireBackend.git"
+          BRANCH="main"
+          REPO_DIR="$HOME/SapphireBackend"
+          if [ -d "$REPO_DIR/.git" ]; then
+            cd "$REPO_DIR"
+            git pull origin "$BRANCH"
+          else
+            git clone "$REPO_URL" "$REPO_DIR"
+            cd "$REPO_DIR"
+          fi
+          
+          cd "$REPO_DIR"
+          
+          echo ${{ secret.BACKEND_ENV }} > .env
+          
+          yarn install --frozen-lockfile
+          yarn codegen
+          yarn build
+          yarn install --production --frozen-lockfile --ignore-scripts
+          
+          echo "Starting application..."
+          yarn start &
