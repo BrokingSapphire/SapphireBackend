@@ -37,10 +37,10 @@ jobs:
           EXCLUDE: "/dist/, /node_modules/"
           SCRIPT_AFTER: |
             whoami
-            echo """${{ secrets.BACKEND_ENV }}""" > .env
-            screen -S sapphire -X quit || true
             cd "${{ secrets.REMOTE_TARGET }}"
             pwd
+            echo """${{ secrets.BACKEND_ENV }}""" > .env
+            screen -S sapphire -X quit || true
             yarn install --production --frozen-lockfile --ignore-scripts
             screen -S sapphire -d -m 'node server.js'
           SCRIPT_AFTER_REQUIRED: true
