@@ -30,12 +30,14 @@ jobs:
         with:
           SSH_PRIVATE_KEY: ${{ secrets.EC2_PRIVATE_KEY }}
           ARGS: "-rlgoDzvc -i --delete"
-          SOURCE: "dist/"
+          SOURCE: "dist/ package.json"
           REMOTE_HOST: ${{ secrets.EC2_HOST }}
           REMOTE_USER: ${{ secrets.EC2_USER }}
           TARGET: ${{ secrets.REMOTE_TARGET }}
           SCRIPT_AFTER: |
             whoami
-            echo "$RSYNC_STDOUT"
             echo """${{ secrets.BACKEND_ENV }}""" > .env
+            screen -S sapphire -X quit || true
+            yarn
+            screen -S sapphire -d -m 'node server.js'
           SCRIPT_AFTER_REQUIRED: true
