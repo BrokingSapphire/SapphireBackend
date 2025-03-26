@@ -1,7 +1,6 @@
 import jwt, { Algorithm, JwtPayload, SignOptions } from 'jsonwebtoken';
 import { expressjwt } from 'express-jwt';
 import { env } from '@app/env';
-import { NextFunction, Request, Response } from 'express';
 
 const ALGORITHM: Algorithm = 'HS256';
 
@@ -20,9 +19,6 @@ const sign = (payload: JwtPayload, options: jwt.SignOptions = {}): string => {
     return jwt.sign(payload, env.jwt.secret, signOptions);
 };
 
-// const jwtMiddleware = expressjwt({ secret: env.jwt.secret, algorithms: [ALGORITHM] });
-const jwtMiddleware = (_req: Request, _res: Response, next: NextFunction) => {
-    next();
-};
+const jwtMiddleware = expressjwt({ secret: env.jwt.secret, algorithms: [ALGORITHM] });
 
 export { sign, jwtMiddleware };
