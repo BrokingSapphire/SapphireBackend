@@ -68,9 +68,9 @@ router.post('/verify-otp', validate(VerifyOtpSchema), verifyOtp);
 
 router.post('/verify', jwtMiddleware, verify);
 
-router.post('payment/initiate', jwtMiddleware, initiatePayment);
+router.post('/payment/initiate', jwtMiddleware, initiatePayment);
 
-router.post('payment/verify', [jwtMiddleware, validate(PaymentVerifySchema)], verifyPayment);
+router.post('/payment/verify', [jwtMiddleware, validate(PaymentVerifySchema)], verifyPayment);
 
 router.get('/checkpoint/:step', jwtMiddleware, getCheckpoint);
 
