@@ -1,7 +1,17 @@
 import { Router } from 'express';
-import { CheckpointSchema, RequestOtpSchema, VerifyOtpSchema } from './signup.validator';
+import { CheckpointSchema, PaymentVerifySchema, RequestOtpSchema, VerifyOtpSchema } from './signup.validator';
 import { validate } from '@app/middlewares';
-import { getCheckpoint, getIpv, postCheckpoint, putIpv, requestOtp, verifyOtp } from './signup.controller';
+import {
+    getCheckpoint,
+    getIpv,
+    initiatePayment,
+    postCheckpoint,
+    putIpv,
+    requestOtp,
+    verify,
+    verifyOtp,
+    verifyPayment,
+} from './signup.controller';
 import { jwtMiddleware } from '@app/utils/jwt';
 
 /**
@@ -55,6 +65,12 @@ router.post('/request-otp', validate(RequestOtpSchema), requestOtp);
  *         description: Email or phone number not found
  */
 router.post('/verify-otp', validate(VerifyOtpSchema), verifyOtp);
+
+router.post('/verify', jwtMiddleware, verify);
+
+router.post('/payment/initiate', jwtMiddleware, initiatePayment);
+
+router.post('/payment/verify', [jwtMiddleware, validate(PaymentVerifySchema)], verifyPayment);
 
 router.get('/checkpoint/:step', jwtMiddleware, getCheckpoint);
 

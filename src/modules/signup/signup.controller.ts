@@ -13,11 +13,12 @@ import axios from 'axios';
 import { insertAddresGetId, insertNameGetId, updateCheckpoint } from '@app/database/transactions';
 import splitName from '@app/utils/split-name';
 import PanService from '@app/services/surepass/pan.service';
-import { CREATED, NO_CONTENT, NOT_ACCEPTABLE, NOT_FOUND, OK } from '@app/utils/httpstatus';
+import { CREATED, NO_CONTENT, NOT_ACCEPTABLE, NOT_FOUND, OK, PAYMENT_REQUIRED } from '@app/utils/httpstatus';
 import { BankVerification, ReversePenyDrop } from '@app/services/surepass/bank-verification';
 import { randomUUID } from 'crypto';
 import { imageUpload, wrappedMulterHandler } from '@app/services/multer-s3.service';
 import logger from '@app/logger';
+import razorPay from '@app/services/razorpay.service';
 
 const requestOtp = async (req: Request, res: Response) => {
     const { type, phone, email } = req.body;
@@ -77,6 +78,17 @@ const verifyOtp = async (req: Request, res: Response) => {
         await phoneOtp.verifyOtp(otp);
         await redisClient.del(`email-verified:${email}`);
 
+        const isVerified = await db
+            .selectFrom('signup_checkpoints')
+            .select('payment_id')
+            .where('email', '=', email)
+            .executeTakeFirst();
+
+        if (!isVerified) {
+            await redisClient.set(`need-payment:${email}`, 'true');
+            await redisClient.expire(`need-payment:${email}`, 10 * 60);
+        }
+
         await db.transaction().execute(async (tx) => {
             const existingCheckpoint = await tx
                 .selectFrom('signup_checkpoints')
@@ -102,20 +114,77 @@ const verifyOtp = async (req: Request, res: Response) => {
             }
         });
 
-        const token = sign({
-            email,
-            phone,
-        });
+        const token = sign({ email, phone });
 
         res.status(OK).json({ message: 'OTP verified', token });
     }
 };
 
-const getCheckpoint = async (req: Request, res: Response) => {
-    if (!req.auth?.email || !req.auth?.phone) {
-        throw new UnauthorizedError('Request cannot be verified!');
+const verify = async (req: Request, res: Response) => {
+    const { email } = req.auth as JwtType;
+    if (await redisClient.get(`need-payment:${email}`)) {
+        res.status(PAYMENT_REQUIRED).json({ message: 'Needs verification' });
+        return;
     }
 
+    const isVerified = await db
+        .selectFrom('signup_checkpoints')
+        .select('payment_id')
+        .where('email', '=', email)
+        .executeTakeFirst();
+
+    if (!isVerified) {
+        throw new UnauthorizedError('Invalid session');
+    }
+
+    res.status(OK).json({ message: 'Account verified' });
+};
+
+const initiatePayment = async (req: Request, res: Response) => {
+    const { email } = req.auth as JwtType;
+
+    if (!(await redisClient.get(`need-payment:${email}`))) throw new UnauthorizedError('Unauthorized access');
+
+    const order = await razorPay.createSignupOrder(email);
+
+    res.status(OK).json({
+        data: {
+            orderId: order.id,
+        },
+        message: 'Order created',
+    });
+};
+
+const verifyPayment = async (req: Request, res: Response) => {
+    const { email, phone } = req.auth as JwtType;
+    const { orderId, paymentId, signature } = req.body;
+
+    if (!(await redisClient.get(`need-payment:${email}`))) throw new UnauthorizedError('Unauthorized access');
+
+    const isVerified = razorPay.verifyOrder(orderId, paymentId, signature);
+    if (!isVerified) throw new UnprocessableEntityError('Payment not verified');
+
+    await db.transaction().execute(async (tx) => {
+        const phoneId = await tx.insertInto('phone_number').values({ phone }).returning('id').executeTakeFirstOrThrow();
+
+        const razorPayDataId = await tx
+            .insertInto('razorpay_data')
+            .values({ order_id: orderId, payment_id: paymentId, signature })
+            .returning('order_id')
+            .executeTakeFirstOrThrow();
+
+        await tx
+            .insertInto('signup_checkpoints')
+            .values({ email, phone_id: phoneId.id, payment_id: razorPayDataId.order_id })
+            .execute();
+    });
+
+    await redisClient.del(`need-payment:${email}`);
+
+    res.status(OK).json({ message: 'Payment verified' });
+};
+
+const getCheckpoint = async (req: Request, res: Response) => {
     const { email } = req.auth as JwtType;
 
     const { step } = req.params;
@@ -201,25 +270,10 @@ const getCheckpoint = async (req: Request, res: Response) => {
 };
 
 const postCheckpoint = async (req: Request, res: Response) => {
-    if (!req.auth?.email || !req.auth?.phone) {
-        throw new UnauthorizedError('Request cannot be verified!');
-    }
-
     const { email, phone } = req.auth as JwtType;
 
     const { step } = req.body;
-    if (step === CheckpointStep.CREDENTIALS) {
-        await db.transaction().execute(async (tx) => {
-            const phoneId = await tx
-                .insertInto('phone_number')
-                .values({ phone })
-                .returning('id')
-                .executeTakeFirstOrThrow();
-            await tx.insertInto('signup_checkpoints').values({ email, phone_id: phoneId.id }).execute();
-        });
-
-        res.status(CREATED).json({ message: 'Credentials saved' });
-    } else if (step === CheckpointStep.PAN) {
+    if (step === CheckpointStep.PAN) {
         const { pan_number } = req.body;
 
         const panService = new PanService();
@@ -564,7 +618,7 @@ const postCheckpoint = async (req: Request, res: Response) => {
                         account_no: rpcResponse.data.data.details.account_number,
                         ifsc_code: rpcResponse.data.data.details.ifsc,
                     })
-                    .onConflict((oc) => oc.constraint('UQ_Bank_Account').doNothing())
+                    .onConflict((oc) => oc.constraint('uq_bank_account').doNothing())
                     .returning('id')
                     .executeTakeFirstOrThrow();
 
@@ -625,7 +679,7 @@ const postCheckpoint = async (req: Request, res: Response) => {
                         account_no: bank.account_number,
                         ifsc_code: bank.ifsc_code,
                     })
-                    .onConflict((oc) => oc.constraint('UQ_Bank_Account').doNothing())
+                    .onConflict((oc) => oc.constraint('uq_bank_account').doNothing())
                     .returning('id')
                     .executeTakeFirstOrThrow();
 
@@ -688,10 +742,6 @@ const ipvImageUpload = wrappedMulterHandler(imageUpload.single('image'));
 const putIpv = async (req: Request, res: Response) => {
     const { uid } = req.params;
 
-    if (!req.auth?.email || !req.auth?.phone) {
-        throw new UnauthorizedError('Request cannot be verified!');
-    }
-
     const { email, phone } = req.auth as JwtType;
     const value = await redisClient.get(`signup_ipv:${uid}`);
     if (!value || value !== email) throw new UnauthorizedError('IPV not authorized or expired.');
@@ -716,10 +766,6 @@ const putIpv = async (req: Request, res: Response) => {
 };
 
 const getIpv = async (req: Request, res: Response) => {
-    if (!req.auth?.email || !req.auth?.phone) {
-        throw new UnauthorizedError('Request cannot be verified!');
-    }
-
     const { email } = req.auth as JwtType;
 
     const url = await db.transaction().execute(async (tx) => {
@@ -739,4 +785,4 @@ const getIpv = async (req: Request, res: Response) => {
     }
 };
 
-export { requestOtp, verifyOtp, postCheckpoint, getCheckpoint, putIpv, getIpv };
+export { requestOtp, verifyOtp, verify, initiatePayment, verifyPayment, postCheckpoint, getCheckpoint, putIpv, getIpv };

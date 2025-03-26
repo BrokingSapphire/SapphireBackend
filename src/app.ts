@@ -34,6 +34,6 @@ logger.info(`API routes registered at ${env.apiPath}`);
 
 // Error handling
 app.use(errorHandler);
-app.use(csurf());
+// app.use(csurf());
 
 export default app;

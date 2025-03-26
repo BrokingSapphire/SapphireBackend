@@ -27,7 +27,7 @@ const insertNameGetId = async (tx: Transaction<DB>, name: Name): Promise<number>
             middle_name: name.middleName,
             last_name: name.lastName,
         })
-        .onConflict((oc) => oc.constraint('UQ_User_Name').doNothing())
+        .onConflict((oc) => oc.constraint('uq_user_name').doNothing())
         .returning('id')
         .executeTakeFirstOrThrow();
 
@@ -41,7 +41,7 @@ const insertAddresGetId = async (tx: Transaction<DB>, address: Address): Promise
             iso: countries.alpha2ToNumeric(countries.getAlpha2Code(address.country, 'en') as string) as string,
             name: address.country,
         })
-        .onConflict((oc) => oc.constraint('PK_Country_Iso').doNothing())
+        .onConflict((oc) => oc.constraint('pk_country_iso').doNothing())
         .returning('iso')
         .executeTakeFirstOrThrow();
 
@@ -51,7 +51,7 @@ const insertAddresGetId = async (tx: Transaction<DB>, address: Address): Promise
             name: address.state,
             country_id: countryIso.iso,
         })
-        .onConflict((oc) => oc.constraint('UQ_State_Country').doNothing())
+        .onConflict((oc) => oc.constraint('uq_state_country').doNothing())
         .returning('id')
         .executeTakeFirstOrThrow();
 
@@ -61,7 +61,7 @@ const insertAddresGetId = async (tx: Transaction<DB>, address: Address): Promise
             name: address.city,
             state_id: stateId.id,
         })
-        .onConflict((oc) => oc.constraint('UQ_City_State').doNothing())
+        .onConflict((oc) => oc.constraint('uq_city_state').doNothing())
         .returning('id')
         .executeTakeFirstOrThrow();
 
@@ -71,7 +71,7 @@ const insertAddresGetId = async (tx: Transaction<DB>, address: Address): Promise
             postal_code: address.postalCode,
             country_id: countryIso.iso,
         })
-        .onConflict((oc) => oc.constraint('UQ_Postal_Country').doNothing())
+        .onConflict((oc) => oc.constraint('uq_postal_country').doNothing())
         .returning('id')
         .executeTakeFirstOrThrow();
 

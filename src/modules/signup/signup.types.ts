@@ -4,7 +4,6 @@ interface JwtType {
 }
 
 enum CheckpointStep {
-    CREDENTIALS = 'credentials',
     PAN = 'pan',
     AADHAAR_URI = 'aadhaar_uri',
     AADHAAR = 'aadhaar',
