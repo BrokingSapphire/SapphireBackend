@@ -55,7 +55,7 @@ const requestOtp = async (req: Request, res: Response) => {
             throw new UnauthorizedError('Email not verified');
         }
 
-        const phoneOtp = new PhoneOtpVerification(phone);
+        const phoneOtp = new PhoneOtpVerification(email, phone);
         await phoneOtp.sendOtp();
     }
 
@@ -74,7 +74,7 @@ const verifyOtp = async (req: Request, res: Response) => {
     } else if (type === CredentialsType.PHONE) {
         if (!(await redisClient.get(`email-verified:${email}`))) throw new UnauthorizedError('Email not verified.');
 
-        const phoneOtp = new PhoneOtpVerification(phone);
+        const phoneOtp = new PhoneOtpVerification(email, phone);
         await phoneOtp.verifyOtp(otp);
         await redisClient.del(`email-verified:${email}`);
 
@@ -361,7 +361,7 @@ const postCheckpoint = async (req: Request, res: Response) => {
 
         const key = `digilocker:${email}`;
         await redisClient.set(key, digiResponse.data.data.client_id);
-        await redisClient.expireAt(key, digiResponse.data.data.expiry_seconds);
+        await redisClient.expire(key, digiResponse.data.data.expiry_seconds);
 
         res.status(OK).json({
             data: {
@@ -424,12 +424,13 @@ const postCheckpoint = async (req: Request, res: Response) => {
 
         const clientId = await redisClient.get(`digilocker:${email}`);
         if (!clientId) throw new UnauthorizedError('Digilocker not authorized or expired.');
-        await redisClient.del(`digilocker:${email}`);
 
         const digilocker = new DigiLockerService();
 
         const status = await digilocker.getStatus(clientId);
-        if (!status.data.data.completed) throw new UnauthorizedError('Digilocker not authorized or expired.');
+        if (!status.data.data.completed) throw new UnauthorizedError('Digilocker status incomplete');
+
+        await redisClient.del(`digilocker:${email}`);
 
         const documents = await digilocker.listDocuments(clientId);
         const aadhar = documents.data.data.documents.find((d: any) => d.doc_type === 'ADHAR');
@@ -590,6 +591,8 @@ const postCheckpoint = async (req: Request, res: Response) => {
                 return;
             }
 
+            await redisClient.del(`upi-validation:${email}`);
+
             await db.transaction().execute(async (tx) => {
                 const checkpointId = await tx
                     .selectFrom('signup_checkpoints')
@@ -603,14 +606,16 @@ const postCheckpoint = async (req: Request, res: Response) => {
                     .returning('bank_account_id')
                     .execute();
 
-                await tx
-                    .deleteFrom('bank_account')
-                    .where(
-                        'id',
-                        'in',
-                        deleted.map((d) => d.bank_account_id),
-                    )
-                    .execute();
+                if (deleted.length > 0) {
+                    await tx
+                        .deleteFrom('bank_account')
+                        .where(
+                            'id',
+                            'in',
+                            deleted.map((d) => d.bank_account_id),
+                        )
+                        .execute();
+                }
 
                 const bankId = await tx
                     .insertInto('bank_account')
@@ -618,7 +623,11 @@ const postCheckpoint = async (req: Request, res: Response) => {
                         account_no: rpcResponse.data.data.details.account_number,
                         ifsc_code: rpcResponse.data.data.details.ifsc,
                     })
-                    .onConflict((oc) => oc.constraint('uq_bank_account').doNothing())
+                    .onConflict((oc) =>
+                        oc.constraint('uq_bank_account').doUpdateSet((eb) => ({
+                            account_no: eb.ref('excluded.account_no'),
+                        })),
+                    )
                     .returning('id')
                     .executeTakeFirstOrThrow();
 
@@ -631,8 +640,6 @@ const postCheckpoint = async (req: Request, res: Response) => {
                     })
                     .execute();
             });
-
-            await redisClient.del(`upi-validation:${email}`);
 
             res.status(CREATED).json({ message: 'UPI validation completed' });
         } else {
@@ -664,14 +671,16 @@ const postCheckpoint = async (req: Request, res: Response) => {
                     .returning('bank_account_id')
                     .execute();
 
-                await tx
-                    .deleteFrom('bank_account')
-                    .where(
-                        'id',
-                        'in',
-                        deleted.map((d) => d.bank_account_id),
-                    )
-                    .execute();
+                if (deleted.length > 0) {
+                    await tx
+                        .deleteFrom('bank_account')
+                        .where(
+                            'id',
+                            'in',
+                            deleted.map((d) => d.bank_account_id),
+                        )
+                        .execute();
+                }
 
                 const bankId = await tx
                     .insertInto('bank_account')
@@ -679,7 +688,11 @@ const postCheckpoint = async (req: Request, res: Response) => {
                         account_no: bank.account_number,
                         ifsc_code: bank.ifsc_code,
                     })
-                    .onConflict((oc) => oc.constraint('uq_bank_account').doNothing())
+                    .onConflict((oc) =>
+                        oc.constraint('uq_bank_account').doUpdateSet((eb) => ({
+                            account_no: eb.ref('excluded.account_no'),
+                        })),
+                    )
                     .returning('id')
                     .executeTakeFirstOrThrow();
 

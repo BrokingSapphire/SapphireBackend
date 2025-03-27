@@ -16,15 +16,6 @@ export interface DigiLockerInitializeRequest {
     state: string;
 }
 
-export interface PanError {
-    error: {
-        message: string;
-        code: string;
-        type: string;
-        info: string;
-    };
-}
-
 export interface BankVerificationDetails {
     id_number: string;
     ifsc: string;

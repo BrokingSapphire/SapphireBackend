@@ -36,7 +36,7 @@ const requestOtp = async (req: Request, res: Response) => {
             throw new NotFoundError('Phone number not found');
         }
 
-        const phoneOtp = new PhoneOtpVerification(phone);
+        const phoneOtp = new PhoneOtpVerification(email, phone);
         await phoneOtp.sendOtp();
     }
 
@@ -50,7 +50,7 @@ const verifyOtp = async (req: Request, res: Response) => {
         const emailOtp = new EmailOtpVerification(email);
         await emailOtp.verifyOtp(otp);
     } else {
-        const phoneOtp = new PhoneOtpVerification(phone);
+        const phoneOtp = new PhoneOtpVerification(email, phone);
         await phoneOtp.verifyOtp(otp);
     }
 

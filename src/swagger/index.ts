@@ -30,7 +30,7 @@ const checkpointSchemaDestructed = {
             step: { type: 'string', enum: [CheckpointStep.AADHAAR_URI] },
             redirect: { type: 'string', format: 'uri' },
         },
-        required: ['step'],
+        required: ['step', 'redirect'],
     },
     [CheckpointStep.INVESTMENT_SEGMENT]: {
         type: 'object',

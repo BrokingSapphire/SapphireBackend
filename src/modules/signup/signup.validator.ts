@@ -44,7 +44,10 @@ const CheckpointSchema = Joi.object({
         is: CheckpointStep.PAN,
         then: Joi.string().length(10).regex(PAN_REGEX).required(),
     }),
-    redirect: Joi.string().optional(),
+    redirect: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.AADHAAR_URI,
+        then: Joi.string().required(),
+    }),
     segments: Joi.alternatives().conditional('step', {
         is: CheckpointStep.INVESTMENT_SEGMENT,
         then: Joi.array()
@@ -66,19 +69,19 @@ const CheckpointSchema = Joi.object({
         then: Joi.string().required(),
     }),
     annual_income: Joi.alternatives().conditional('step', {
-        is: CheckpointStep.USER_DETAIL,
+        is: CheckpointStep.ACCOUNT_DETAIL,
         then: Joi.string()
             .valid(...Object.values(AnnualIncome))
             .required(),
     }),
     experience: Joi.alternatives().conditional('step', {
-        is: CheckpointStep.USER_DETAIL,
+        is: CheckpointStep.ACCOUNT_DETAIL,
         then: Joi.string()
             .valid(...Object.values(TradingExperience))
             .required(),
     }),
     settlement: Joi.alternatives().conditional('step', {
-        is: CheckpointStep.USER_DETAIL,
+        is: CheckpointStep.ACCOUNT_DETAIL,
         then: Joi.string()
             .valid(...Object.values(AccountSettlement))
             .required(),

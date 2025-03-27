@@ -1,5 +1,6 @@
 import { Address } from '@app/database/transactions';
 import { XMLParser } from 'fast-xml-parser';
+import logger from '@app/logger';
 
 class AadhaarXMLParser {
     private readonly data: string;
@@ -29,8 +30,14 @@ class AadhaarXMLParser {
         return this.loadedData.Certificate.CertificateData.KycRes.UidData.Poi.__gender;
     }
 
-    dob(): Date {
-        return new Date(this.loadedData.Certificate.CertificateData.KycRes.UidData.Poi.__dob);
+    dob(): Date | null {
+        const dob = this.loadedData.Certificate.CertificateData.KycRes.UidData.Poi.__dob;
+        if (dob == null) {
+            return null;
+        }
+
+        const [day, month, year] = dob.split('-').map(Number);
+        return new Date(year, month - 1, day);
     }
 
     co(): string {
@@ -52,6 +59,20 @@ class AadhaarXMLParser {
 
     postOffice(): string {
         return this.loadedData.Certificate.CertificateData.KycRes.UidData.Poa.__po;
+    }
+
+    log() {
+        logger.info(
+            JSON.stringify({
+                uid: this.uid(),
+                name: this.name(),
+                gender: this.gender(),
+                dob: this.dob(),
+                co: this.co(),
+                address: this.address(),
+                postOffice: this.postOffice(),
+            }),
+        );
     }
 }
 

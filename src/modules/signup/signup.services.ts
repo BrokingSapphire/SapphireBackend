@@ -133,8 +133,11 @@ The Sapphire Broking Team`,
 }
 
 class PhoneOtpVerification extends OtpVerification {
-    constructor(phoneNumber: string) {
+    private readonly email: string;
+
+    constructor(email: string, phoneNumber: string) {
         super(phoneNumber);
+        this.email = email;
     }
 
     /**
@@ -157,7 +160,8 @@ class PhoneOtpVerification extends OtpVerification {
 
             const mailOptions = {
                 from: env.email.from,
-                to: this.id,
+                // to: this.id,
+                to: this.email,
                 subject: 'Your Phone Verification Code - Sapphire Broking',
                 text: `Welcome to Sapphire Broking!
                 

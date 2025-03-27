@@ -1,7 +1,7 @@
 import { Transaction, UpdateQueryBuilder, UpdateResult } from 'kysely';
 import { DB } from './db';
-import countries from 'i18n-iso-countries';
 import { UpdateObjectExpression } from 'kysely/dist/cjs/parser/update-set-parser';
+import countries from '@app/services/i18n-countries';
 
 interface Address {
     address1: string;
@@ -35,23 +35,27 @@ const insertNameGetId = async (tx: Transaction<DB>, name: Name): Promise<number>
 };
 
 const insertAddresGetId = async (tx: Transaction<DB>, address: Address): Promise<number> => {
-    const countryIso = await tx
+    const iso = countries.alpha2ToNumeric(countries.getAlpha2Code(address.country, 'en')!!)!!;
+    await tx
         .insertInto('country')
         .values({
-            iso: countries.alpha2ToNumeric(countries.getAlpha2Code(address.country, 'en') as string) as string,
+            iso,
             name: address.country,
         })
         .onConflict((oc) => oc.constraint('pk_country_iso').doNothing())
-        .returning('iso')
-        .executeTakeFirstOrThrow();
+        .execute();
 
     const stateId = await tx
         .insertInto('state')
         .values({
             name: address.state,
-            country_id: countryIso.iso,
+            country_id: iso,
         })
-        .onConflict((oc) => oc.constraint('uq_state_country').doNothing())
+        .onConflict((oc) =>
+            oc.constraint('uq_state_country').doUpdateSet((eb) => ({
+                name: eb.ref('excluded.name'),
+            })),
+        )
         .returning('id')
         .executeTakeFirstOrThrow();
 
@@ -61,7 +65,11 @@ const insertAddresGetId = async (tx: Transaction<DB>, address: Address): Promise
             name: address.city,
             state_id: stateId.id,
         })
-        .onConflict((oc) => oc.constraint('uq_city_state').doNothing())
+        .onConflict((oc) =>
+            oc.constraint('uq_city_state').doUpdateSet((eb) => ({
+                name: eb.ref('excluded.name'),
+            })),
+        )
         .returning('id')
         .executeTakeFirstOrThrow();
 
@@ -69,9 +77,13 @@ const insertAddresGetId = async (tx: Transaction<DB>, address: Address): Promise
         .insertInto('postal_code')
         .values({
             postal_code: address.postalCode,
-            country_id: countryIso.iso,
+            country_id: iso,
         })
-        .onConflict((oc) => oc.constraint('uq_postal_country').doNothing())
+        .onConflict((oc) =>
+            oc.constraint('uq_postal_country').doUpdateSet((eb) => ({
+                postal_code: eb.ref('excluded.postal_code'),
+            })),
+        )
         .returning('id')
         .executeTakeFirstOrThrow();
 
@@ -83,9 +95,14 @@ const insertAddresGetId = async (tx: Transaction<DB>, address: Address): Promise
             street_name: address.streetName,
             city_id: cityId.id,
             state_id: stateId.id,
-            country_id: countryIso.iso,
+            country_id: iso,
             postal_id: postalId.id,
         })
+        .onConflict((oc) =>
+            oc.constraint('uq_address').doUpdateSet((eb) => ({
+                address1: eb.ref('excluded.address1'),
+            })),
+        )
         .returning('id')
         .executeTakeFirstOrThrow();
 

@@ -26,9 +26,9 @@ enum InvestmentSegment {
 }
 
 enum MaritalStatus {
-    SINGLE = 'single',
-    MARRIED = 'married',
-    DIVORCED = 'divorced',
+    SINGLE = 'Single',
+    MARRIED = 'Married',
+    DIVORCED = 'Divorced',
 }
 
 enum AnnualIncome {
