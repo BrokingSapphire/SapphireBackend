@@ -106,9 +106,31 @@ const errorHandler = (error: unknown, _req: Request, res: Response<ErrorResponse
         error: {
             code: INTERNAL_SERVER_ERROR,
             message: 'Something went wrong!',
-            details: env.env === 'development' ? [error instanceof Error ? error.message : ''] : undefined,
+            details: env.env === 'development' ? getErrorDetails(error) : undefined,
         },
     });
 };
+
+function getErrorDetails(error: unknown): string[] {
+    const details: string[] = [];
+
+    if (error instanceof Error) {
+        details.push(error.message);
+
+        // Add cause chain if available
+        let currentError = error.cause as Error | undefined;
+        while (currentError) {
+            details.push(`Caused by: ${currentError.message}`);
+            currentError = currentError.cause as Error | undefined;
+        }
+
+        // Add stack trace for developer debugging
+        if (error.stack) {
+            details.push(error.stack);
+        }
+    }
+
+    return details.length ? details : ['Unknown error'];
+}
 
 export default errorHandler;
