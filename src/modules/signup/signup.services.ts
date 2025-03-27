@@ -141,15 +141,38 @@ class PhoneOtpVerification extends OtpVerification {
      * Send OTP to the user's phone
      */
     public async sendOtp(): Promise<void> {
+        // FIXME
+        // try {
+        //     const otp = await this.storeOtp();
+        //
+        //     const message = `Welcome to Sapphire! Your OTP for signup is ${otp}. Do not share this OTP with anyone. It is valid for 10 minutes. - Sapphire Broking`;
+        //     await smsService.sendSms(this.id, message, '1007898245699377543'); // FIXME: Remove raw template ID
+        //     logger.debug(`Sent OTP ${otp} to ${this.id}`);
+        // } catch (error) {
+        //     logger.error(`Failed to send OTP to phone ${this.id}:`, error);
+        //     throw new Error('Failed to send OTP via SMS');
+        // }
         try {
             const otp = await this.storeOtp();
 
-            const message = `Welcome to Sapphire! Your OTP for signup is ${otp}. Do not share this OTP with anyone. It is valid for 10 minutes. - Sapphire Broking`;
-            await smsService.sendSms(this.id, message, '1007898245699377543'); // FIXME: Remove raw template ID
+            const mailOptions = {
+                from: env.email.from,
+                to: this.id,
+                subject: 'Your Phone Verification Code - Sapphire Broking',
+                text: `Welcome to Sapphire Broking!
+                
+Your verification code for mobile number is: ${otp}
+This code will expire in 10 minutes. Do not share this code with anyone.
+If you did not request this code, please ignore this email.
+Regards,
+The Sapphire Broking Team`,
+            };
+
+            await transporter.sendMail(mailOptions);
             logger.debug(`Sent OTP ${otp} to ${this.id}`);
         } catch (error) {
-            logger.error(`Failed to send OTP to phone ${this.id}:`, error);
-            throw new Error('Failed to send OTP via SMS');
+            logger.error(`Failed to send OTP to email ${this.id}:`, error);
+            throw new Error('Failed to send OTP via email');
         }
     }
 }

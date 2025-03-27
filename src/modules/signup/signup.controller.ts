@@ -162,7 +162,7 @@ const verifyPayment = async (req: Request, res: Response) => {
     if (!(await redisClient.get(`need-payment:${email}`))) throw new UnauthorizedError('Unauthorized access');
 
     // const isVerified = razorPay.verifyOrder(orderId, paymentId, signature);
-    // if (!isVerified) throw new UnprocessableEntityError('Payment not verified');
+    // if (!isVerified) throw new UnprocessableEntityError('Payment not verified'); // FIXME
 
     await db.transaction().execute(async (tx) => {
         const phoneId = await tx.insertInto('phone_number').values({ phone }).returning('id').executeTakeFirstOrThrow();
