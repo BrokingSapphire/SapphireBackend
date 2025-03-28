@@ -4,9 +4,11 @@ import { validate } from '@app/middlewares';
 import {
     getCheckpoint,
     getIpv,
+    getSignature,
     initiatePayment,
     postCheckpoint,
     putIpv,
+    putSignature,
     requestOtp,
     verify,
     verifyOtp,
@@ -130,5 +132,9 @@ router.put('/ipv/:uid', jwtMiddleware, putIpv);
  *         description: Unauthorized
  */
 router.get('/ipv', jwtMiddleware, getIpv);
+
+router.put('/signature/:uid', jwtMiddleware, putSignature);
+
+router.get('/signature', jwtMiddleware, getSignature);
 
 export default router;

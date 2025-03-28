@@ -690,6 +690,18 @@ const postCheckpoint = async (req: Request, res: Response) => {
 
             res.status(CREATED).json({ message: 'Bank validation completed' });
         }
+    } else if (step === CheckpointStep.SIGNATURE) {
+        const uid = randomUUID();
+
+        await redisClient.set(`signup_signature:${uid}`, email);
+        await redisClient.expire(`signup_signature:${uid}`, 10 * 60);
+
+        res.status(OK).json({
+            data: {
+                uid,
+            },
+            message: 'Signature started',
+        });
     } else if (step === CheckpointStep.IPV) {
         const uid = randomUUID();
 

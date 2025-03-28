@@ -13,6 +13,7 @@ enum CheckpointStep {
     OCCUPATION = 'occupation',
     BANK_VALIDATION_START = 'bank_validation_start',
     BANK_VALIDATION = 'bank_validation',
+    SIGNATURE = 'signature',
     IPV = 'ipv',
     ADD_NOMINEES = 'add_nominees',
 }

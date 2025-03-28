@@ -523,6 +523,95 @@ const swaggerDocument = {
                 },
             },
         },
+        '/auth/signup/signature/{uid}': {
+            put: {
+                tags: ['Auth'],
+                security: [{ BearerAuth: [] }],
+                summary: 'Upload Signature image',
+                parameters: [
+                    {
+                        in: 'path',
+                        name: 'uid',
+                        required: true,
+                        schema: { type: 'string', format: 'uuid' },
+                    },
+                ],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'multipart/form-data': {
+                            schema: {
+                                type: 'object',
+                                properties: {
+                                    image: {
+                                        type: 'string',
+                                        format: 'binary',
+                                    },
+                                },
+                                required: ['image'],
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    '201': {
+                        description: 'Signature image uploaded successfully',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        message: { type: 'string' },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    '401': { $ref: '#/components/responses/Unauthorized' },
+                    '422': { $ref: '#/components/responses/UnprocessableEntity' },
+                },
+            },
+        },
+        '/auth/signup/signature': {
+            get: {
+                tags: ['Auth'],
+                security: [{ BearerAuth: [] }],
+                summary: 'Get Signature image URL',
+                parameters: [
+                    {
+                        in: 'path',
+                        name: 'uid',
+                        required: true,
+                        schema: { type: 'string', format: 'uuid' },
+                    },
+                ],
+                responses: {
+                    '200': {
+                        description: 'Signature image URL retrieved successfully',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        data: {
+                                            type: 'object',
+                                            properties: {
+                                                url: { type: 'string' },
+                                            },
+                                        },
+                                        message: { type: 'string' },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    '204': {
+                        description: 'Signature not uploaded yet',
+                    },
+                    '401': { $ref: '#/components/responses/Unauthorized' },
+                },
+            },
+        },
     },
 };
 
