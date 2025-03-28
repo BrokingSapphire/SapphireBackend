@@ -197,6 +197,18 @@ const getCheckpoint = async (req: Request, res: Response) => {
             .executeTakeFirstOrThrow();
 
         res.status(OK).json({ data: { pan_number }, message: 'PAN number fetched' });
+    } else if (step === CheckpointStep.AADHAAR) {
+        const { masked_aadhaar_no } = await db
+            .selectFrom('signup_checkpoints')
+            .innerJoin('aadhaar_detail', 'signup_checkpoints.aadhaar_id', 'aadhaar_detail.id')
+            .select('aadhaar_detail.masked_aadhaar_no')
+            .where('email', '=', email)
+            .executeTakeFirstOrThrow();
+
+        res.status(OK).json({
+            data: { aadhaar_no: `XXXXXXXX${masked_aadhaar_no}` },
+            message: 'Aadhaar number fetched',
+        });
     } else if (step === CheckpointStep.INVESTMENT_SEGMENT) {
         const segments = await db
             .selectFrom('signup_checkpoints')
@@ -276,6 +288,18 @@ const postCheckpoint = async (req: Request, res: Response) => {
     if (step === CheckpointStep.PAN) {
         const { pan_number } = req.body;
 
+        const exists = await db
+            .selectFrom('signup_checkpoints')
+            .innerJoin('pan_detail', 'signup_checkpoints.pan_id', 'pan_detail.id')
+            .select(['pan_detail.id', 'pan_detail.pan_number'])
+            .where('signup_checkpoints.email', '=', email)
+            .executeTakeFirst();
+
+        if (exists && exists.pan_number === pan_number) {
+            res.status(OK).json({ message: 'PAN already verified' });
+            return;
+        }
+
         const panService = new PanService();
         let panResponse;
         try {
@@ -336,6 +360,10 @@ const postCheckpoint = async (req: Request, res: Response) => {
                 dob: new Date(panResponse.data.data.dob),
                 pan_id: panId.id,
             }).execute();
+
+            if (exists) {
+                await tx.deleteFrom('pan_detail').where('id', '=', exists.id).execute();
+            }
         });
 
         res.status(OK).json({ message: 'PAN verified' });
@@ -355,7 +383,7 @@ const postCheckpoint = async (req: Request, res: Response) => {
             verify_email: true,
             verify_phone: true,
             signup_flow: false,
-            redirect_url: redirect ?? '',
+            redirect_url: redirect,
             state: 'test',
         });
 
@@ -370,58 +398,6 @@ const postCheckpoint = async (req: Request, res: Response) => {
             message: 'Digilocker URI generated',
         });
     } else if (step === CheckpointStep.AADHAAR) {
-        // const details = await db
-        //     .selectFrom('signup_checkpoints')
-        //     .innerJoin('phone_number', 'signup_checkpoints.phone_id', 'phone_number.id')
-        //     .innerJoin('user_name', 'signup_checkpoints.name', 'user_name.id')
-        //     .innerJoin('aadhaar_detail', 'signup_checkpoints.aadhaar_id', 'aadhaar_detail.id')
-        //     .innerJoin('address', 'aadhaar_detail.address_id', 'address.id')
-        //     .innerJoin('country', 'address.country_id', 'country.iso')
-        //     .innerJoin('state', 'address.state_id', 'state.id')
-        //     .innerJoin('city', 'address.city_id', 'city.id')
-        //     .innerJoin('postal_code', 'address.postal_id', 'postal_code.id')
-        //     .select([
-        //         'user_name.full_name',
-        //         'signup_checkpoints.dob',
-        //         'aadhaar_detail.co',
-        //         'aadhaar_detail.gender',
-        //         'country.name as country',
-        //         'state.name as state',
-        //         'city.name as city',
-        //         'postal_code.postal_code as postalCode',
-        //         'address.address1',
-        //         'address.address2',
-        //         'address.street_name',
-        //     ])
-        //     .where('email', '=', email)
-        //     .where('phone', '=', phone)
-        //     .where('aadhaar_id', 'is not', null)
-        //     .$narrowType<{ aadhaar_id: NotNull }>()
-        //     .executeTakeFirst();
-        //
-        // if (details) {
-        //     res.status(OK).json({
-        //         data: {
-        //             name: details.full_name,
-        //             dob: details.dob,
-        //             email,
-        //             father_name: details.co,
-        //             gender: details.gender,
-        //             address: {
-        //                 address1: details.address1,
-        //                 address2: details.address2,
-        //                 streetName: details.street_name,
-        //                 city: details.city,
-        //                 state: details.state,
-        //                 country: details.country,
-        //                 postalCode: details.postalCode,
-        //             },
-        //         },
-        //         message: 'Aadhaar details already saved',
-        //     });
-        //     return;
-        // }
-
         const clientId = await redisClient.get(`digilocker:${email}`);
         if (!clientId) throw new UnauthorizedError('Digilocker not authorized or expired.');
 
@@ -435,7 +411,7 @@ const postCheckpoint = async (req: Request, res: Response) => {
         const documents = await digilocker.listDocuments(clientId);
         const aadhar = documents.data.data.documents.find((d: any) => d.doc_type === 'ADHAR');
 
-        if (!aadhar) throw new UnprocessableEntityError("User doesn't have aadhar linked to his digilocker.");
+        if (!aadhar) throw new UnprocessableEntityError("User doesn't have aadhaar linked to his digilocker.");
 
         const downloadLink = await digilocker.downloadDocument(clientId, aadhar.file_id);
         if (downloadLink.data.data.mime_type !== 'application/xml')
@@ -454,6 +430,20 @@ const postCheckpoint = async (req: Request, res: Response) => {
             let co = parser.co();
             if (co.startsWith('C/O')) co = co.substring(4).trim();
             const coId = await insertNameGetId(tx, splitName(co));
+
+            const exists = await tx
+                .selectFrom('signup_checkpoints')
+                .select('aadhaar_id')
+                .where('email', '=', email)
+                .executeTakeFirst();
+
+            if (exists && exists.aadhaar_id) {
+                await updateCheckpoint(tx, email, phone, {
+                    aadhaar_id: null,
+                }).execute();
+
+                await tx.deleteFrom('aadhaar_detail').where('address_id', '=', exists.aadhaar_id).execute();
+            }
 
             const aadhaarId = await tx
                 .insertInto('aadhaar_detail')
@@ -476,14 +466,6 @@ const postCheckpoint = async (req: Request, res: Response) => {
         });
 
         res.status(OK).json({
-            // data: {
-            //     name: parser.name(),
-            //     dob: parser.dob(),
-            //     email,
-            //     father_name: parser.co(),
-            //     gender: parser.gender(),
-            //     address: parser.address(),
-            // },
             message: 'Aadhaar verified',
         });
     } else if (step === CheckpointStep.INVESTMENT_SEGMENT) {
@@ -781,15 +763,11 @@ const putIpv = async (req: Request, res: Response) => {
 const getIpv = async (req: Request, res: Response) => {
     const { email } = req.auth as JwtType;
 
-    const url = await db.transaction().execute(async (tx) => {
-        const ipv = await tx
-            .selectFrom('signup_checkpoints')
-            .select('ipv')
-            .where('email', '=', email)
-            .executeTakeFirstOrThrow();
-
-        return ipv.ipv;
-    });
+    const { ipv: url } = await db
+        .selectFrom('signup_checkpoints')
+        .select('ipv')
+        .where('email', '=', email)
+        .executeTakeFirstOrThrow();
 
     if (url === null) {
         res.status(NO_CONTENT).json({ message: 'IPV not uploaded' });
@@ -798,4 +776,58 @@ const getIpv = async (req: Request, res: Response) => {
     }
 };
 
-export { requestOtp, verifyOtp, verify, initiatePayment, verifyPayment, postCheckpoint, getCheckpoint, putIpv, getIpv };
+const putSignature = async (req: Request, res: Response) => {
+    const { uid } = req.params;
+
+    const { email, phone } = req.auth as JwtType;
+    const value = await redisClient.get(`signup_signature:${uid}`);
+    if (!value || value !== email) throw new UnauthorizedError('Signature uri not authorized or expired.');
+
+    let uploadResult;
+    try {
+        uploadResult = await ipvImageUpload(req, res);
+    } catch (e: any) {
+        throw new UnprocessableEntityError(e.message);
+    }
+
+    await db.transaction().execute(async (tx) => {
+        await updateCheckpoint(tx, email, phone, {
+            signature: uploadResult.file.location,
+        }).execute();
+    });
+
+    await redisClient.del(`signup_signature:${uid}`);
+    res.status(CREATED).json({
+        message: 'Signature completed',
+    });
+};
+
+const getSignature = async (req: Request, res: Response) => {
+    const { email } = req.auth as JwtType;
+
+    const { signature: url } = await db
+        .selectFrom('signup_checkpoints')
+        .select('signature')
+        .where('email', '=', email)
+        .executeTakeFirstOrThrow();
+
+    if (url === null) {
+        res.status(NO_CONTENT).json({ message: 'Signature not uploaded' });
+    } else {
+        res.status(OK).json({ data: { url }, message: 'Signature completed.' });
+    }
+};
+
+export {
+    requestOtp,
+    verifyOtp,
+    verify,
+    initiatePayment,
+    verifyPayment,
+    postCheckpoint,
+    getCheckpoint,
+    putIpv,
+    getIpv,
+    putSignature,
+    getSignature,
+};

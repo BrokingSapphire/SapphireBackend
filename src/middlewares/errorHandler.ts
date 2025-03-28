@@ -126,7 +126,7 @@ function getErrorDetails(error: unknown): string[] {
 
         // Add stack trace for developer debugging
         if (error.stack) {
-            details.push(error.stack);
+            details.push(error.stack.split('\n')[0]);
         }
     }
 

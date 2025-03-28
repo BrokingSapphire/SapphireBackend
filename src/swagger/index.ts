@@ -381,6 +381,7 @@ const swaggerDocument = {
                             type: 'string',
                             enum: [
                                 CheckpointStep.PAN,
+                                CheckpointStep.AADHAAR,
                                 CheckpointStep.INVESTMENT_SEGMENT,
                                 CheckpointStep.USER_DETAIL,
                                 CheckpointStep.ACCOUNT_DETAIL,
