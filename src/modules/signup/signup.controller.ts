@@ -189,14 +189,15 @@ const getCheckpoint = async (req: Request, res: Response) => {
 
     const { step } = req.params;
     if (step === CheckpointStep.PAN) {
-        const { pan_number } = await db
+        const { pan_number, full_name, dob } = await db
             .selectFrom('signup_checkpoints')
             .innerJoin('pan_detail', 'signup_checkpoints.pan_id', 'pan_detail.id')
-            .select('pan_detail.pan_number')
+            .innerJoin('user_name', 'pan_detail.name', 'user_name.id')
+            .select(['pan_detail.pan_number', 'user_name.full_name', 'pan_detail.dob'])
             .where('email', '=', email)
             .executeTakeFirstOrThrow();
 
-        res.status(OK).json({ data: { pan_number }, message: 'PAN number fetched' });
+        res.status(OK).json({ data: { pan_number, full_name, dob }, message: 'PAN number fetched' });
     } else if (step === CheckpointStep.AADHAAR) {
         const { masked_aadhaar_no } = await db
             .selectFrom('signup_checkpoints')
