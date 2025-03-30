@@ -1,4 +1,4 @@
-import { Transaction, UpdateQueryBuilder, UpdateResult } from 'kysely';
+import { Kysely, UpdateQueryBuilder, UpdateResult } from 'kysely';
 import { DB } from './db';
 import { UpdateObjectExpression } from 'kysely/dist/cjs/parser/update-set-parser';
 import countries from '@app/services/i18n-countries';
@@ -19,7 +19,7 @@ interface Name {
     lastName: string | null;
 }
 
-const insertNameGetId = async (tx: Transaction<DB>, name: Name): Promise<number> => {
+const insertNameGetId = async <T extends Kysely<DB>>(tx: T, name: Name): Promise<number> => {
     const nameId = await tx
         .insertInto('user_name')
         .values({
@@ -27,14 +27,20 @@ const insertNameGetId = async (tx: Transaction<DB>, name: Name): Promise<number>
             middle_name: name.middleName,
             last_name: name.lastName,
         })
-        .onConflict((oc) => oc.constraint('uq_user_name').doNothing())
+        .onConflict((oc) =>
+            oc.constraint('uq_user_name').doUpdateSet((eb) => ({
+                first_name: eb.ref('excluded.first_name'),
+                middle_name: eb.ref('excluded.middle_name'),
+                last_name: eb.ref('excluded.last_name'),
+            })),
+        )
         .returning('id')
         .executeTakeFirstOrThrow();
 
     return nameId.id;
 };
 
-const insertAddresGetId = async (tx: Transaction<DB>, address: Address): Promise<number> => {
+const insertAddresGetId = async <T extends Kysely<DB>>(tx: T, address: Address): Promise<number> => {
     const iso = countries.alpha2ToNumeric(countries.getAlpha2Code(address.country, 'en')!!)!!;
     await tx
         .insertInto('country')
@@ -109,8 +115,8 @@ const insertAddresGetId = async (tx: Transaction<DB>, address: Address): Promise
     return addressId.id;
 };
 
-const updateCheckpoint = (
-    tx: Transaction<DB>,
+const updateCheckpoint = <T extends Kysely<DB>>(
+    tx: T,
     email: string,
     phone: string,
     update: UpdateObjectExpression<DB, 'signup_checkpoints', 'signup_checkpoints'>,
