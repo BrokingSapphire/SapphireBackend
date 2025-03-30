@@ -54,6 +54,16 @@ const checkpointSchemaDestructed = {
         },
         required: ['step', 'marital_status', 'father_name', 'mother_name'],
     },
+    [CheckpointStep.ACCOUNT_DETAIL]: {
+        type: 'object',
+        properties: {
+            step: { type: 'string', enum: [CheckpointStep.ACCOUNT_DETAIL] },
+            annual_income: { type: 'string' },
+            trading_exp: { type: 'string' },
+            settlement: { type: 'string' },
+        },
+        required: ['step', 'annual_income', 'trading_exp', 'settlement'],
+    },
     [CheckpointStep.OCCUPATION]: {
         type: 'object',
         properties: {
