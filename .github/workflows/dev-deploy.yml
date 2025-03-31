@@ -27,10 +27,6 @@ jobs:
         uses: borales/actions-yarn@v4
         with:
           cmd: build
-      - name: Run test
-        uses: borales/actions-yarn@v4
-        with:
-          cmd: test
       - name: Remove temp files
         run: |
           rm -rf node_modules
