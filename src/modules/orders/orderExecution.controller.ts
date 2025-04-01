@@ -19,375 +19,391 @@ import logger from '@app/logger';
 import {OK, CREATED} from '@app/utils/httpstatus';
 
 const executeOrder = async(req: Request, res: Response): Promise<void> => {
-    try {
-        const orderId = parseInt(req.params.orderId);
-        const { executionPrice, exchangeOrderId, remarks }: ExecuteOrderRequest = req.body;
+    const orderId = parseInt(req.params.orderId);
+    const { executionPrice, exchangeOrderId, remarks }: ExecuteOrderRequest = req.body;
 
-        if (!executionPrice) {
-            throw new BadRequestError("Execution Price is Required");
+    if (!executionPrice) {
+        throw new BadRequestError("Execution Price is Required");
+    }
+
+    const result = await db.transaction().execute(async(trx) => {
+        const order = await trx
+            .selectFrom('orders')
+            .where('id', '=', orderId)
+            .selectAll()
+            .executeTakeFirst();
+
+        if (!order) {
+            throw new NotFoundError("Order not found");
         }
 
-        const result = await db.transaction().execute(async(trx) => {
-            const order = await trx
-                .selectFrom('orders')
-                .where('id', '=', orderId)
-                .selectAll()
-                .executeTakeFirst();
+        // Validate order status
+        if (order.status !== OrderStatus.QUEUED) {
+            throw new BadRequestError(`Cannot execute order with status "${order.status}"`);
+        }
 
-            if (!order) {
-                throw new NotFoundError("Order not found");
-            }
+        // updating order status
+        const updatedOrder = await trx
+            .updateTable('orders')
+            .set({
+                status: OrderStatus.EXECUTED,
+                executed_at: new Date(),
+                price: executionPrice, //  Needs to Update with actual execution price
+                order_id: exchangeOrderId || null
+            })
+            .where('id', '=', orderId)
+            .returningAll()
+            .executeTakeFirst();
 
-            // Validate order status
-            if (order.status !== OrderStatus.QUEUED) {
-                throw new BadRequestError(`Cannot execute order with status "${order.status}"`);
-            }
+        // Create order history record
+        await trx
+            .insertInto('order_history')
+            .values({
+                order_id: orderId,
+                previous_status: OrderStatus.QUEUED,
+                new_status: OrderStatus.EXECUTED,
+                changed_at: new Date(),
+                remarks: remarks || 'Order executed',
+                changed_by: 'system'
+            })
+            .execute();
 
-            // updating order status
-            const updatedOrder = await trx
-                .updateTable('orders')
-                .set({
-                    status: OrderStatus.EXECUTED,
-                    executed_at: new Date(),
-                    price: executionPrice, //  Needs to Update with actual execution price
-                    order_id: exchangeOrderId || null
-                })
-                .where('id', '=', orderId)
-                .returningAll()
-                .executeTakeFirst();
+        // handling different types of orders
+        let additionalData: any = {};
+        let currentLeg = null;
 
-            // Create order history record
-            await trx
-                .insertInto('order_history')
-                .values({
-                    order_id: orderId,
-                    previous_status: OrderStatus.QUEUED,
-                    new_status: OrderStatus.EXECUTED,
-                    changed_at: new Date(),
-                    remarks: remarks || 'Order executed',
-                    changed_by: 'system'
-                })
-                .execute();
+        switch (order.order_category) {
+            case OrderCategory.INSTANT:
+                break; // nothing additional data for instant orders
 
-            // handling different types of orders
-            let additionalData: any = {};
-            let currentLeg = null;
+            case OrderCategory.NORMAL:
+                break; // nothing addition data for normal orders
 
-            switch (order.order_category) {
-                case OrderCategory.INSTANT:
-                    break; // nothing additional data for instant orders
+            case OrderCategory.ICEBERG:
+                const icebergOrder = await trx
+                    .selectFrom('iceberg_orders')
+                    .where('order_id', '=', orderId)
+                    .selectAll()
+                    .executeTakeFirst();
 
-                case OrderCategory.NORMAL:
-                    break; // nothing addition data for normal orders
+                // get the first leg
+                currentLeg = await trx
+                    .selectFrom('iceberg_legs')
+                    .where('iceberg_order_id', '=', orderId)
+                    .where('status', '=', OrderStatus.QUEUED)
+                    .orderBy('leg_number', 'asc')
+                    .selectAll()
+                    .executeTakeFirst();
 
-                case OrderCategory.ICEBERG:
-                    const icebergOrder = await trx
-                        .selectFrom('iceberg_orders')
-                        .where('order_id', '=', orderId)
-                        .selectAll()
-                        .executeTakeFirst();
+                if (currentLeg) {
+                    await trx
+                        .updateTable('iceberg_legs')
+                        .set({
+                            status: OrderStatus.EXECUTED,
+                            executed_at: new Date()
+                        })
+                        .where('id', '=', currentLeg.id)
+                        .execute();
 
-                    // get the first leg
-                    currentLeg = await trx
+                    // Get the next leg
+                    const nextLeg = await trx
                         .selectFrom('iceberg_legs')
                         .where('iceberg_order_id', '=', orderId)
-                        .where('status', '=', OrderStatus.QUEUED)
+                        .where('leg_number', '>', currentLeg.leg_number)
                         .orderBy('leg_number', 'asc')
                         .selectAll()
                         .executeTakeFirst();
 
-                    if (currentLeg) {
+                    // If there's a next leg, update its status to queued
+                    if (nextLeg) {
                         await trx
                             .updateTable('iceberg_legs')
                             .set({
-                                status: OrderStatus.EXECUTED,
-                                executed_at: new Date()
+                                status: OrderStatus.QUEUED
                             })
-                            .where('id', '=', currentLeg.id)
+                            .where('id', '=', nextLeg.id)
                             .execute();
+                    }
+                    // Add to response data
+                    additionalData.icebergExecution = {
+                        currentLeg,
+                        nextLeg: nextLeg || null,
+                        remainingLegs: !!nextLeg,
+                        productType: icebergOrder?.product_type
+                    };
+                }
+                break;
+            case OrderCategory.COVER_ORDER:
+                const coverOrder = await trx
+                    .selectFrom('cover_orders')
+                    .where('order_id', '=', orderId)
+                    .selectAll()
+                    .executeTakeFirst();
+                // Update cover order details
+                const updatedCoverOrderDetails = await trx
+                    .updateTable('cover_order_details')
+                    .set({
+                        main_order_status: OrderStatus.EXECUTED,
+                        main_order_executed_at: new Date(),
+                        main_order_id: exchangeOrderId || null
+                    })
+                    .where('cover_order_id', '=', orderId)
+                    .returningAll()
+                    .executeTakeFirst();
 
-                        // Get the next leg
-                        const nextLeg = await trx
-                            .selectFrom('iceberg_legs')
-                            .where('iceberg_order_id', '=', orderId)
-                            .where('leg_number', '>', currentLeg.leg_number)
-                            .orderBy('leg_number', 'asc')
-                            .selectAll()
-                            .executeTakeFirst();
+                // Add to response data
+                additionalData.coverOrderExecution = {
+                    coverOrder,
+                    coverOrderDetails: updatedCoverOrderDetails,
+                    stopLossActive: true
+                };
+                break;
+        }
 
-                        // If there's a next leg, update its status to queued
-                        if (nextLeg) {
+        // Apply charges ---> executed order
+        if (order.order_category === OrderCategory.ICEBERG && currentLeg) {
+            // applying charges based on legs qty.
+            const legQuantity = currentLeg?.quantity || 0;
+
+            if (legQuantity > 0) {
+                const icebergOrder = await trx
+                    .selectFrom('iceberg_orders')
+                    .where('order_id', '=', orderId)
+                    .selectAll()
+                    .executeTakeFirst();
+
+                const segmentName = icebergOrder?.product_type === ProductType.INTRADAY
+                    ? 'EQUITY INTRADAY'
+                    : 'EQUITY DELIVERY';
+
+                // transaction value for this leg
+                const transactionValue = legQuantity * executionPrice;
+                // Get charges configuration from DB
+                const segment = await trx
+                    .selectFrom('market_segments')
+                    .where('name', '=', segmentName)
+                    .select(['id'])
+                    .executeTakeFirst();
+
+                if (!segment) {
+                    // Instead of throwing, record the error and continue
+                    await trx
+                        .insertInto('order_charge_failures')
+                        .values({
+                            order_id: orderId,
+                            reason: 'Error applying charges',
+                            details: JSON.stringify({
+                                error: 'Segment not found',
+                            }),
+                            attempted_at: new Date()
+                        })
+                        .execute();
+                    
+                    additionalData.chargeError = 'Charges application failed but order was executed';
+                } else {
+                    const charges = await trx
+                        .selectFrom('brokerage_charges')
+                        .innerJoin('charge_types', 'brokerage_charges.charge_type_id', 'charge_types.id')
+                        .where('brokerage_charges.segment_id', '=', segment.id)
+                        .where(eb =>
+                            eb.or([
+                                eb('brokerage_charges.effective_to', 'is', null),
+                                eb('brokerage_charges.effective_to', '>=', new Date())
+                            ])
+                        )
+                        .where('brokerage_charges.effective_from', '<=', new Date())
+                        .select([
+                            'brokerage_charges.id as charge_id',
+                            'charge_types.id as charge_type_id',
+                            'charge_types.name as charge_name',
+                            'brokerage_charges.buy_value',
+                            'brokerage_charges.sell_value',
+                            'brokerage_charges.is_percentage',
+                            'brokerage_charges.min_amount',
+                            'brokerage_charges.max_amount'
+                        ])
+                        .execute();
+                        
+                    // Calculate and save charges for this leg
+                    if (charges.length > 0) {
+                        let totalLegCharges = 0;
+                        let taxableAmount = 0; // For GST calculation
+
+                        for (const charge of charges) {
+                            let chargeAmount = 0;
+                            const value = order.order_side === OrderSide.BUY ? charge.buy_value : charge.sell_value;
+                            
+                            // Skip if the charge value is 0
+                            if (value === 0) {
+                                continue;
+                            }
+                            
+                            // Calculate the charge
+                            if (charge.is_percentage) {
+                                chargeAmount = (transactionValue * value) / 100;
+                                
+                                // Apply min/max if needed
+                                if (charge.min_amount !== null && chargeAmount < charge.min_amount) {
+                                    chargeAmount = charge.min_amount;
+                                }
+                                
+                                if (charge.max_amount !== null && chargeAmount > charge.max_amount) {
+                                    chargeAmount = charge.max_amount;
+                                }
+                            } else {
+                                chargeAmount = value;
+                            }
+                            
+                            // GST calculation
+                            if (['BROKERAGE', 'TRANSACTION CHARGES', 'SEBI CHARGES'].includes(charge.charge_name)) {
+                                taxableAmount += chargeAmount;
+                            }
+                            
+                            chargeAmount = parseFloat(chargeAmount.toFixed(2));
+                            
+                            // Add to total
+                            totalLegCharges += chargeAmount;
+
+                            // Record charge for this leg
                             await trx
-                                .updateTable('iceberg_legs')
-                                .set({
-                                    status: OrderStatus.QUEUED
+                                .insertInto('order_charges')
+                                .values({
+                                    order_id: orderId,
+                                    charge_type_id: charge.charge_type_id,
+                                    charge_amount: chargeAmount,
+                                    is_percentage: charge.is_percentage,
+                                    percentage_value: charge.is_percentage ? value : null,
+                                    transaction_value: transactionValue,
+                                    created_at: new Date()
                                 })
-                                .where('id', '=', nextLeg.id)
                                 .execute();
                         }
-                        // Add to response data
-                        additionalData.icebergExecution = {
-                            currentLeg,
-                            nextLeg: nextLeg || null,
-                            remainingLegs: !!nextLeg,
-                            productType: icebergOrder?.product_type
-                        };
-                    }
-                    break;
-                case OrderCategory.COVER_ORDER:
-                    const coverOrder = await trx
-                        .selectFrom('cover_orders')
-                        .where('order_id', '=', orderId)
-                        .selectAll()
-                        .executeTakeFirst();
-                    // Update cover order details
-                    const updatedCoverOrderDetails = await trx
-                        .updateTable('cover_order_details')
-                        .set({
-                            main_order_status: OrderStatus.EXECUTED,
-                            main_order_executed_at: new Date(),
-                            main_order_id: exchangeOrderId || null
-                        })
-                        .where('cover_order_id', '=', orderId)
-                        .returningAll()
-                        .executeTakeFirst();
-
-                    // Add to response data
-                    additionalData.coverOrderExecution = {
-                        coverOrder,
-                        coverOrderDetails: updatedCoverOrderDetails,
-                        stopLossActive: true
-                    };
-                    break;
-            }
-
-            // Apply charges for the executed order
-            try {
-                if (order.order_category === OrderCategory.ICEBERG && currentLeg) {
-                    // applying charges based on legs qty.
-                    const legQuantity = currentLeg?.quantity || 0;
-
-                    if (legQuantity > 0) {
-                        const icebergOrder = await trx
-                            .selectFrom('iceberg_orders')
-                            .where('order_id', '=', orderId)
-                            .selectAll()
+                        
+                        // Calculate GST on taxable amount
+                        const cgstAmount = parseFloat((taxableAmount * 0.09).toFixed(2));
+                        const sgstAmount = parseFloat((taxableAmount * 0.09).toFixed(2));
+                        
+                        totalLegCharges += cgstAmount + sgstAmount;
+                        
+                        // Add GST charges
+                        const cgstType = await trx
+                            .selectFrom('charge_types')
+                            .where('name', '=', 'CGST')
+                            .select(['id'])
                             .executeTakeFirst();
-
-                        const segmentName = icebergOrder?.product_type === ProductType.INTRADAY
-                            ? 'EQUITY INTRADAY'
-                            : 'EQUITY DELIVERY';
-
-                        // transaction value for this leg
-                        const transactionValue = legQuantity * executionPrice;
-                        // Get charges configuration from DB
-                        const segment = await trx
-                            .selectFrom('market_segments')
-                            .where('name', '=', segmentName)
+                            
+                        const sgstType = await trx
+                            .selectFrom('charge_types')
+                            .where('name', '=', 'SGST')
                             .select(['id'])
                             .executeTakeFirst();
 
-                        if (!segment) {
-                            throw new APIError(500, "Segment not found");
+                        if (cgstType) {
+                            await trx
+                                .insertInto('order_charges')
+                                .values({
+                                    order_id: orderId,
+                                    charge_type_id: cgstType.id,
+                                    charge_amount: cgstAmount,
+                                    is_percentage: true,
+                                    percentage_value: 9, // 9%
+                                    transaction_value: taxableAmount,
+                                    created_at: new Date()
+                                })
+                                .execute();
                         }
                         
-                        if (segment) {
-                            const charges = await trx
-                                .selectFrom('brokerage_charges')
-                                .innerJoin('charge_types', 'brokerage_charges.charge_type_id', 'charge_types.id')
-                                .where('brokerage_charges.segment_id', '=', segment.id)
-                                .where(eb =>
-                                    eb.or([
-                                        eb('brokerage_charges.effective_to', 'is', null),
-                                        eb('brokerage_charges.effective_to', '>=', new Date())
-                                    ])
-                                )
-                                .where('brokerage_charges.effective_from', '<=', new Date())
-                                .select([
-                                    'brokerage_charges.id as charge_id',
-                                    'charge_types.id as charge_type_id',
-                                    'charge_types.name as charge_name',
-                                    'brokerage_charges.buy_value',
-                                    'brokerage_charges.sell_value',
-                                    'brokerage_charges.is_percentage',
-                                    'brokerage_charges.min_amount',
-                                    'brokerage_charges.max_amount'
-                                ])
+                        if (sgstType) {
+                            await trx
+                                .insertInto('order_charges')
+                                .values({
+                                    order_id: orderId,
+                                    charge_type_id: sgstType.id,
+                                    charge_amount: sgstAmount,
+                                    is_percentage: true,
+                                    percentage_value: 9, // 9%
+                                    transaction_value: taxableAmount,
+                                    created_at: new Date()
+                                })
                                 .execute();
-                                
-                            // Calculate and save charges for this leg
-                            if (charges.length > 0) {
-                                let totalLegCharges = 0;
-                                let taxableAmount = 0; // For GST calculation
-
-                                for (const charge of charges) {
-                                    let chargeAmount = 0;
-                                    const value = order.order_side === OrderSide.BUY ? charge.buy_value : charge.sell_value;
-                                    
-                                    // Skip if the charge value is 0
-                                    if (value === 0) {
-                                        continue;
-                                    }
-                                    
-                                    // Calculate the charge
-                                    if (charge.is_percentage) {
-                                        chargeAmount = (transactionValue * value) / 100;
-                                        
-                                        // Apply min/max if needed
-                                        if (charge.min_amount !== null && chargeAmount < charge.min_amount) {
-                                            chargeAmount = charge.min_amount;
-                                        }
-                                        
-                                        if (charge.max_amount !== null && chargeAmount > charge.max_amount) {
-                                            chargeAmount = charge.max_amount;
-                                        }
-                                    } else {
-                                        chargeAmount = value;
-                                    }
-                                    
-                                    // GST calculation
-                                    if (['BROKERAGE', 'TRANSACTION CHARGES', 'SEBI CHARGES'].includes(charge.charge_name)) {
-                                        taxableAmount += chargeAmount;
-                                    }
-                                    
-                                    chargeAmount = parseFloat(chargeAmount.toFixed(2));
-                                    
-                                    // Add to total
-                                    totalLegCharges += chargeAmount;
-
-                                    // Record charge for this leg
-                                    await trx
-                                        .insertInto('order_charges')
-                                        .values({
-                                            order_id: orderId,
-                                            charge_type_id: charge.charge_type_id,
-                                            charge_amount: chargeAmount,
-                                            is_percentage: charge.is_percentage,
-                                            percentage_value: charge.is_percentage ? value : null,
-                                            transaction_value: transactionValue,
-                                            created_at: new Date()
-                                        })
-                                        .execute();
-                                }
-                                
-                                // Calculate GST on taxable amount
-                                const cgstAmount = parseFloat((taxableAmount * 0.09).toFixed(2));
-                                const sgstAmount = parseFloat((taxableAmount * 0.09).toFixed(2));
-                                
-                                totalLegCharges += cgstAmount + sgstAmount;
-                                
-                                // Add GST charges
-                                const cgstType = await trx
-                                    .selectFrom('charge_types')
-                                    .where('name', '=', 'CGST')
-                                    .select(['id'])
-                                    .executeTakeFirst();
-                                    
-                                const sgstType = await trx
-                                    .selectFrom('charge_types')
-                                    .where('name', '=', 'SGST')
-                                    .select(['id'])
-                                    .executeTakeFirst();
-
-                                if (cgstType) {
-                                    await trx
-                                        .insertInto('order_charges')
-                                        .values({
-                                            order_id: orderId,
-                                            charge_type_id: cgstType.id,
-                                            charge_amount: cgstAmount,
-                                            is_percentage: true,
-                                            percentage_value: 9, // 9%
-                                            transaction_value: taxableAmount,
-                                            created_at: new Date()
-                                        })
-                                        .execute();
-                                }
-                                
-                                if (sgstType) {
-                                    await trx
-                                        .insertInto('order_charges')
-                                        .values({
-                                            order_id: orderId,
-                                            charge_type_id: sgstType.id,
-                                            charge_amount: sgstAmount,
-                                            is_percentage: true,
-                                            percentage_value: 9, // 9%
-                                            transaction_value: taxableAmount,
-                                            created_at: new Date()
-                                        })
-                                        .execute();
-                                }
-                                
-                                // Update the order with the leg's charges
-                                const existingCharges = await trx
-                                    .selectFrom('orders')
-                                    .where('id', '=', orderId)
-                                    .select(['total_charges'])
-                                    .executeTakeFirst();
-                                
-                                const previousCharges = existingCharges?.total_charges || 0;
-                                
-                                await trx
-                                    .updateTable('orders')
-                                    .set({
-                                        total_charges: previousCharges + totalLegCharges,
-                                        updated_at: new Date()
-                                    })
-                                    .where('id', '=', orderId)
-                                    .execute();
-                                
-                                // Add charges data to the response
-                                additionalData.charges = {
-                                    legCharges: totalLegCharges,
-                                    totalChargesSoFar: previousCharges + totalLegCharges
-                                };
-                            }
                         }
+                        
+                        // Update the order with the leg's charges
+                        const existingCharges = await trx
+                            .selectFrom('orders')
+                            .where('id', '=', orderId)
+                            .select(['total_charges'])
+                            .executeTakeFirst();
+                        
+                        const previousCharges = existingCharges?.total_charges || 0;
+                        
+                        await trx
+                            .updateTable('orders')
+                            .set({
+                                total_charges: previousCharges + totalLegCharges,
+                                updated_at: new Date()
+                            })
+                            .where('id', '=', orderId)
+                            .execute();
+                        
+                        // Add charges data to the response
+                        additionalData.charges = {
+                            legCharges: totalLegCharges,
+                            totalChargesSoFar: previousCharges + totalLegCharges
+                        };
                     }
-                } else {
-                    // For non-iceberg orders, apply charges to the entire order
-                    const { order_id, total_charges, applied_charges } = await ChargesService.applyOrderCharges(orderId, order.user_id);
-                    
-                    additionalData.charges = {
-                        total_charges,
-                        applied_charges
-                    };
                 }
-            } catch (chargeError) {
-                // If there's an error applying charges, log it but don't fail the order execution
-                logger.error('Error applying charges to order:', chargeError);
+            }
+        } else {
+            // For non-iceberg orders, apply charges to the entire order
+            try {
+                const { order_id, total_charges, applied_charges } = await ChargesService.applyOrderCharges(orderId, order.user_id);
                 
-                // Record the error in the DB for later processing
+                additionalData.charges = {
+                    total_charges,
+                    applied_charges
+                };
+            } catch (serviceError) {
+                // Record the error but don't fail the transaction
                 await trx
                     .insertInto('order_charge_failures')
                     .values({
                         order_id: orderId,
                         reason: 'Error applying charges',
                         details: JSON.stringify({
-                            error: chargeError instanceof Error ? chargeError.message : 'Unknown error',
-                            stack: chargeError instanceof Error ? chargeError.stack : undefined
+                            error: serviceError instanceof Error ? serviceError.message : 'Unknown error',
+                            stack: serviceError instanceof Error ? serviceError.stack : undefined
                         }),
                         attempted_at: new Date()
                     })
                     .execute();
                 
                 additionalData.chargeError = 'Charges application failed but order was executed';
+                
+                // Log the error for monitoring
+                logger.error('Error applying charges to order:', serviceError);
             }
+        }
 
-            return {
-                order: updatedOrder,
-                ...additionalData
-            };
-        });
-        
-        res.status(OK).json({
-            data: result,
-            message: 'Order executed successfully'
-        });
-    } catch (error) {
+        return {
+            order: updatedOrder,
+            ...additionalData
+        };
+    }).catch(error => {
+        // Log and re-throw errors from the transaction
         logger.error('Error executing order:', error);
-    }
+        
+        if (error instanceof NotFoundError || error instanceof BadRequestError || error instanceof APIError) {
+            throw error;
+        }
+        
+        throw new APIError(500, 'Failed to execute order');
+    });
+
+    res.status(OK).json({
+        data: result,
+        message: 'Order executed successfully'
+    });
 };
 
 const executeNextIcebergLeg = async(req:Request , res: Response): Promise<void> =>{
