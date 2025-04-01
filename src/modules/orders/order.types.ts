@@ -160,3 +160,35 @@ export enum OrderSide {
       cancelled: number;
     };
 }
+
+// order-execution
+
+export interface ExecuteOrderRequest {
+  executionPrice: number;
+  exchangeOrderId?: string;
+  remarks?: string;
+}
+
+export interface ExecuteNextLegRequest {
+  executionPrice: number;
+  exchangeOrderId?: string;
+  remarks?: string;
+}
+
+export interface RejectOrderRequest {
+  rejectionReason: string;
+}
+
+export interface ExecuteStopLossRequest {
+  executionPrice: number;
+  exchangeOrderId?: string;
+  remarks?: string;
+}
+
+export interface ChargesData {
+  legCharges?: number;
+  totalChargesSoFar?: number;
+  stopLossCharges?: number;
+  appliedCharges?: any[];
+  error?: string;
+}
