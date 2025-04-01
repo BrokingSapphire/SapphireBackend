@@ -1,8 +1,6 @@
-// funds.controller.ts
-
 import { Request, Response } from 'express';
-import  {fundsService}  from './funds.services';
-import { APIError, BadRequestError, ForbiddenError, NotFoundError } from '@app/apiError';
+import { fundsService } from './funds.services';
+import { BadRequestError, ForbiddenError, NotFoundError } from '@app/apiError';
 import { db } from '@app/database';
 import { DepositRequest, WithdrawalProcessRequest } from './funds.types';
 import logger from '@app/logger';
@@ -12,59 +10,43 @@ import { CREATED, OK } from '@app/utils/httpstatus';
  * Get user funds
  */
 const getUserFunds = async (req: Request, res: Response): Promise<void> => {
-    const userId = parseInt(req.params.userId);
+    const userId = parseInt(req.params.userId, 10);
 
     if (isNaN(userId)) {
         throw new BadRequestError('Invalid user ID');
     }
 
-    let userFunds = await db
-        .selectFrom('user_funds')
+    const balance = await db
+        .selectFrom('user_balance')
         .where('user_id', '=', userId)
-        .select(['id', 'user_id', 'available_funds', 'blocked_funds', 'total_funds', 'used_funds'])
-        .executeTakeFirst();
-
-    if (!userFunds) {
-        userFunds = await db.transaction().execute(async (tx) => {
-            const inserted = await tx
-                .insertInto('user_funds')
-                .values({
-                    user_id: userId,
-                    total_funds: 0,
-                    available_funds: 0,
-                    blocked_funds: 0,
-                    used_funds: 0,
-                    created_at: new Date(),
-                    updated_at: new Date(),
-                })
-                .returningAll()
-                .executeTakeFirst();
-
-            return inserted;
-        });
-    }
+        .select([
+            'available_cash',
+            'blocked_cash',
+            'total_cash',
+            'available_margin',
+            'blocked_margin',
+            'total_margin',
+            'total_available_balance',
+            'total_balance',
+        ])
+        .executeTakeFirstOrThrow();
 
     res.status(OK).json({
-        message: 'User funds fetched successfully',
-        data: userFunds
+        message: 'User balance fetched successfully',
+        data: balance,
     });
 };
 
 /**
  * Add funds to user account
  */
-
 const addFunds = async (req: Request, res: Response): Promise<void> => {
-    const userId = parseInt(req.params.userId);
+    const userId = parseInt(req.params.userId, 10);
     const { amount, bankAccountId, remarks } = req.body as DepositRequest;
 
     // checking for valid input
     if (!amount || amount <= 0) {
         throw new BadRequestError('Invalid deposit amount');
-    }
-
-    if (!bankAccountId) {
-        throw new BadRequestError('Bank account ID is required');
     }
 
     // Check bank account verification status
@@ -94,19 +76,19 @@ const addFunds = async (req: Request, res: Response): Promise<void> => {
         throw new ForbiddenError('Bank account does not belong to this user');
     }
 
-    // Depositing Funds 
+    // Depositing Funds
     const result = await db.transaction().execute(async (tx) => {
         const fundTransaction = await tx
             .insertInto('fund_transactions')
             .values({
                 user_id: userId,
                 bank_account_id: bankAccountId,
-                amount: amount,
+                amount,
                 transaction_type: 'deposit',
                 status: 'completed',
                 transaction_date: new Date(),
                 remarks: remarks || 'Deposit',
-                processed_at: new Date()
+                processed_at: new Date(),
             })
             .returningAll()
             .executeTakeFirst();
@@ -115,9 +97,9 @@ const addFunds = async (req: Request, res: Response): Promise<void> => {
         await tx
             .updateTable('user_funds')
             .set({
-                available_funds: eb => eb('available_funds', '+', amount),
-                total_funds: eb => eb('total_funds', '+', amount),
-                updated_at: new Date()
+                available_funds: (eb) => eb('available_funds', '+', amount),
+                total_funds: (eb) => eb('total_funds', '+', amount),
+                updated_at: new Date(),
             })
             .where('user_id', '=', userId)
             .execute();
@@ -127,7 +109,7 @@ const addFunds = async (req: Request, res: Response): Promise<void> => {
 
     res.status(CREATED).json({
         message: 'Deposit processed successfully',
-        data: result
+        data: result,
     });
 };
 
@@ -135,7 +117,7 @@ const addFunds = async (req: Request, res: Response): Promise<void> => {
  * Complete deposit - Not needed for immediate deposits, but kept for backwards compatibility
  */
 const completeFundDeposit = async (req: Request, res: Response): Promise<void> => {
-    const transactionId = parseInt(req.params.transactionId);
+    const transactionId = parseInt(req.params.transactionId, 10);
 
     if (isNaN(transactionId)) {
         throw new BadRequestError('Invalid transaction ID');
@@ -175,8 +157,8 @@ const completeFundDeposit = async (req: Request, res: Response): Promise<void> =
         await tx
             .updateTable('user_funds')
             .set({
-                total_funds: eb => eb('total_funds', '+', transaction.amount),
-                available_funds: eb => eb('available_funds', '+', transaction.amount),
+                total_funds: (eb) => eb('total_funds', '+', transaction.amount),
+                available_funds: (eb) => eb('available_funds', '+', transaction.amount),
                 updated_at: new Date(),
             })
             .where('user_id', '=', transaction.user_id)
@@ -186,7 +168,7 @@ const completeFundDeposit = async (req: Request, res: Response): Promise<void> =
     });
     res.status(OK).json({
         message: 'Deposit completed successfully',
-        data: result
+        data: result,
     });
 };
 
@@ -194,7 +176,7 @@ const completeFundDeposit = async (req: Request, res: Response): Promise<void> =
  * Withdraw funds - standard withdrawal
  */
 const withdrawFunds = async (req: Request, res: Response): Promise<void> => {
-    const userId = parseInt(req.params.userId);
+    const userId = parseInt(req.params.userId, 10);
     const { amount, bankAccountId, remarks } = req.body as WithdrawalProcessRequest;
 
     if (!amount || amount <= 0) {
@@ -231,7 +213,7 @@ const withdrawFunds = async (req: Request, res: Response): Promise<void> => {
         if (userFunds.available_funds < amount) {
             throw new BadRequestError('Insufficient funds for withdrawal');
         }
-        
+
         const fundTransaction = await trx
             .insertInto('fund_transactions')
             .values({
@@ -242,18 +224,18 @@ const withdrawFunds = async (req: Request, res: Response): Promise<void> => {
                 status: 'pending',
                 transaction_date: new Date(),
                 remarks: remarks || 'Withdrawal request',
-                scheduled_processing_time: new Date(Date.now() + 24 * 60 * 60 * 1000) // Schedule for next day
+                scheduled_processing_time: new Date(Date.now() + 24 * 60 * 60 * 1000), // Schedule for next day
             })
             .returningAll()
             .executeTakeFirst();
 
-        // Updating User funds after withdrawal 
+        // Updating User funds after withdrawal
         await trx
             .updateTable('user_funds')
             .set({
-                available_funds: eb => eb('available_funds', '-', amount),
-                blocked_funds: eb => eb('blocked_funds', '+', amount),
-                updated_at: new Date()
+                available_funds: (eb) => eb('available_funds', '-', amount),
+                blocked_funds: (eb) => eb('blocked_funds', '+', amount),
+                updated_at: new Date(),
             })
             .where('user_id', '=', userId)
             .execute();
@@ -263,7 +245,7 @@ const withdrawFunds = async (req: Request, res: Response): Promise<void> => {
 
     res.status(CREATED).json({
         message: 'Withdrawal request created successfully',
-        data: result
+        data: result,
     });
 };
 
@@ -304,8 +286,8 @@ const completeWithdrawal = async (req: Request, res: Response): Promise<void> =>
         await tx
             .updateTable('user_funds')
             .set({
-                total_funds: eb => eb('total_funds', '-', transaction.amount),
-                blocked_funds: eb => eb('blocked_funds', '-', transaction.amount),
+                total_funds: (eb) => eb('total_funds', '-', transaction.amount),
+                blocked_funds: (eb) => eb('blocked_funds', '-', transaction.amount),
                 updated_at: new Date(),
             })
             .where('user_id', '=', transaction.user_id)
@@ -316,7 +298,7 @@ const completeWithdrawal = async (req: Request, res: Response): Promise<void> =>
 
     res.status(OK).json({
         message: 'Withdrawal completed successfully',
-        data: result
+        data: result,
     });
 };
 /**
@@ -326,9 +308,9 @@ const getUserTransactions = async (req: Request, res: Response): Promise<void> =
     const userId = parseInt(req.params.userId);
 
     if (isNaN(userId)) {
-        throw new BadRequestError("Invalid User ID");
+        throw new BadRequestError('Invalid User ID');
     }
-    
+
     const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
     const offset = req.query.offset ? parseInt(req.query.offset as string) : 0;
 
@@ -362,9 +344,9 @@ const getUserTransactions = async (req: Request, res: Response): Promise<void> =
                 total,
                 page: Math.floor(offset / limit) + 1,
                 limit,
-                pages: Math.ceil(total / limit)
-            }
-        }
+                pages: Math.ceil(total / limit),
+            },
+        },
     });
 };
 
@@ -381,14 +363,7 @@ const getTransactionById = async (req: Request, res: Response): Promise<void> =>
     const transaction = await db
         .selectFrom('fund_transactions')
         .where('id', '=', transactionId)
-        .select([
-            'id',
-            'user_id',
-            'amount',
-            'transaction_type',
-            'status',
-            'bank_account_id'
-        ])
+        .select(['id', 'user_id', 'amount', 'transaction_type', 'status', 'bank_account_id'])
         .executeTakeFirst();
 
     if (!transaction) {
@@ -399,28 +374,22 @@ const getTransactionById = async (req: Request, res: Response): Promise<void> =>
         const bankDetails = await db
             .selectFrom('bank_account')
             .where('id', '=', transaction.bank_account_id)
-            .select([
-                'account_holder_name',
-                'account_no',
-                'ifsc_code',
-                'bank_name',
-                'branch_name'
-            ])
+            .select(['account_holder_name', 'account_no', 'ifsc_code', 'bank_name', 'branch_name'])
             .executeTakeFirst();
 
         res.status(OK).json({
             message: 'Transaction details fetched successfully',
             data: {
                 ...transaction,
-                bankDetails
-            }
+                bankDetails,
+            },
         });
         return;
     }
 
     res.status(OK).json({
         message: 'Transaction details fetched successfully',
-        data: transaction
+        data: transaction,
     });
 };
 
@@ -440,7 +409,7 @@ const getTransactionById = async (req: Request, res: Response): Promise<void> =>
 //         if (!amount || amount <= 0) {
 //             throw new BadRequestError('Invalid withdrawal amount');
 //         }
-        
+
 //         if (!bankAccountId) {
 //             throw new BadRequestError('Bank account ID is required');
 //         }
@@ -451,7 +420,7 @@ const getTransactionById = async (req: Request, res: Response): Promise<void> =>
 //             .where('user_id', '=', userId)
 //             .where('bank_account_id', '=', bankAccountId)
 //             .executeTakeFirst();
-            
+
 //         if (!bankToUser) {
 //             throw new ForbiddenError('Bank account does not belong to this user');
 //         }
@@ -462,11 +431,11 @@ const getTransactionById = async (req: Request, res: Response): Promise<void> =>
 //             .where('user_id', '=', userId)
 //             .selectAll()
 //             .executeTakeFirst();
-            
+
 //         if (!userFunds) {
 //             throw new NotFoundError('User funds not found');
 //         }
-        
+
 //         if (userFunds.available_funds < amount) {
 //             throw new BadRequestError( 'Insufficient funds for withdrawal');
 //         }
@@ -475,7 +444,7 @@ const getTransactionById = async (req: Request, res: Response): Promise<void> =>
 //         const hasActivePositions = await db
 //             .selectFrom('trading_positions')
 //             .where('user_id', '=', userId)
-//             .where(eb => 
+//             .where(eb =>
 //                 eb.or([
 //                     eb('trade_type', '=', 'equity_futures'),
 //                     eb('trade_type', '=', 'equity_options'),
@@ -509,18 +478,18 @@ const getTransactionById = async (req: Request, res: Response): Promise<void> =>
 
 //         const now = new Date();
 //         let scheduledTime = new Date();
-        
+
 //         if (processingWindow === 'NOON') {
 //             // Set to noon today
 //             scheduledTime.setHours(12, 0, 0, 0);
-            
+
 //             // If it's already past noon, schedule for next day
 //             if (now > scheduledTime) {
 //                 scheduledTime.setDate(scheduledTime.getDate() + 1);
 //             }
 //         }else{
 //             scheduledTime.setHours(18, 0, 0, 0);
-            
+
 //             // If it's already past 6 PM, schedule for next day
 //             if (now > scheduledTime) {
 //                 scheduledTime.setDate(scheduledTime.getDate() + 1);
@@ -546,7 +515,7 @@ const getTransactionById = async (req: Request, res: Response): Promise<void> =>
 //                 })
 //                 .returningAll()
 //                 .executeTakeFirst();
-            
+
 //             await trx
 //             .updateTable('user_funds')
 //             .set({
@@ -568,7 +537,7 @@ const getTransactionById = async (req: Request, res: Response): Promise<void> =>
 //         });
 //     } catch (error) {
 //         logger.error('Error processing withdrawal:', error);
-        
+
 //         if (error instanceof APIError) {
 //             res.status(error.status).json({
 //                 message: error.message
@@ -580,8 +549,6 @@ const getTransactionById = async (req: Request, res: Response): Promise<void> =>
 //         }
 //     }
 // };
-
-
 
 /**
  * Enhanced processWithdrawal function with F&O safety feature
@@ -618,11 +585,7 @@ const processWithdrawal = async (req: Request, res: Response): Promise<void> => 
     const userFunds = await db
         .selectFrom('user_funds')
         .where('user_id', '=', userId)
-        .select([
-            'id',
-            'user_id',
-            'available_funds'
-        ])
+        .select(['id', 'user_id', 'available_funds'])
         .executeTakeFirst();
 
     if (!userFunds) {
@@ -633,23 +596,23 @@ const processWithdrawal = async (req: Request, res: Response): Promise<void> => 
         throw new BadRequestError('Insufficient funds for withdrawal');
     }
 
-    // checking for F&O 
+    // checking for F&O
     const hasActivePositions = await db
-    .selectFrom('trading_positions')
-    .where('user_id', '=', userId)
-    .where(eb => 
-        eb.or([
-            eb('trade_type', '=', 'equity_futures'),
-            eb('trade_type', '=', 'equity_options'),
-            eb('trade_type', '=', 'currency_futures'),
-            eb('trade_type', '=', 'currency_options'),
-            eb('trade_type', '=', 'commodity_futures'),
-            eb('trade_type', '=', 'commodity_options')
-        ])
-    )
-    .select('id')
-    .limit(1)
-    .executeTakeFirst();
+        .selectFrom('trading_positions')
+        .where('user_id', '=', userId)
+        .where((eb) =>
+            eb.or([
+                eb('trade_type', '=', 'equity_futures'),
+                eb('trade_type', '=', 'equity_options'),
+                eb('trade_type', '=', 'currency_futures'),
+                eb('trade_type', '=', 'currency_options'),
+                eb('trade_type', '=', 'commodity_futures'),
+                eb('trade_type', '=', 'commodity_options'),
+            ]),
+        )
+        .select('id')
+        .limit(1)
+        .executeTakeFirst();
 
     // Calculate safety cut
     const { safetyCut } = fundsService.calculateSafetyCut(!!hasActivePositions, amount);
@@ -676,8 +639,8 @@ const processWithdrawal = async (req: Request, res: Response): Promise<void> => 
                 remarks: remarks || 'Withdrawal request',
                 scheduled_processing_time: scheduledTime,
                 processing_window: processingWindow,
-                safety_cut_amount: safetyCut?.reason ? safetyCut.amount as number : null,
-                safety_cut_percentage: safetyCut?.reason ? safetyCut.percentage : null
+                safety_cut_amount: safetyCut?.reason ? (safetyCut.amount as number) : null,
+                safety_cut_percentage: safetyCut?.reason ? safetyCut.percentage : null,
             })
             .returningAll()
             .executeTakeFirst();
@@ -685,28 +648,28 @@ const processWithdrawal = async (req: Request, res: Response): Promise<void> => 
         await trx
             .updateTable('user_funds')
             .set({
-                available_funds: eb => eb('available_funds', '-', amount),
-                blocked_funds: eb => eb('blocked_funds', '+', safetyCut.finalAmount as number),
-                updated_at: new Date()
+                available_funds: (eb) => eb('available_funds', '-', amount),
+                blocked_funds: (eb) => eb('blocked_funds', '+', safetyCut.finalAmount as number),
+                updated_at: new Date(),
             })
             .where('user_id', '=', userId)
             .execute();
-            
+
         return {
             ...fundTransaction,
-            safetyCut
+            safetyCut,
         };
     });
 
     res.status(CREATED).json({
         message: 'Withdrawal request processed successfully',
-        data: result
+        data: result,
     });
 };
 
 /**
-* Get user withdrawals
-*/
+ * Get user withdrawals
+ */
 const getUserWithdrawals = async (req: Request, res: Response): Promise<void> => {
     const userId = parseInt(req.params.userId);
 
@@ -751,9 +714,9 @@ const getUserWithdrawals = async (req: Request, res: Response): Promise<void> =>
                 page,
                 limit,
                 pages: Math.ceil(total / limit),
-                hasMore: offset + withdrawals.length < total
-            }
-        }
+                hasMore: offset + withdrawals.length < total,
+            },
+        },
     });
 };
 
@@ -783,28 +746,22 @@ const getWithdrawalById = async (req: Request, res: Response): Promise<void> => 
         const bankDetails = await db
             .selectFrom('bank_account')
             .where('id', '=', withdrawal.bank_account_id)
-            .select([
-                'account_holder_name',
-                'account_no',
-                'ifsc_code',
-                'bank_name',
-                'branch_name'
-            ])
+            .select(['account_holder_name', 'account_no', 'ifsc_code', 'bank_name', 'branch_name'])
             .executeTakeFirst();
 
         res.status(OK).json({
             message: 'Withdrawal details fetched successfully',
             data: {
                 ...withdrawal,
-                bankDetails
-            }
+                bankDetails,
+            },
         });
         return;
     }
 
     res.status(OK).json({
         message: 'Withdrawal details fetched successfully',
-        data: withdrawal
+        data: withdrawal,
     });
 };
 
@@ -822,11 +779,7 @@ const processScheduledWithdrawals = async (): Promise<void> => {
         .where('transaction_type', '=', 'withdrawal')
         .where('status', '=', 'pending')
         .where('scheduled_processing_time', '<=', now)
-        .select([
-            'id',
-            'user_id',
-            'amount'
-        ])
+        .select(['id', 'user_id', 'amount'])
         .execute();
 
     logger.info(`Found ${pendingWithdrawals.length} withdrawals to process`);
@@ -840,7 +793,7 @@ const processScheduledWithdrawals = async (): Promise<void> => {
                     .set({
                         status: 'completed',
                         processed_at: new Date(),
-                        updated_at: new Date()
+                        updated_at: new Date(),
                     })
                     .where('id', '=', withdrawal.id)
                     .execute();
@@ -849,9 +802,9 @@ const processScheduledWithdrawals = async (): Promise<void> => {
                 await tx
                     .updateTable('user_funds')
                     .set({
-                        total_funds: eb => eb('total_funds', '-', withdrawal.amount),
-                        blocked_funds: eb => eb('blocked_funds', '-', withdrawal.amount),
-                        updated_at: new Date()
+                        total_funds: (eb) => eb('total_funds', '-', withdrawal.amount),
+                        blocked_funds: (eb) => eb('blocked_funds', '-', withdrawal.amount),
+                        updated_at: new Date(),
                     })
                     .where('user_id', '=', withdrawal.user_id)
                     .execute();

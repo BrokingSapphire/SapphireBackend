@@ -16,41 +16,41 @@ export class FundsService {
             reason: hasActivePositions ? 'Active F&O Positions' : null,
             originalAmount: amount,
             finalAmount: amount,
-            applied: hasActivePositions
+            applied: hasActivePositions,
         };
-    
+
         if (hasActivePositions) {
             // Apply 5% safety cut for users with F&O positions
             safetyCut.amount = amount * 0.05;
             safetyCut.finalAmount = amount - safetyCut.amount;
         }
-    
+
         return { safetyCut };
     }
-    
+
     /**
      * Prepare scheduled processing time for withdrawal
      */
-    prepareScheduledProcessingTime(): { 
-        processingWindow: string, 
-        scheduledTime: Date 
+    prepareScheduledProcessingTime(): {
+        processingWindow: string;
+        scheduledTime: Date;
     } {
         const now = new Date();
         const currentHour = now.getHours();
         const processingWindow = currentHour < 12 ? 'NOON' : 'EOD';
 
         let scheduledTime = new Date();
-        
+
         if (processingWindow === 'NOON') {
             // Set to noon today
             scheduledTime.setHours(12, 0, 0, 0);
-            
+
             if (now > scheduledTime) {
                 scheduledTime.setDate(scheduledTime.getDate() + 1);
             }
         } else {
             scheduledTime.setHours(18, 0, 0, 0);
-            
+
             // already past 6PM
             if (now > scheduledTime) {
                 scheduledTime.setDate(scheduledTime.getDate() + 1);
@@ -59,7 +59,7 @@ export class FundsService {
 
         return { processingWindow, scheduledTime };
     }
-    
+
     /**
      * Utility function to calculate processing windows based on current time
      */
@@ -67,7 +67,7 @@ export class FundsService {
         const currentHour = new Date().getHours();
         return currentHour < 12 ? 'NOON' : 'EOD';
     }
-    
+
     /**
      * Format a currency value with 2 decimal places
      */

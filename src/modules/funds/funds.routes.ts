@@ -10,12 +10,12 @@ import {
     getUserWithdrawals,
     getWithdrawalById,
 } from './funds.controller';
-import { 
-    DepositRequestSchema, 
-    WithdrawalRequestSchema, 
+import {
+    DepositRequestSchema,
+    WithdrawalRequestSchema,
     TransactionIdSchema,
     UserIdSchema,
-    PaginationSchema 
+    PaginationSchema,
 } from './funds.validator';
 
 /**
@@ -90,11 +90,7 @@ router.get('/:userId/funds', validate(UserIdSchema), getUserFunds);
  *       401:
  *         description: Unauthorized
  */
-router.post('/:userId/deposit', 
-    validate(UserIdSchema), 
-    validate(DepositRequestSchema), 
-    addFunds
-);
+router.post('/:userId/deposit', validate(UserIdSchema), validate(DepositRequestSchema), addFunds);
 
 /**
  * @swagger
@@ -123,11 +119,7 @@ router.post('/:userId/deposit',
  *       401:
  *         description: Unauthorized
  */
-router.post('/:userId/withdraw', 
-    validate(UserIdSchema), 
-    validate(WithdrawalRequestSchema), 
-    withdrawFunds
-);
+router.post('/:userId/withdraw', validate(UserIdSchema), validate(WithdrawalRequestSchema), withdrawFunds);
 
 /**
  * @swagger
@@ -156,11 +148,7 @@ router.post('/:userId/withdraw',
  *       401:
  *         description: Unauthorized
  */
-router.post('/:userId/withdraw/process', 
-    validate(UserIdSchema), 
-    validate(WithdrawalRequestSchema), 
-    processWithdrawal
-);
+router.post('/:userId/withdraw/process', validate(UserIdSchema), validate(WithdrawalRequestSchema), processWithdrawal);
 
 /**
  * @swagger
@@ -193,11 +181,7 @@ router.post('/:userId/withdraw/process',
  *       401:
  *         description: Unauthorized
  */
-router.get('/:userId/transactions', 
-    validate(UserIdSchema), 
-    validate(PaginationSchema), 
-    getUserTransactions
-);
+router.get('/:userId/transactions', validate(UserIdSchema), validate(PaginationSchema), getUserTransactions);
 
 /**
  * @swagger
@@ -220,10 +204,7 @@ router.get('/:userId/transactions',
  *       404:
  *         description: Transaction not found
  */
-router.get('/transaction/:transactionId', 
-    validate(TransactionIdSchema), 
-    getTransactionById
-);
+router.get('/transaction/:transactionId', validate(TransactionIdSchema), getTransactionById);
 
 /**
  * @swagger
@@ -256,11 +237,7 @@ router.get('/transaction/:transactionId',
  *       401:
  *         description: Unauthorized
  */
-router.get('/:userId/withdrawals', 
-    validate(UserIdSchema), 
-    validate(PaginationSchema), 
-    getUserWithdrawals
-);
+router.get('/:userId/withdrawals', validate(UserIdSchema), validate(PaginationSchema), getUserWithdrawals);
 
 /**
  * @swagger
@@ -283,9 +260,6 @@ router.get('/:userId/withdrawals',
  *       404:
  *         description: Withdrawal not found
  */
-router.get('/withdrawal/:withdrawalId', 
-    validate(TransactionIdSchema), 
-    getWithdrawalById
-);
+router.get('/withdrawal/:withdrawalId', validate(TransactionIdSchema), getWithdrawalById);
 
 export default router;
