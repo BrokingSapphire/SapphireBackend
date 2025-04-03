@@ -8,6 +8,7 @@ import {
   ComplianceAction,
   VerificationStatus
 } from './db.interface';
+import logger from '@app/logger';
 
 interface RequestWithSession extends Request {
     flash?: (type: string, message?: string) => string[] | void;
@@ -51,7 +52,7 @@ interface RequestWithSession extends Request {
           officer: req.session?.officer || { name: 'Test Officer', id: 1 }
         });
       } catch (error) {
-        console.error('Error rendering compliance dashboard:', error);
+        logger.error('Error rendering compliance dashboard:', error);
         res.status(500).send(`
           <h1>Error</h1>
           <p>Failed to load dashboard: ${(error as Error).message}</p>
@@ -228,7 +229,7 @@ interface RequestWithSession extends Request {
           officer: req.session?.officer || { name: 'Test Officer', id: 1 }
         });
       } catch (error) {
-        console.error('Error rendering verification details:', error);
+        logger.error('Error rendering verification details:', error);
         res.status(500).render('error', {
           message: 'Failed to load verification details',
           error
@@ -241,8 +242,8 @@ interface RequestWithSession extends Request {
      */
     async approveVerification(req: RequestWithSession, res: Response): Promise<void> {
       try {
-        console.log('Approve verification called with params:', req.params);
-        console.log('Request body:', req.body);
+        logger.info('Approve verification called with params:', req.params);
+        logger.info('Request body:', req.body);
 
         const checkpointId = Number(req.params.checkpointId);
         const { notes } = req.body;
@@ -278,7 +279,7 @@ interface RequestWithSession extends Request {
         }
         res.redirect('/compliance/dashboard');
       } catch (error) {
-        console.error('Error approving verification:', error);
+        logger.error('Error approving verification:', error);
         if (req.flash) {
           req.flash('error', `Failed to approve: ${(error as Error).message}`);
         }
@@ -321,7 +322,7 @@ interface RequestWithSession extends Request {
               officer_id: officerId,
               action: 'rejection' as ComplianceAction,
               status: 'rejected' as ComplianceStatus,
-              reason: reason,
+              reason,
               notes: notes || 'Application rejected',
               created_at: new Date()
             })
@@ -333,7 +334,7 @@ interface RequestWithSession extends Request {
         }
         res.redirect('/compliance/dashboard');
       } catch (error) {
-        console.error('Error rejecting verification:', error);
+        logger.error('Error rejecting verification:', error);
         if (req.flash) {
           req.flash('error', `Failed to reject: ${(error as Error).message}`);
         }
@@ -388,7 +389,7 @@ interface RequestWithSession extends Request {
           history
         });
       } catch (error) {
-        console.error('Error viewing history:', error);
+        logger.error('Error viewing history:', error);
         res.status(500).render('error', {
           message: 'Failed to load verification history',
           error
