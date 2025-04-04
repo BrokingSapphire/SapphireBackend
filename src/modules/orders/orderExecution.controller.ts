@@ -14,6 +14,7 @@ import {
     RejectOrderRequest,
     ExecuteStopLossRequest,
 } from './order.types';
+import { applyOrderCharges } from '../charges/charges.service';
 import logger from '@app/logger';
 import {OK} from '@app/utils/httpstatus';
 
@@ -254,7 +255,7 @@ const executeOrder = async(req: Request, res: Response): Promise<void> => {
                             }
                             
                             // GST calculation
-                            if (['BROKERAGE', 'TRANSACTION CHARGES', 'SEBI CHARGES'].includes(charge.charge_name)) {
+                            if (['BROKERAGE', 'TRANSACTION CHARGES', 'SEBI CHARGES', 'IPFT'].includes(charge.charge_name)) {
                                 taxableAmount += chargeAmount;
                             }
                             
@@ -355,50 +356,41 @@ const executeOrder = async(req: Request, res: Response): Promise<void> => {
             }
         } else {
             // For non-iceberg orders, apply charges to the entire order
-            try {
-                const { order_id, total_charges, applied_charges } = await ChargesService.applyOrderCharges(orderId, order.user_id);
-                
-                additionalData.charges = {
-                    total_charges,
-                    applied_charges
-                };
-            } catch (serviceError) {
-                // Record the error but don't fail the transaction
-                await trx
-                    .insertInto('order_charge_failures')
-                    .values({
-                        order_id: orderId,
-                        reason: 'Error applying charges',
-                        details: JSON.stringify({
-                            error: serviceError instanceof Error ? serviceError.message : 'Unknown error',
-                            stack: serviceError instanceof Error ? serviceError.stack : undefined
-                        }),
-                        attempted_at: new Date()
-                    })
-                    .execute();
-                
-                additionalData.chargeError = 'Charges application failed but order was executed';
-                
-                // Log the error for monitoring
-                logger.error('Error applying charges to order:', serviceError);
-            }
+        if (!(order.order_category === OrderCategory.ICEBERG && currentLeg)) {
+        // Apply charges directly without try/catch
+        const chargesResult = await applyOrderCharges(orderId, order.user_id);
+    
+        if (chargesResult) {
+        additionalData.charges = {
+            total_charges: chargesResult.total_charges,
+            applied_charges: chargesResult.applied_charges
+            };
+        } else {
+        // Record the error but don't fail the transaction
+        await trx
+            .insertInto('order_charge_failures')
+            .values({
+                order_id: orderId,
+                reason: 'Error applying charges',
+                details: JSON.stringify({
+                    error: 'Failed to apply charges'
+                }),
+                attempted_at: new Date()
+            })
+            .execute();
+        
+        additionalData.chargeError = 'Charges application failed but order was executed';
+        
+        // Log the error for monitoring
+        logger.error('Error applying charges to order: Failed to get charge results');
         }
-
+        }
+        }
         return {
             order: updatedOrder,
             ...additionalData
         };
-    }).catch(error => {
-        // Log and re-throw errors from the transaction
-        logger.error('Error executing order:', error);
-        
-        if (error instanceof NotFoundError || error instanceof BadRequestError || error instanceof APIError) {
-            throw error;
-        }
-        
-        throw new APIError(500, 'Failed to execute order');
     });
-
     res.status(OK).json({
         data: result,
         message: 'Order executed successfully'
@@ -488,7 +480,6 @@ const executeNextIcebergLeg = async(req:Request , res: Response): Promise<void> 
     
     let chargesData: ChargesData = {};
 
-    try {
         // Determine segment based on product type
         const segmentName = icebergOrder.product_type === ProductType.INTRADAY 
           ? 'EQUITY INTRADAY' 
@@ -503,190 +494,11 @@ const executeNextIcebergLeg = async(req:Request , res: Response): Promise<void> 
           .where('name', '=', segmentName)
           .select(['id'])
           .executeTakeFirst();
-          
-        if (segment && order) {
-          const charges = await trx
-            .selectFrom('brokerage_charges')
-            .innerJoin('charge_types', 'brokerage_charges.charge_type_id', 'charge_types.id')
-            .where('brokerage_charges.segment_id', '=', segment.id)
-            .where(eb => 
-              eb.or([
-                eb('brokerage_charges.effective_to', 'is', null),
-                eb('brokerage_charges.effective_to', '>=', new Date())
-              ])
-            )
-            .where('brokerage_charges.effective_from', '<=', new Date())
-            .select([
-              'brokerage_charges.id as charge_id',
-              'charge_types.id as charge_type_id',
-              'charge_types.name as charge_name',
-              'brokerage_charges.buy_value',
-              'brokerage_charges.sell_value',
-              'brokerage_charges.is_percentage',
-              'brokerage_charges.min_amount',
-              'brokerage_charges.max_amount'
-            ])
-            .execute();
-            if (charges.length > 0) {
-                let totalLegCharges = 0;
-                let taxableAmount = 0;
-                const appliedCharges: any[] = [];
-                
-                for (const charge of charges) {
-                  let chargeAmount = 0;
-                  let value;
-                if (order.order_side === OrderSide.BUY) {
-                    value = charge.buy_value;
-                }else {
-                    value = charge.sell_value;
-                }
 
-                if (value === 0) {
-                    continue;
-                }
-
-                if (charge.is_percentage) {
-                    chargeAmount = (legTransactionValue * value) / 100;
-                    
-                    // Apply min/max if needed
-                    if (charge.min_amount !== null && chargeAmount < charge.min_amount) {
-                      chargeAmount = charge.min_amount;
-                    }
-                    
-                    if (charge.max_amount !== null && chargeAmount > charge.max_amount) {
-                      chargeAmount = charge.max_amount;
-                    }
-                  } else {
-                    chargeAmount = value;
-                  }
-                  if (['BROKERAGE', 'TRANSACTION CHARGES', 'SEBI CHARGES'].includes(charge.charge_name)) {
-                    taxableAmount += chargeAmount;
-                  }
-                  
-                  // Round to 2 decimal places
-                  chargeAmount = parseFloat(chargeAmount.toFixed(2));
-                  
-                  // Add to total
-                  totalLegCharges += chargeAmount;
-                  
-                  // Record charge for this leg
-                  const savedCharge = await trx
-                    .insertInto('order_charges')
-                    .values({
-                      order_id: icebergOrderId,
-                      charge_type_id: charge.charge_type_id,
-                      charge_amount: chargeAmount,
-                      is_percentage: charge.is_percentage,
-                      percentage_value: charge.is_percentage ? value : null,
-                      transaction_value: legTransactionValue,
-                      created_at: new Date()
-                    })
-                    .returningAll()
-                    .executeTakeFirst();
-                    
-                  if (savedCharge) {
-                    appliedCharges.push({
-                      ...savedCharge,
-                      charge_name: charge.charge_name
-                    });
-                  }
-                }
-                
-                // Calculate GST on taxable amount
-                const cgstAmount = parseFloat((taxableAmount * 0.09).toFixed(2));
-                const sgstAmount = parseFloat((taxableAmount * 0.09).toFixed(2));
-                
-                totalLegCharges += cgstAmount + sgstAmount;
-                
-                // Add GST charges
-                const cgstType = await trx
-                  .selectFrom('charge_types')
-                  .where('name', '=', 'CGST')
-                  .select(['id'])
-                  .executeTakeFirst();
-                  
-                const sgstType = await trx
-                  .selectFrom('charge_types')
-                  .where('name', '=', 'SGST')
-                  .select(['id'])
-                  .executeTakeFirst();
-                
-                if (cgstType) {
-                  const cgstCharge = await trx
-                    .insertInto('order_charges')
-                    .values({
-                      order_id: icebergOrderId,
-                      charge_type_id: cgstType.id,
-                      charge_amount: cgstAmount,
-                      is_percentage: true,
-                      percentage_value: 9, // 9%
-                      transaction_value: taxableAmount,
-                      created_at: new Date()
-                    })
-                    .returningAll()
-                    .executeTakeFirst();
-                    
-                  if (cgstCharge) {
-                    appliedCharges.push({
-                      ...cgstCharge,
-                      charge_name: 'CGST'
-                    });
-                  }
-                }
-                
-                if (sgstType) {
-                  const sgstCharge = await trx
-                    .insertInto('order_charges')
-                    .values({
-                      order_id: icebergOrderId,
-                      charge_type_id: sgstType.id,
-                      charge_amount: sgstAmount,
-                      is_percentage: true,
-                      percentage_value: 9, // 9%
-                      transaction_value: taxableAmount,
-                      created_at: new Date()
-                    })
-                    .returningAll()
-                    .executeTakeFirst();
-                    
-                  if (sgstCharge) {
-                    appliedCharges.push({
-                      ...sgstCharge,
-                      charge_name: 'SGST'
-                    });
-                  }
-                }
-                
-                // Update order with total charges
-                const existingCharges = await trx
-                  .selectFrom('orders')
-                  .where('id', '=', icebergOrderId)
-                  .select(['total_charges'])
-                  .executeTakeFirst();
-                  
-                const previousCharges = existingCharges?.total_charges || 0;
-                
-                await trx
-                  .updateTable('orders')
-                  .set({
-                    total_charges: previousCharges + totalLegCharges,
-                    updated_at: new Date()
-                  })
-                  .where('id', '=', icebergOrderId)
-                  .execute();
-                  
-                chargesData = {
-                  legCharges: totalLegCharges,
-                  totalChargesSoFar: previousCharges + totalLegCharges,
-                  appliedCharges
-                };
-              }
-            }
-          } catch (chargeError) {
-            // If there's an error applying charges, logging it -->
-            logger.error('Error applying charges to iceberg leg:', chargeError);
+          if (!segment || !order) {
+            // Recording the error if segment or order is not found
+            logger.error('Error applying charges to iceberg leg: Segment or order not found');
             
-            // Recording the error ->
             await trx
               .insertInto('order_charge_failures')
               .values({
@@ -695,8 +507,7 @@ const executeNextIcebergLeg = async(req:Request , res: Response): Promise<void> 
                 details: JSON.stringify({
                   legId: nextLeg.id,
                   legNumber: nextLeg.leg_number,
-                  error: chargeError instanceof Error ? chargeError.message : 'Unknown error',
-                  stack: chargeError instanceof Error ? chargeError.stack : undefined
+                  error: 'Segment or order not found'
                 }),
                 attempted_at: new Date()
               })
@@ -705,8 +516,179 @@ const executeNextIcebergLeg = async(req:Request , res: Response): Promise<void> 
             chargesData = {
               error: 'Charges application failed but leg was executed'
             };
-          }
+          } else {
+            const charges = await trx
+              .selectFrom('brokerage_charges')
+              .innerJoin('charge_types', 'brokerage_charges.charge_type_id', 'charge_types.id')
+              .where('brokerage_charges.segment_id', '=', segment.id)
+              .where(eb => 
+                eb.or([
+                  eb('brokerage_charges.effective_to', 'is', null),
+                  eb('brokerage_charges.effective_to', '>=', new Date())
+                ])
+              )
+              .where('brokerage_charges.effective_from', '<=', new Date())
+              .select([
+                'brokerage_charges.id as charge_id',
+                'charge_types.id as charge_type_id',
+                'charge_types.name as charge_name',
+                'brokerage_charges.buy_value',
+                'brokerage_charges.sell_value',
+                'brokerage_charges.is_percentage',
+                'brokerage_charges.min_amount',
+                'brokerage_charges.max_amount'
+              ])
+              .execute();
+              
+            if (charges.length > 0) {
+              let totalLegCharges = 0;
+              let taxableAmount = 0;
+              const appliedCharges: any[] = [];
+              
+              for (const charge of charges) {
+                let chargeAmount = 0;
+                let value;
+                
+                if (order.order_side === OrderSide.BUY) {
+                  value = charge.buy_value;
+                } else {
+                  value = charge.sell_value;
+                }
       
+                if (value === 0) {
+                  continue;
+                }
+      
+                if (charge.is_percentage) {
+                  chargeAmount = (legTransactionValue * value) / 100;
+                  
+                  // Apply min/max if needed
+                  if (charge.min_amount !== null && chargeAmount < charge.min_amount) {
+                    chargeAmount = charge.min_amount;
+                  }
+                  
+                  if (charge.max_amount !== null && chargeAmount > charge.max_amount) {
+                    chargeAmount = charge.max_amount;
+                  }
+                } else {
+                  chargeAmount = value;
+                }
+                
+                if (['BROKERAGE', 'TRANSACTION CHARGES', 'SEBI CHARGES'].includes(charge.charge_name)) {
+                  taxableAmount += chargeAmount;
+                }
+                
+                // Round to 2 decimal places
+                chargeAmount = parseFloat(chargeAmount.toFixed(2));
+                
+                // Add to total
+                totalLegCharges += chargeAmount;
+                
+                // Record charge for this leg
+                const savedCharge = await trx
+                  .insertInto('order_charges')
+                  .values({
+                    order_id: icebergOrderId,
+                    charge_type_id: charge.charge_type_id,
+                    charge_amount: chargeAmount,
+                    is_percentage: charge.is_percentage,
+                    percentage_value: charge.is_percentage ? value : null,
+                    transaction_value: legTransactionValue,
+                    created_at: new Date()
+                  })
+                  .returningAll()
+                  .executeTakeFirst();
+                  
+                if (savedCharge) {
+                  appliedCharges.push({
+                    ...savedCharge,
+                    charge_name: charge.charge_name
+                  });
+                }
+              }
+              
+              // Calculate GST on taxable amount (18% combined)
+              const gstAmount = parseFloat((taxableAmount * 0.18).toFixed(2));
+              
+              totalLegCharges += gstAmount;
+              
+              // Add GST charge
+              const gstType = await trx
+                .selectFrom('charge_types')
+                .where('name', '=', 'GST')
+                .select(['id'])
+                .executeTakeFirst();
+              
+              if (gstType) {
+                const gstCharge = await trx
+                  .insertInto('order_charges')
+                  .values({
+                    order_id: icebergOrderId,
+                    charge_type_id: gstType.id,
+                    charge_amount: gstAmount,
+                    is_percentage: true,
+                    percentage_value: 18, // 18%
+                    transaction_value: taxableAmount,
+                    created_at: new Date()
+                  })
+                  .returningAll()
+                  .executeTakeFirst();
+                  
+                if (gstCharge) {
+                  appliedCharges.push({
+                    ...gstCharge,
+                    charge_name: 'GST'
+                  });
+                }
+              }
+              
+              // Update order with total charges
+              const existingCharges = await trx
+                .selectFrom('orders')
+                .where('id', '=', icebergOrderId)
+                .select(['total_charges'])
+                .executeTakeFirst();
+                
+              const previousCharges = existingCharges?.total_charges || 0;
+              
+              await trx
+                .updateTable('orders')
+                .set({
+                  total_charges: previousCharges + totalLegCharges,
+                  updated_at: new Date()
+                })
+                .where('id', '=', icebergOrderId)
+                .execute();
+                
+              chargesData = {
+                legCharges: totalLegCharges,
+                totalChargesSoFar: previousCharges + totalLegCharges,
+                appliedCharges
+              };
+            } else {
+              // No charges found
+              logger.error('Error applying charges to iceberg leg: No charges found for segment');
+              
+              await trx
+                .insertInto('order_charge_failures')
+                .values({
+                  order_id: icebergOrderId,
+                  reason: 'Error applying charges to iceberg leg',
+                  details: JSON.stringify({
+                    legId: nextLeg.id,
+                    legNumber: nextLeg.leg_number,
+                    error: 'No charges found for segment'
+                  }),
+                  attempted_at: new Date()
+                })
+                .execute();
+                
+              chargesData = {
+                error: 'Charges application failed but leg was executed'
+              };
+            }
+          }
+        
           return {
             executedLeg: updatedLeg,
             nextLeg: followingLeg || null,
@@ -716,7 +698,8 @@ const executeNextIcebergLeg = async(req:Request , res: Response): Promise<void> 
             productType: icebergOrder.product_type,
             charges: chargesData
           };
-        })
+        });
+
         res.status(OK).json({
             data: result,
             message: 'Iceberg order leg executed successfully'
@@ -826,9 +809,6 @@ res.status(OK).json({
 })
 }
 
-
-// Execute Stop-loss order
-
 // Execute Stop-loss order
 
 const executeStopLoss = async(req: Request, res: Response): Promise<void> => {
@@ -913,7 +893,26 @@ const executeStopLoss = async(req: Request, res: Response): Promise<void> => {
             .select(['id'])
             .executeTakeFirst();
             
-        if (segment) {
+        if (!segment) {
+            // Log error and record failure
+            logger.error(`Error applying charges to stop loss: Segment ${segmentName} not found`);
+            
+            await trx
+                .insertInto('order_charge_failures')
+                .values({
+                    order_id: coverOrderId,
+                    reason: 'Error applying charges to stop loss',
+                    details: JSON.stringify({
+                        error: `Segment ${segmentName} not found`
+                    }),
+                    attempted_at: new Date()
+                })
+                .execute();
+                
+            chargesData = {
+                error: 'Charges application failed but stop loss was executed'
+            };
+        } else {
             const charges = await trx
                 .selectFrom('brokerage_charges')
                 .innerJoin('charge_types', 'brokerage_charges.charge_type_id', 'charge_types.id')
@@ -938,7 +937,26 @@ const executeStopLoss = async(req: Request, res: Response): Promise<void> => {
                 .execute();
                 
             // Calculate charges for stop loss
-            if (charges.length > 0) {
+            if (charges.length === 0) {
+                // Log error and record failure
+                logger.error('Error applying charges to stop loss: No charges found for segment');
+                
+                await trx
+                    .insertInto('order_charge_failures')
+                    .values({
+                        order_id: coverOrderId,
+                        reason: 'Error applying charges to stop loss',
+                        details: JSON.stringify({
+                            error: 'No charges found for segment'
+                        }),
+                        attempted_at: new Date()
+                    })
+                    .execute();
+                    
+                chargesData = {
+                    error: 'Charges application failed but stop loss was executed'
+                };
+            } else {
                 let totalStopLossCharges = 0;
                 let taxableAmount = 0;
                 const appliedCharges: any[] = [];
@@ -1005,69 +1023,42 @@ const executeStopLoss = async(req: Request, res: Response): Promise<void> => {
                     }
                 }
                 
-                // Calculate GST on taxable amount
-                const cgstAmount = parseFloat((taxableAmount * 0.09).toFixed(2));
-                const sgstAmount = parseFloat((taxableAmount * 0.09).toFixed(2));
+                // Calculate GST on taxable amount (18% combined instead of separate CGST and SGST)
+                const gstAmount = parseFloat((taxableAmount * 0.18).toFixed(2));
                 
-                totalStopLossCharges += cgstAmount + sgstAmount;
+                totalStopLossCharges += gstAmount;
                 
-                // Add GST charges
-                const cgstType = await trx
+                // Add GST charge
+                const gstType = await trx
                     .selectFrom('charge_types')
-                    .where('name', '=', 'CGST')
-                    .select(['id'])
-                    .executeTakeFirst();
-                    
-                const sgstType = await trx
-                    .selectFrom('charge_types')
-                    .where('name', '=', 'SGST')
+                    .where('name', '=', 'GST')
                     .select(['id'])
                     .executeTakeFirst();
                 
-                if (cgstType) {
-                    const cgstCharge = await trx
+                if (gstType) {
+                    const gstCharge = await trx
                         .insertInto('order_charges')
                         .values({
                             order_id: coverOrderId,
-                            charge_type_id: cgstType.id,
-                            charge_amount: cgstAmount,
+                            charge_type_id: gstType.id,
+                            charge_amount: gstAmount,
                             is_percentage: true,
-                            percentage_value: 9, // 9%
+                            percentage_value: 18, // 18%
                             transaction_value: taxableAmount,
                             created_at: new Date()
                         })
                         .returningAll()
                         .executeTakeFirst();
                         
-                    if (cgstCharge) {
+                    if (gstCharge) {
                         appliedCharges.push({
-                            ...cgstCharge,
-                            charge_name: 'CGST'
+                            ...gstCharge,
+                            charge_name: 'GST'
                         });
                     }
-                }
-                
-                if (sgstType) {
-                    const sgstCharge = await trx
-                        .insertInto('order_charges')
-                        .values({
-                            order_id: coverOrderId,
-                            charge_type_id: sgstType.id,
-                            charge_amount: sgstAmount,
-                            is_percentage: true,
-                            percentage_value: 9, // 9%
-                            transaction_value: taxableAmount,
-                            created_at: new Date()
-                        })
-                        .returningAll()
-                        .executeTakeFirst();
-                        
-                    if (sgstCharge) {
-                        appliedCharges.push({
-                            ...sgstCharge,
-                            charge_name: 'SGST'
-                        });
-                    }
+                } else {
+                    // Log error if GST charge type not found
+                    logger.error('Error applying GST charge: GST charge type not found');
                 }
                 
                 // Update order with total charges
@@ -1102,32 +1093,10 @@ const executeStopLoss = async(req: Request, res: Response): Promise<void> => {
             exchangeOrderId,
             charges: chargesData
         };
-    }).catch((error) => {
-        // Log unexpected errors
-        logger.error('Error executing stop loss:', error);
-        
-        // Create a record of the charge application failure if appropriate
-        if (error.message?.includes('charges')) {
-            try {
-                db.insertInto('order_charge_failures')
-                    .values({
-                        order_id: coverOrderId,
-                        reason: 'Error applying charges to stop loss',
-                        details: JSON.stringify({
-                            error: error instanceof Error ? error.message : 'Unknown error',
-                            stack: error instanceof Error ? error.stack : undefined
-                        }),
-                        attempted_at: new Date()
-                    })
-                    .execute();
-            } catch (recordError) {
-                logger.error('Failed to record charge error:', recordError);
-            }
-        }
-        
-        throw new APIError(500, 'Failed to execute stop loss');
     });
-
+    if (!result) {
+        logger.error('Error executing stop loss: Transaction failed');
+    }
     res.status(OK).json({
         success: true,
         data: result,

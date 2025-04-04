@@ -1,8 +1,7 @@
 import { db } from "@app/database";
 import {
     OrderSide,
-    ProductType,
-    OrderCategory,
+    ProductType
 } from "../orders/order.types";
 
 import {
@@ -524,3 +523,80 @@ export const calculateCharges = async (
             applied_charges: appliedCharges
         };
 };
+
+export const applyOrderCharges = async ( orderId: number,
+    userId: number): Promise<ChargeCalculationResult> => {
+        // Get order details
+        const order = await db
+            .selectFrom('orders')
+            .where('id', '=', orderId)
+            .selectAll()
+            .executeTakeFirst();
+            if (!order) {
+                throw new Error(`Order not found: ${orderId}`);
+            }
+            // get the type of product
+            let productType: ProductType;
+
+            // implementing switch case
+
+            switch(order.order_category){
+                case 'instant':
+                    const instantOrder = await db
+                        .selectFrom('instant_orders')
+                        .where('order_id', '=', orderId)
+                        .select(['product_type'])
+                        .executeTakeFirst();
+                    
+                    productType = instantOrder?.product_type as ProductType || ProductType.DELIVERY;
+                    break;
+                
+                case 'normal':
+                    // Normal orders are always delivery
+                    productType = ProductType.DELIVERY;
+                    break;
+                
+                case 'iceberg':
+                    const icebergOrder = await db
+                        .selectFrom('iceberg_orders')
+                        .where('order_id', '=', orderId)
+                        .select(['product_type'])
+                        .executeTakeFirst();
+                    
+                    productType = icebergOrder?.product_type as ProductType || ProductType.DELIVERY;
+                    break;
+                
+                case 'cover_order':
+                    // Cover orders are always intraday
+                    productType = ProductType.INTRADAY;
+                    break;
+                
+                default:
+                    productType = ProductType.DELIVERY;
+            }
+
+    // Identifying the direct (BUY OR SELL)
+    let direction: ChargesDirection;
+            switch (order.order_side) {
+                case OrderSide.BUY:
+                    direction = ChargesDirection.BUY;
+                    break;
+                case OrderSide.SELL:
+                    direction = ChargesDirection.SELL;
+                    break;
+                default:
+                    direction = ChargesDirection.BUY; 
+        }
+
+        // calculating charhes with the help of calculateCharges function above
+        const chargesResult = await calculateCharges(
+            orderId,
+            order.quantity,
+            order.price || 0,
+            direction,
+            order.exchange as ExchangeType || ExchangeType.NSE,
+            productType
+        );
+
+        return chargesResult;
+    }
