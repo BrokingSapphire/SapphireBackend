@@ -16,9 +16,47 @@ import {
     CoverOrderRequest,
     OrderAttemptFailure
 } from './order.types';
+import { calculateCharges } from '../charges/charges.service';
+import {
+    ChargesDirection,
+    ExchangeType
+} from '../charges/charges.types';
 import generateOrderId  from './orderIdGenerator';
 import logger from '@app/logger';
 import {OK, CREATED} from '@app/utils/httpstatus';
+
+const calculateOrderCharges = async (
+    orderId: number,
+    quantity: number,
+    price: number,
+    orderSide: OrderSide,
+    productType: ProductType,
+    exchange: ExchangeType = ExchangeType.NSE  // NSE --> Default for now 
+): Promise<number> => {
+    let direction: ChargesDirection;
+    switch (orderSide) {
+        case OrderSide.BUY:
+            direction = ChargesDirection.BUY;
+            break;
+        case OrderSide.SELL:
+            direction = ChargesDirection.SELL;
+            break;
+        default:
+            direction = ChargesDirection.BUY; 
+    }
+
+    // Calculate charges
+    const chargesResult = await calculateCharges(
+        orderId,
+        quantity,
+        price,
+        direction,
+        exchange,
+        productType
+    );
+
+    return chargesResult.total_charges;
+}
 
 // Creating Instant Order
 
@@ -33,7 +71,8 @@ const createInstantOrder = async (req: Request, res: Response): Promise<void> =>
     quantity,
     price,
     productType,
-    orderType } : InstantOrderRequest = req.body;
+    orderType ,
+    exchange = ExchangeType.NSE} : InstantOrderRequest & { exchange?: ExchangeType } = req.body;
 
     if(!symbol || !orderSide || !quantity || !productType || !orderType) {
         throw new BadRequestError('Missing required fields');
@@ -69,6 +108,18 @@ const createInstantOrder = async (req: Request, res: Response): Promise<void> =>
     const estimatePrice:number = price || getEstimatedMarketPrice(symbol);
     const estimatedValue:number = estimatePrice * quantity;
 
+    const generatedOrderId = await generateOrderId(db);
+
+    // Calculate trading charges
+    const tradingCharges = await calculateOrderCharges(
+        Number(generatedOrderId),
+        quantity,
+        estimatePrice,
+        orderSide,
+        productType,
+        exchange
+    );
+
     // For margin products, apply appropriate margin requirement
 
     let requiredFunds: number = estimatedValue;
@@ -78,8 +129,7 @@ const createInstantOrder = async (req: Request, res: Response): Promise<void> =>
     else if(productType === ProductType.MTF){
         requiredFunds = estimatedValue * 0.4; // 40% margin for MTF
     }
-
-    const generatedOrderId = await generateOrderId(db);
+    requiredFunds += tradingCharges;
 
     // Check if sufficient funds 
 if (userFunds.available_funds < requiredFunds) { 
@@ -89,7 +139,7 @@ if (userFunds.available_funds < requiredFunds) {
             .insertInto('order_attempt_failures')
             .values({
                 user_id: userId, 
-                order_category: OrderCategory.NORMAL, 
+                order_category: OrderCategory.INSTANT, 
                 order_reference_id: generatedOrderId,
                 symbol, 
                 order_side: orderSide, 
@@ -132,7 +182,9 @@ const result = await db.transaction().execute(async (trx) => {
         quantity,
         price: price || null,
         status: OrderStatus.QUEUED,
-        placed_at: new Date()
+        placed_at: new Date(),
+        exchange,
+        total_charges: tradingCharges
     })
     .returningAll()
     .executeTakeFirstOrThrow();
@@ -172,6 +224,8 @@ const result = await db.transaction().execute(async (trx) => {
         orderReferenceId: generatedOrderId,
         fundsImpact: {
             required: requiredFunds,
+            tradingValue: estimatedValue,
+            tradingCharges,
             remainingFunds: userFunds.available_funds - requiredFunds
         }
     };
@@ -203,7 +257,8 @@ const createNormalOrder = async (req:Request, res: Response): Promise<void> =>{
         triggerPrice,
         validity,
         validityMinutes,
-        disclosedQuantity}: NormalOrderRequest = req.body;
+        disclosedQuantity,
+        exchange = ExchangeType.NSE}: NormalOrderRequest & {exchange?: ExchangeType} = req.body;
 
     if(!userId || !orderSide || !quantity || !orderType || !validity){
         throw new BadRequestError("Missing Fields are Required");
@@ -245,14 +300,24 @@ const createNormalOrder = async (req:Request, res: Response): Promise<void> =>{
     const estimatePrice:number = price || getEstimatedMarketPrice(symbol);
     const estimatedValue:number = estimatePrice * quantity;
 
-    // normal orders,  100% margin is required
-    const requiredFunds: number = estimatedValue;
+    const productType = ProductType.DELIVERY;
 
     // generateOrderID: 
     const generatedOrderId = await generateOrderId(db);
 
-    // checking if user has sufficient funds
+    // Calculate trading charges
+    const tradingCharges = await calculateOrderCharges(
+        Number(generatedOrderId),
+        quantity,
+        estimatePrice,
+        orderSide,
+        productType,
+        exchange
+    );
+    // normal orders,  100% margin is required
+    const requiredFunds: number = estimatedValue + tradingCharges;
 
+    // checking if user has sufficient funds
     if (userFunds.available_funds < requiredFunds) { 
         // Log the failed attempt 
         await db.transaction().execute(async (trx) => {
@@ -304,7 +369,9 @@ const result = await db.transaction().execute(async (trx) => {
         quantity,
         price: price || null,
         status: OrderStatus.QUEUED,
-        placed_at: new Date()
+        placed_at: new Date(),
+        exchange,
+        total_charges: tradingCharges
     })
     .returningAll()
     .executeTakeFirstOrThrow();
@@ -347,7 +414,13 @@ const result = await db.transaction().execute(async (trx) => {
     return {
         order,
         normalOrder,
-        orderReferenceId: generatedOrderId
+        orderReferenceId: generatedOrderId,
+        fundsImpact: {
+            required: requiredFunds,
+            tradingValue: estimatedValue,
+            tradingCharges,
+            remainingFunds: userFunds.available_funds - requiredFunds
+        }
     };
 });
 
@@ -377,7 +450,8 @@ const createIcebergOrder = async (req:Request, res: Response): Promise<void> =>{
         validityMinutes,
         disclosedQuantity,
         numOfLegs,
-        productType}: IcebergOrderRequest = req.body;
+        productType,
+        exchange = ExchangeType.NSE}: IcebergOrderRequest & {exchange?: ExchangeType} = req.body;
     if(!symbol || !orderSide || !quantity || !orderType || !validity){
         throw new BadRequestError("Missing Fields are Required");
     }
@@ -423,6 +497,18 @@ const createIcebergOrder = async (req:Request, res: Response): Promise<void> =>{
     const estimatePrice:number = price || getEstimatedMarketPrice(symbol);
     const estimatedValue:number = estimatePrice * quantity;
 
+    const generatedOrderId = await generateOrderId(db);
+
+    // Calculate trading charges
+    const tradingCharges = await calculateOrderCharges(
+        Number(generatedOrderId),
+        quantity,
+        estimatePrice,
+        orderSide,
+        productType,
+        exchange
+    );
+
     // calculate funds
     let requiredFunds: number ;
 
@@ -432,8 +518,7 @@ const createIcebergOrder = async (req:Request, res: Response): Promise<void> =>{
     else{
         requiredFunds = estimatedValue // for delivery 100% margin utilization
     }
-
-    const generatedOrderId = await generateOrderId(db);
+    requiredFunds += tradingCharges;
 
     // checking if user has sufficient funds
     if(!userFunds || userFunds.available_funds < requiredFunds){
@@ -486,7 +571,9 @@ const createIcebergOrder = async (req:Request, res: Response): Promise<void> =>{
                 quantity,
                 price: price || null,
                 status: OrderStatus.QUEUED,
-                placed_at: new Date()
+                placed_at: new Date(),
+                exchange,
+                total_charges: tradingCharges
             })
             .returningAll()
             .executeTakeFirst();
@@ -558,10 +645,12 @@ return {
     legs,
     orderReferenceId: generatedOrderId,
     fundDetails: {
-        requiredFunds,
-        remainingFunds: userFunds.available_funds - requiredFunds,
-        productType
-    }
+            requiredFunds,
+            tradingValue: estimatedValue,
+            tradingCharges,
+            remainingFunds: userFunds.available_funds - requiredFunds,
+            productType
+        }
 };
 });
 
@@ -589,8 +678,9 @@ const createCoverOrder = async(req: Request , res: Response): Promise<void> =>{
         quantity,
         price,
         orderType,
-        stopLossPrice
-    }: CoverOrderRequest = req.body;
+        stopLossPrice,
+        exchange = ExchangeType.NSE
+    }: CoverOrderRequest & { exchange?: ExchangeType } = req.body;
 
     // Validate required fields
     if (!symbol || !orderSide || !quantity || !orderType || !stopLossPrice) {
@@ -629,10 +719,38 @@ const createCoverOrder = async(req: Request , res: Response): Promise<void> =>{
     const estimatePrice: number = price || getEstimatedMarketPrice(symbol);
     const estimatedValue: number = estimatePrice * quantity;
 
-    // Cover orders are always intraday, typically require less margin (e.g., 20%)
-    const requiredFunds: number = estimatedValue * 0.2;
+     // Generate order ID
+     const generatedOrderId = await generateOrderId(db);
 
-    const generatedOrderId = await generateOrderId(db);
+     // Cover orders are always intraday
+     const productType = ProductType.INTRADAY;
+
+    const mainOrderCharges = await calculateOrderCharges(
+        Number(generatedOrderId),
+        quantity,
+        estimatePrice,
+        orderSide,
+        productType,
+        exchange
+    );
+
+     // Calculate stop loss order charges (will execute in opposite direction)
+     const stopLossOrderSide = orderSide === OrderSide.BUY ? OrderSide.SELL : OrderSide.BUY;
+     const stopLossOrderCharges = await calculateOrderCharges(
+        Number(generatedOrderId) + 1,
+        quantity,
+        stopLossPrice,
+        stopLossOrderSide,
+        productType,
+        exchange
+     );
+ 
+     // Total charges for both orders
+     const totalCharges = mainOrderCharges + stopLossOrderCharges;
+ 
+     // Cover orders require less margin (20% + charges)
+     const requiredFunds: number = (estimatedValue * 0.2) + totalCharges;
+ 
 
     // Check if sufficient funds
     if (!userFunds || userFunds.available_funds < requiredFunds) {
@@ -684,7 +802,9 @@ const createCoverOrder = async(req: Request , res: Response): Promise<void> =>{
                 quantity,
                 price: price || null,
                 status: OrderStatus.QUEUED,
-                placed_at: new Date()
+                placed_at: new Date(),
+                exchange,
+                total_charges: totalCharges 
             })
             .returningAll()
             .executeTakeFirst();
@@ -738,7 +858,14 @@ const createCoverOrder = async(req: Request , res: Response): Promise<void> =>{
             order,
             coverOrder,
             coverOrderDetails,
-            orderReferenceId: generatedOrderId
+            orderReferenceId: generatedOrderId,
+            chargesDetails: {
+                mainOrderCharges,
+                stopLossOrderCharges,
+                totalCharges,
+                tradingValue: estimatedValue,
+                requiredFunds
+            }
         };
     });
 
@@ -749,6 +876,8 @@ const createCoverOrder = async(req: Request , res: Response): Promise<void> =>{
         data:result
     });
 };
+
+// ########################################################################################
 
 // Helper function to get estimated market price
 function getEstimatedMarketPrice(symbol: string): number {
@@ -767,6 +896,8 @@ function getEstimatedMarketPrice(symbol: string): number {
     // Return price or default
     return prices[symbol] || 1000; // Default price if symbol not found
 }
+
+// #################################################################################
 
 // Get all orders of users
 const getAllOrders = async (req: Request, res: Response): Promise<void> => {
@@ -832,7 +963,6 @@ const getAllOrders = async (req: Request, res: Response): Promise<void> => {
         .execute();
 
     res.status(OK).json({
-        success: true,
         data: {
             orders,
             pagination: {

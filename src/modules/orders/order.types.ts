@@ -10,7 +10,8 @@ export enum OrderSide {
     DELIVERY = 'delivery',
     MTF = 'mtf',
     FUTURES = 'futures',
-    OPTIONS = 'options'
+    OPTIONS = 'options',
+    CURRENCY = 'currency' 
   }
   
   export enum OrderType {

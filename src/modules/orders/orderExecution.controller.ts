@@ -3,7 +3,6 @@
 import { Request, Response } from "express";
 import {db} from '@app/database';
 import { APIError, BadRequestError, NotFoundError } from '@app/apiError';
-// import { ChargesService } from '../services/charges.service.js';
 import { 
     OrderStatus, 
     OrderCategory, 
@@ -16,10 +15,10 @@ import {
     ExecuteStopLossRequest,
 } from './order.types';
 import logger from '@app/logger';
-import {OK, CREATED} from '@app/utils/httpstatus';
+import {OK} from '@app/utils/httpstatus';
 
 const executeOrder = async(req: Request, res: Response): Promise<void> => {
-    const orderId = parseInt(req.params.orderId);
+    const orderId = parseInt(req.params.orderId , 10);
     const { executionPrice, exchangeOrderId, remarks }: ExecuteOrderRequest = req.body;
 
     if (!executionPrice) {
@@ -69,7 +68,7 @@ const executeOrder = async(req: Request, res: Response): Promise<void> => {
             .execute();
 
         // handling different types of orders
-        let additionalData: any = {};
+        const additionalData: any = {};
         let currentLeg = null;
 
         switch (order.order_category) {
@@ -407,7 +406,7 @@ const executeOrder = async(req: Request, res: Response): Promise<void> => {
 };
 
 const executeNextIcebergLeg = async(req:Request , res: Response): Promise<void> =>{
-    const icebergOrderId : number = parseInt(req.params.icebergOrderId)
+    const icebergOrderId : number = parseInt(req.params.icebergOrderId , 10)
     const { executionPrice, exchangeOrderId, remarks }: ExecuteNextLegRequest  = req.body;
 
     if(!executionPrice){
@@ -727,7 +726,7 @@ const executeNextIcebergLeg = async(req:Request , res: Response): Promise<void> 
 // Rejectingt the order
 
 const rejectOrder = async(req: Request, res: Response): Promise<void> =>{
-    const orderId: number = parseInt(req.params.orderId);
+    const orderId: number = parseInt(req.params.orderId , 10);
     const { rejectionReason }: RejectOrderRequest = req.body;
 
     if (!rejectionReason) {
@@ -833,7 +832,7 @@ res.status(OK).json({
 // Execute Stop-loss order
 
 const executeStopLoss = async(req: Request, res: Response): Promise<void> => {
-    const coverOrderId: number = parseInt(req.params.coverOrderId);
+    const coverOrderId: number = parseInt(req.params.coverOrderId , 10);
     const { executionPrice, exchangeOrderId, remarks }: ExecuteStopLossRequest = req.body;
 
     if (!executionPrice) {
@@ -1139,7 +1138,7 @@ const executeStopLoss = async(req: Request, res: Response): Promise<void> => {
 // Get Order Charges
 
 const getOrderCharges = async (req: Request, res: Response): Promise<void> => {
-    const orderId: number = parseInt(req.params.orderId);
+    const orderId: number = parseInt(req.params.orderId , 10);
     
     // First check if the order exists
     const order = await db
