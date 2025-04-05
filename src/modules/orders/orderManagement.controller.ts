@@ -61,7 +61,7 @@ const calculateOrderCharges = async (
 // Creating Instant Order
 
 const createInstantOrder = async (req: Request, res: Response): Promise<void> => {
-    const userId: number = parseInt(req.params.userId, 10);
+    const userId: number = parseInt(req.params.user_id, 10);
 
     if(isNaN(userId)) {
         throw new BadRequestError('Invalid user ID');
@@ -1182,80 +1182,6 @@ const getOrderHistory = async(req:Request, res: Response):Promise<void> =>{
     });
 };
     
-
-// get-order-summary
-
-const getOrderSummary = async(req:Request, res: Response): Promise<void> =>{
-    const userId: number = parseInt(req.params.user_id , 10);
-
-  if (isNaN(userId)) {
-    throw new BadRequestError('Invalid user ID');
-  }
-
-  // count for different order-categories
-
-  const summary = await db
-    .selectFrom('orders')
-    .where('user_id', '=', userId)
-    .select([
-      db.fn.count('id').as('total'),
-      'order_category',
-      'status'
-    ])
-    .groupBy(['order_category', 'status'])
-    .execute();
-
-    const result = {
-        total: 0,
-        byCategory: {
-          instant: { total: 0, queued: 0, executed: 0, rejected: 0, cancelled: 0 },
-          normal: { total: 0, queued: 0, executed: 0, rejected: 0, cancelled: 0 },
-          iceberg: { total: 0, queued: 0, executed: 0, rejected: 0, cancelled: 0 },
-          cover_order: { total: 0, queued: 0, executed: 0, rejected: 0, cancelled: 0 }
-        },
-        byStatus: {
-          queued: 0,
-          executed: 0,
-          rejected: 0,
-          cancelled: 0
-        }
-      };
-      for (const item of summary) {
-        const count = parseInt(item.total as string , 10);
-        const category = item.order_category as OrderCategory;
-        const status = item.status as OrderStatus;
-    
-        // Update total
-        result.total += count;
-    
-        // // Update by category
-        // result.byCategory[category].total += count;
-        // result.byCategory[category][status as keyof typeof result.byCategory[OrderCategory.INSTANT]] += count;
-    
-        // // Update by status
-        // result.byStatus[status as keyof typeof result.byStatus] += count;
-
-        // Update by category with any type assertion
-    if (category in result.byCategory) {
-        (result.byCategory as any)[category].total += count;
-    
-        if (status in (result.byCategory as any)[category]) {
-      (result.byCategory as any)[category][status] += count;
-        }
-    }
-
-    // Update by status
-    if (status in result.byStatus) {
-        (result.byStatus as any)[status] += count;
-    }
-    }
-    
-      res.status(OK).json({
-        success: true,
-        data: result
-      });
-};
-
 // get-recent-orders
 
 const getRecentOrders = async (req: Request, res: Response): Promise<void> => {
@@ -1333,6 +1259,26 @@ const getFailedOrderAttempts = async(req: Request, res: Response):Promise<void> 
   });
 };
 
+const getQueuedOrders = async (req: Request, res: Response): Promise<void> => {
+    req.query.status = 'QUEUED';
+    return getAllOrders(req, res);
+};
+
+const getExecutedOrders = async (req: Request, res: Response): Promise<void> => {
+    req.query.status = 'EXECUTED';
+    return getAllOrders(req, res);
+  };
+  
+  const getCancelledOrders = async (req: Request, res: Response): Promise<void> => {
+    req.query.status = 'CANCELLED';
+    return getAllOrders(req, res);
+  };
+  
+  const getRejectedOrders = async (req: Request, res: Response): Promise<void> => {
+    req.query.status = 'REJECTED';
+    return getAllOrders(req, res);
+  };
+
 export const orderManagementController = {
     createInstantOrder,
     createNormalOrder,
@@ -1342,7 +1288,10 @@ export const orderManagementController = {
     getOrderById,
     cancelOrder,
     getOrderHistory,
-    getOrderSummary,
     getRecentOrders,
-    getFailedOrderAttempts
+    getFailedOrderAttempts,
+    getQueuedOrders,
+    getExecutedOrders,
+    getCancelledOrders,
+    getRejectedOrders,
 };
