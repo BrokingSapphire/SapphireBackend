@@ -182,6 +182,37 @@ export class WatchlistController {
       res.status(500).json({ success: false, error: 'Internal server error' });
     }
   };
+
+  updateWatchlist = async (req: Request, res: Response): Promise<void> => {
+    try {
+      // For now, hardcode a userId or get it from query params
+      const userId = parseInt(req.query.userId as string, 10) || 1;
+      const watchlistId = parseInt(req.params.id, 10);
+      const { name, description } = req.body;
+  
+      if (isNaN(watchlistId)) {
+        res.status(400).json({ success: false, error: 'Invalid watchlist ID' });
+        return;
+      }
+  
+      if (!name && description === undefined) {
+        res.status(400).json({ success: false, error: 'At least one field (name or description) must be provided' });
+        return;
+      }
+  
+      const result = await this.watchlistService.updateWatchlist(watchlistId, userId, { name, description });
+  
+      if (result.success) {
+        res.status(200).json({ success: true, data: result.data });
+      } else {
+        const status = result.error === 'Watchlist not found' ? 404 : 400;
+        res.status(status).json({ success: false, error: result.error });
+      }
+    } catch (error) {
+      logger.error('Error in updateWatchlist controller:', error);
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  };
 }
 
 export default WatchlistController;

@@ -393,6 +393,94 @@ export class WatchlistDbService {
       logger.error('Error deleting watchlist:', error);
       return { success: false, error: 'Failed to delete watchlist' };
     }
+  };
+  
+  async updateWatchlist(
+    watchlistId: number,
+    userId: number,
+    updateData: { name?: string; description?: string | null }
+  ): Promise<ServiceResponse<WatchlistResponse>> {
+    try {
+      // Get user_watchlist ID for this user
+      const userWatchlistId = await this.ensureUserWatchlistExists(userId);
+  
+      // Check if watchlist exists and belongs to user
+      const watchlist = await this.db
+        .selectFrom('watchlist')
+        .where('id', '=', watchlistId)
+        .where('user_watchlist_id', '=', userWatchlistId)
+        .select(['id'])
+        .executeTakeFirst();
+  
+      if (!watchlist) {
+        return { success: false, error: 'Watchlist not found or does not belong to user' };
+      }
+  
+      // Prepare update object with only the fields that were provided
+      const updateObject: any = {
+        updated_at: new Date()
+      };
+  
+      if (updateData.name !== undefined) {
+        updateObject.name = updateData.name;
+      }
+  
+      if (updateData.description !== undefined) {
+        updateObject.description = updateData.description;
+      }
+  
+      // Update the watchlist
+      await this.db
+        .updateTable('watchlist')
+        .set(updateObject)
+        .where('id', '=', watchlistId)
+        .execute();
+  
+      // Get the updated watchlist to return
+      const updatedWatchlist = await this.db
+        .selectFrom('watchlist')
+        .where('id', '=', watchlistId)
+        .select([
+          'id',
+          'name',
+          'description',
+          'is_default',
+          'created_at',
+          'updated_at',
+        ])
+        .executeTakeFirst();
+  
+      if (!updatedWatchlist) {
+        return { success: false, error: 'Failed to retrieve updated watchlist' };
+      }
+  
+      // Count the items in the watchlist
+      const count = await this.db
+        .selectFrom('watchlist_item')
+        .where('watchlist_id', '=', watchlistId)
+        .select(({ fn }) => [fn.count('id').as('count')])
+        .executeTakeFirst();
+  
+      // Format the response to match WatchlistResponse type
+      const response: WatchlistResponse = {
+        id: updatedWatchlist.id,
+        name: updatedWatchlist.name,
+        description: updatedWatchlist.description,
+        is_default: updatedWatchlist.is_default,
+        created_at: updatedWatchlist.created_at instanceof Date
+          ? updatedWatchlist.created_at.toISOString()
+          : String(updatedWatchlist.created_at),
+        updated_at: updatedWatchlist.updated_at instanceof Date
+          ? updatedWatchlist.updated_at.toISOString()
+          : String(updatedWatchlist.updated_at),
+        items_count: Number(count?.count || 0),
+      };
+  
+      return { success: true, data: response };
+    } catch (error) {
+      logger.error('Error updating watchlist:', error);
+      return { success: false, error: 'Failed to update watchlist' };
+    }
   }
 }
 

@@ -54,4 +54,11 @@ router.delete('/:watchlistId/items/:itemId',  watchlistController.removeFromWatc
  */
 router.delete('/:id',  watchlistController.deleteWatchlist);
 
+/**
+ * @route  UPDATE /api/watchlists/:id
+ * @desc   Update a watchlist name
+ * @access Private
+ */
+router.put('/:id', watchlistController.updateWatchlist);
+
 export default router;
