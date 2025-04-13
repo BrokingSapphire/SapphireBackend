@@ -1,0 +1,112 @@
+-- Trade Section Schema for Stock Broking Application
+-- To be used with PostgreSQL
+
+-- Create enum types
+CREATE TYPE trade_status AS ENUM ('active', 'target_hit', 'stoploss_hit', 'expired', 'cancelled');
+CREATE TYPE trade_type AS ENUM ('buy', 'sell');
+CREATE TYPE instrument_type AS ENUM ('stock', 'future', 'option', 'commodity');
+
+-- Base table for all trade advices
+CREATE TABLE trade_advice (
+    id SERIAL PRIMARY KEY,
+    instrument_type instrument_type NOT NULL,
+    symbol VARCHAR(50) NOT NULL,
+    trade_type trade_type NOT NULL,
+    entry_price DECIMAL(15, 2) NOT NULL,
+    entry_price_low DECIMAL(15, 2),  -- For entry range (optional)
+    entry_price_high DECIMAL(15, 2), -- For entry range (optional)
+    stoploss DECIMAL(15, 2) NOT NULL,
+    target DECIMAL(15, 2) NOT NULL,
+    risk_reward_ratio DECIMAL(5, 2) NOT NULL,
+    posted_by INTEGER NOT NULL REFERENCES user(id),
+    posted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    closing_time TIMESTAMP,
+    exit_price DECIMAL(15, 2),
+    status trade_status NOT NULL DEFAULT 'active',
+    notes TEXT,
+    CONSTRAINT check_entry_range CHECK (
+        (entry_price_low IS NULL AND entry_price_high IS NULL) OR
+        (entry_price_low IS NOT NULL AND entry_price_high IS NOT NULL AND entry_price_low < entry_price_high)
+    )
+);
+
+-- Stock specific details
+CREATE TABLE stock_trade_advice (
+    id SERIAL PRIMARY KEY,
+    trade_advice_id INTEGER NOT NULL REFERENCES trade_advice(id) ON DELETE CASCADE,
+    quantity INTEGER NOT NULL CHECK (quantity > 0)
+);
+
+-- Future specific details
+CREATE TABLE future_trade_advice (
+    id SERIAL PRIMARY KEY,
+    trade_advice_id INTEGER NOT NULL REFERENCES trade_advice(id) ON DELETE CASCADE,
+    lot_size INTEGER NOT NULL CHECK (lot_size > 0),
+    expiry_date DATE NOT NULL
+);
+
+-- Commodity specific details
+CREATE TABLE commodity_trade_advice (
+    id SERIAL PRIMARY KEY,
+    trade_advice_id INTEGER NOT NULL REFERENCES trade_advice(id) ON DELETE CASCADE,
+    lot_size INTEGER NOT NULL CHECK (lot_size > 0),
+    expiry_date DATE NOT NULL
+);
+
+-- Option specific details
+CREATE TABLE option_trade_advice (
+    id SERIAL PRIMARY KEY,
+    trade_advice_id INTEGER NOT NULL REFERENCES trade_advice(id) ON DELETE CASCADE,
+    lot_size INTEGER NOT NULL CHECK (lot_size > 0),
+    expiry_date DATE NOT NULL,
+    strike_price DECIMAL(15, 2) NOT NULL,
+    option_type VARCHAR(4) NOT NULL CHECK (option_type IN ('CALL', 'PUT'))
+);
+
+-- Option strategy details
+CREATE TABLE option_strategy (
+    id SERIAL PRIMARY KEY,
+    option_trade_advice_id INTEGER NOT NULL REFERENCES option_trade_advice(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    entry_price DECIMAL(15, 2) NOT NULL,
+    exit_price DECIMAL(15, 2),
+    lot_size INTEGER NOT NULL CHECK (lot_size > 0),
+    leg_order INTEGER NOT NULL  -- To maintain the order of strategy legs
+);
+
+-- Table for tracking user subscriptions to trade advices
+CREATE TABLE user_trade_subscription (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES user(id),
+    trade_advice_id INTEGER NOT NULL REFERENCES trade_advice(id),
+    subscribed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, trade_advice_id)
+);
+
+-- Table for trade advice updates
+CREATE TABLE trade_advice_update (
+    id SERIAL PRIMARY KEY,
+    trade_advice_id INTEGER NOT NULL REFERENCES trade_advice(id),
+    update_type VARCHAR(50) NOT NULL,  -- e.g., 'target_modified', 'stoploss_modified', 'status_changed'
+    old_value TEXT,
+    new_value TEXT,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by INTEGER NOT NULL REFERENCES user(id)
+);
+
+-- Indexes for better performance
+CREATE INDEX idx_trade_advice_symbol ON trade_advice(symbol);
+CREATE INDEX idx_trade_advice_status ON trade_advice(status);
+CREATE INDEX idx_trade_advice_posted_by ON trade_advice(posted_by);
+CREATE INDEX idx_trade_advice_instrument_type ON trade_advice(instrument_type);
+CREATE INDEX idx_trade_advice_posted_at ON trade_advice(posted_at DESC);
+
+-- Index for trade advice specific tables
+CREATE INDEX idx_stock_trade_advice ON stock_trade_advice(trade_advice_id);
+CREATE INDEX idx_future_trade_advice ON future_trade_advice(trade_advice_id);
+CREATE INDEX idx_commodity_trade_advice ON commodity_trade_advice(trade_advice_id);
+CREATE INDEX idx_option_trade_advice ON option_trade_advice(trade_advice_id);
+CREATE INDEX idx_option_strategy ON option_strategy(option_trade_advice_id);
+
+-- Index for user subscriptions
+CREATE INDEX idx_user_trade_subscription ON user_trade_subscription(user_id, trade_advice_id);

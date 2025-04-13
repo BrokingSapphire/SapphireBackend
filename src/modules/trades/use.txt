@@ -1,0 +1,200 @@
+# Trading Recommendation System - Technical Documentation
+
+## Overview
+A real-time system for posting and displaying trading recommendations across multiple instrument types (stocks, futures, options, commodities) with socket integration for instant updates.
+
+## Backend Structure
+src/
+├── config/                # Configuration files
+│   ├── db.config.ts       # Database setup (Kysely + PostgreSQL)
+│   └── socket.config.ts   # Socket.IO setup
+├── modules/
+│   └── trade/             # Trade recommendation module
+│       ├── models/        # Database operations
+│       ├── services/      # Business logic
+│       ├── controllers/   # API handlers
+│       ├── routes/        # API routes
+│       ├── sockets/       # Socket handlers
+│       └── types/         # TypeScript definitions
+├── app.ts                 # Express app setup
+└── server.ts              # Server entry point
+
+## Key Features
+- Multi-instrument Support: Different instrument types with specific data requirements
+- Real-time Updates: Socket.IO integration for instant notifications
+- REST API + WebSockets: Dual communication channels
+- Modular Architecture: Clean separation of concerns
+
+## Database Schema
+Trading recommendations are stored in a relational database with:
+- trade_advice - Base table with common fields
+- Instrument-specific tables (stock, future, option, commodity)
+- user_trade_subscription - For user subscriptions
+- trade_advice_update - For tracking updates
+
+## API Endpoints
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| POST | /api/trade | Create a recommendation | Required |
+| GET | /api/trade | Get all recommendations | Optional |
+| GET | /api/trade/:id | Get recommendation by ID | Optional |
+| GET | /api/trade?instrumentType=X | Filter by instrument type | Optional |
+
+## Socket Events
+| Event | Direction | Description |
+|-------|-----------|-------------|
+| joinInstrumentRoom | Client → Server | Subscribe to instrument updates |
+| createTradeAdvice | Client → Server | Create a recommendation |
+| newTradeAdvice | Server → Client | New recommendation notification |
+| tradeAdviceCreated | Server → Client | Confirmation of creation |
+
+## Core Functions
+
+### 1. Post Trade Recommendation
+// Create a trade recommendation
+const postTradeAdvice = async (tradeData, token, useSocket = false) => {
+  if (useSocket) {
+    // Use socket for real-time posting
+    return createViaSocket(tradeData, token);
+  } else {
+    // Use REST API
+    return createViaAPI(tradeData, token);
+  }
+};
+
+### 2. Get Trade Recommendations
+// Get trade recommendations with optional filtering
+const getTradeAdvice = async (options = {}, token = null) => {
+  const { id, instrumentType, subscribeToUpdates } = options;
+
+  // Build API endpoint based on options
+  let endpoint = `/api/trade`;
+  if (id) endpoint = `${endpoint}/${id}`;
+  else if (instrumentType) endpoint = `${endpoint}?instrumentType=${instrumentType}`;
+
+  // Get initial data via REST API
+  const data = await fetchFromAPI(endpoint, token);
+
+  // Subscribe to real-time updates if requested
+  if (subscribeToUpdates && instrumentType) {
+    subscribeToInstrumentUpdates(instrumentType, options.onUpdate);
+  }
+
+  return data;
+};
+
+## Usage Examples
+
+### 1. Stock Recommendation
+const stockAdvice = {
+  baseTradeAdvice: {
+    instrument_type: 'stock',
+    symbol: 'RELIANCE',
+    trade_type: 'buy',
+    entry_price: 2450.75,
+    entry_price_low: 2440.00,  // Optional range
+    entry_price_high: 2455.00, // Optional range
+    stoploss: 2400.00,
+    target: 2550.00,
+    risk_reward_ratio: 2.0,
+    status: 'active',
+    notes: 'Strong support at 2440'
+  },
+  instrumentDetails: {
+    quantity: 10  // Number of shares
+  }
+};
+
+// Post via REST API
+const result = await postTradeAdvice(stockAdvice, 'your-auth-token');
+
+### 2. Future Recommendation
+const futureAdvice = {
+  baseTradeAdvice: {
+    instrument_type: 'future',
+    symbol: 'NIFTY',
+    trade_type: 'sell',
+    entry_price: 22450.00,
+    stoploss: 22550.00,
+    target: 22250.00,
+    risk_reward_ratio: 2.0,
+    status: 'active',
+    notes: 'Breakdown from resistance zone'
+  },
+  instrumentDetails: {
+    lot_size: 50,               // Contract size
+    expiry_date: '2023-06-29'   // Expiration date
+  }
+};
+
+// Post via Socket for instant updates
+const socketResult = await postTradeAdvice(futureAdvice, 'your-auth-token', true);
+
+### 3. Option Recommendation
+const optionAdvice = {
+  baseTradeAdvice: {
+    instrument_type: 'option',
+    symbol: 'BANKNIFTY',
+    trade_type: 'buy',
+    entry_price: 250.75,
+    stoploss: 200.00,
+    target: 350.00,
+    risk_reward_ratio: 2.0,
+    status: 'active',
+    notes: 'Momentum play ahead of quarterly results'
+  },
+  instrumentDetails: {
+    lot_size: 25,               // Contract size
+    expiry_date: '2023-06-15',  // Expiration date
+    strike_price: 43000.00,     // Strike price
+    option_type: 'CALL'         // CALL or PUT
+  }
+};
+
+const result = await postTradeAdvice(optionAdvice, 'your-auth-token');
+
+### 4. Commodity Recommendation
+const commodityAdvice = {
+  baseTradeAdvice: {
+    instrument_type: 'commodity',
+    symbol: 'GOLD',
+    trade_type: 'buy',
+    entry_price: 58750.00,
+    entry_price_low: 58500.00,
+    entry_price_high: 58900.00,
+    stoploss: 58000.00,
+    target: 60000.00,
+    risk_reward_ratio: 1.5,
+    status: 'active',
+    notes: 'Safe haven demand amid market volatility'
+  },
+  instrumentDetails: {
+    lot_size: 10,              // Contract size
+    expiry_date: '2023-08-05'  // Expiration date
+  }
+};
+
+const result = await postTradeAdvice(commodityAdvice, 'your-auth-token');
+
+### Getting Trade Recommendations with Updates
+// Get all active recommendations for a specific instrument type
+const getRecommendations = async (instrumentType) => {
+  const recommendations = await getTradeAdvice({
+    instrumentType: instrumentType,
+    subscribeToUpdates: true,
+    onUpdate: (newAdvice) => {
+      console.log(`New ${instrumentType} recommendation:`, newAdvice);
+      // Update UI here
+    }
+  }, 'your-auth-token');
+
+  // Display recommendations
+  displayRecommendations(recommendations);
+};
+
+// Get recommendations for each instrument type
+getRecommendations('stock');
+getRecommendations('future');
+getRecommendations('option');
+getRecommendations('commodity');
+
