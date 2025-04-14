@@ -47,6 +47,29 @@ export async function up(db: Kysely<any>): Promise<void> {
       col.notNull().defaultTo(sql`now()`)
     )
     .execute();
+    // Create watchlist_category table
+    await db.schema
+    .createTable('watchlist_category')
+    .addColumn('id', 'serial', (col) => col.primaryKey())
+    .addColumn('watchlist_id', 'integer', (col) =>
+      col.notNull().references('watchlist.id').onDelete('cascade')
+    )
+    .addColumn('name', 'varchar(255)', (col) => col.notNull())
+    .addColumn('order', 'integer', (col) => col.notNull().defaultTo(0))
+    .addColumn('created_at', 'timestamp', (col) =>
+      col.notNull().defaultTo(sql`now()`)
+    )
+    .addColumn('updated_at', 'timestamp', (col) =>
+      col.notNull().defaultTo(sql`now()`)
+    )
+    .execute();
+   // Add category_id to watchlist_item table
+   await db.schema
+   .alterTable('watchlist_item')
+   .addColumn('category_id', 'integer', (col) =>
+     col.references('watchlist_category.id').onDelete('set null')
+   )
+   .execute();
 
   // Add indexes
   await db.schema
@@ -68,6 +91,18 @@ export async function up(db: Kysely<any>): Promise<void> {
     .column('watchlist_id')
     .execute();
 
+  await db.schema
+    .createIndex('watchlist_category_watchlist_id_idx')
+    .on('watchlist_category')
+    .column('watchlist_id')
+    .execute();
+
+  await db.schema
+    .createIndex('watchlist_item_category_id_idx')
+    .on('watchlist_item')
+    .column('category_id')
+    .execute();
+
   // Create a unique index to prevent duplicate symbols in the same watchlist
   await db.schema
     .createIndex('watchlist_item_unique_symbol')
@@ -75,10 +110,24 @@ export async function up(db: Kysely<any>): Promise<void> {
     .columns(['watchlist_id', 'symbol'])
     .unique()
     .execute();
+
+  // Create a unique index for category names within a watchlist
+  await db.schema
+    .createIndex('watchlist_category_unique_name')
+    .on('watchlist_category')
+    .columns(['watchlist_id', 'name'])
+    .unique()
+    .execute();
 }
 
 export async function down(db: Kysely<any>): Promise<void> {
   // Drop tables in reverse order
+  await db.schema
+    .alterTable('watchlist_item')
+    .dropColumn('category_id')
+    .execute();
+  
+  await db.schema.dropTable('watchlist_category').execute();
   await db.schema.dropTable('watchlist_item').execute();
   await db.schema.dropTable('watchlist').execute();
   await db.schema.dropTable('user_watchlist').execute();
