@@ -12,6 +12,7 @@ export interface CreateWatchlistRequest {
 export interface AddToWatchlistRequest {
   symbol: string;
   categoryId?: number; // Optional category ID
+  order?: number;
 }
 
 export interface CreateCategoryRequest {
@@ -26,6 +27,25 @@ export interface UpdateCategoryRequest {
 
 export interface UpdateItemCategoryRequest {
   categoryId: number | null; // null means remove from any category
+}
+
+// For Managing --> Positions Change
+
+export interface UpdateItemOrderRequest {
+  order: number;
+}
+
+export interface BatchUpdateItemsOrderRequest {
+  items: { id: number; order: number }[];
+}
+
+export interface BatchUpdateCategoriesOrderRequest {
+  categories: { id: number; order: number }[];
+}
+
+export interface MoveItemRequest {
+  categoryId: number | null;
+  order: number;
 }
 
 // Response types
@@ -45,6 +65,7 @@ export interface WatchlistItemResponse {
   symbol: string;
   added_at: string;
   category_id: number | null;
+  order?: number;
 }
 
 export interface CategoryResponse {

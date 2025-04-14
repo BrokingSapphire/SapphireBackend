@@ -10,7 +10,7 @@ export class FundsService {
      */
     calculateSafetyCut(hasActivePositions: boolean, amount: number): { safetyCut: WithdrawalRequest['safetyCut'] } {
         // Apply safety cut logic
-        let safetyCut: WithdrawalRequest['safetyCut'] & { applied: boolean } = {
+        const safetyCut: WithdrawalRequest['safetyCut'] & { applied: boolean } = {
             percentage: 5,
             amount: 0,
             reason: hasActivePositions ? 'Active F&O Positions' : null,
@@ -39,7 +39,7 @@ export class FundsService {
         const currentHour = now.getHours();
         const processingWindow = currentHour < 12 ? 'NOON' : 'EOD';
 
-        let scheduledTime = new Date();
+        const scheduledTime = new Date();
 
         if (processingWindow === 'NOON') {
             // Set to noon today

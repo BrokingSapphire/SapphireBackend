@@ -7,7 +7,7 @@ import { Request, Response } from 'express';
 import WatchlistDbService from '../../services/watchlistDb.service';
 import { Kysely } from 'kysely';
 import { DB } from '../../database/db';
-import { AddToWatchlistRequest, CreateWatchlistRequest, CreateCategoryRequest, UpdateCategoryRequest, UpdateItemCategoryRequest } from './watchlist.types';
+import { AddToWatchlistRequest, CreateWatchlistRequest, CreateCategoryRequest, UpdateCategoryRequest, UpdateItemCategoryRequest, UpdateItemOrderRequest, BatchUpdateItemsOrderRequest, BatchUpdateCategoriesOrderRequest, MoveItemRequest } from './watchlist.types';
 import logger from '@app/logger';
 
 
@@ -95,52 +95,52 @@ export class WatchlistController {
     }
   };
 
-  /**
-   * Add a stock symbol to a watchlist
-   */
-  addToWatchlist = async (req: Request, res: Response): Promise<void> => {
-    try {
-      // For now, hardcode a userId or get it from query params
-      const userId = parseInt(req.query.userId as string, 10) || 1;
-      const watchlistId = parseInt(req.params.id, 10);
-      const { symbol, categoryId } = req.body as AddToWatchlistRequest;
+  // /**
+  //  * Add a stock symbol to a watchlist
+  //  */
+  // addToWatchlist = async (req: Request, res: Response): Promise<void> => {
+  //   try {
+  //     // For now, hardcode a userId or get it from query params
+  //     const userId = parseInt(req.query.userId as string, 10) || 1;
+  //     const watchlistId = parseInt(req.params.id, 10);
+  //     const { symbol, categoryId } = req.body as AddToWatchlistRequest;
   
-      if (isNaN(watchlistId)) {
-        res.status(400).json({ success: false, error: 'Invalid watchlist ID' });
-        return;
-      }
+  //     if (isNaN(watchlistId)) {
+  //       res.status(400).json({ success: false, error: 'Invalid watchlist ID' });
+  //       return;
+  //     }
   
-      if (!symbol) {
-        res.status(400).json({ success: false, error: 'Stock symbol is required' });
-        return;
-      }
+  //     if (!symbol) {
+  //       res.status(400).json({ success: false, error: 'Stock symbol is required' });
+  //       return;
+  //     }
   
-      // Check if categoryId is a valid number or null
-      let parsedCategoryId: number | null = null;
-      if (categoryId !== undefined) {
-        parsedCategoryId = typeof categoryId === 'number' ? categoryId : parseInt(categoryId as any, 10);
-        if (isNaN(parsedCategoryId)) {
-          parsedCategoryId = null;
-        }
-      }
+  //     // Check if categoryId is a valid number or null
+  //     let parsedCategoryId: number | null = null;
+  //     if (categoryId !== undefined) {
+  //       parsedCategoryId = typeof categoryId === 'number' ? categoryId : parseInt(categoryId as any, 10);
+  //       if (isNaN(parsedCategoryId)) {
+  //         parsedCategoryId = null;
+  //       }
+  //     }
   
-      const result = await this.watchlistService.addToWatchlist(
-        watchlistId, 
-        userId, 
-        symbol, 
-        parsedCategoryId
-      );
+  //     const result = await this.watchlistService.addToWatchlist(
+  //       watchlistId, 
+  //       userId, 
+  //       symbol, 
+  //       parsedCategoryId
+  //     );
   
-      if (result.success) {
-        res.status(201).json({ success: true, data: result.data });
-      } else {
-        res.status(400).json({ success: false, error: result.error });
-      }
-    } catch (error) {
-      logger.error('Error in addToWatchlist controller:', error);
-      res.status(500).json({ success: false, error: 'Internal server error' });
-    }
-  };
+  //     if (result.success) {
+  //       res.status(201).json({ success: true, data: result.data });
+  //     } else {
+  //       res.status(400).json({ success: false, error: result.error });
+  //     }
+  //   } catch (error) {
+  //     logger.error('Error in addToWatchlist controller:', error);
+  //     res.status(500).json({ success: false, error: 'Internal server error' });
+  //   }
+  // };
 
   /**
    * Remove a stock symbol from a watchlist
@@ -397,6 +397,238 @@ updateItemCategory = async (req: Request, res: Response): Promise<void> => {
     res.status(500).json({ success: false, error: 'Internal server error' });
     }
   };
+  // Add these methods to your WatchlistController class
+
+/**
+ * Update a single watchlist item's order
+ */
+updateItemOrder = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = parseInt(req.query.userId as string, 10) || 1;
+    const watchlistId = parseInt(req.params.watchlistId, 10);
+    const itemId = parseInt(req.params.itemId, 10);
+    const { order } = req.body as UpdateItemOrderRequest;
+
+    if (isNaN(watchlistId) || isNaN(itemId)) {
+      res.status(400).json({ success: false, error: 'Invalid ID parameters' });
+      return;
+    }
+
+    if (typeof order !== 'number' || order < 0) {
+      res.status(400).json({ success: false, error: 'Order must be a non-negative number' });
+      return;
+    }
+
+    const result = await this.watchlistService.updateItemOrder(
+      watchlistId,
+      userId,
+      itemId,
+      order
+    );
+
+    if (result.success) {
+      res.status(200).json({ success: true, data: result.data });
+    } else {
+      res.status(400).json({ success: false, error: result.error });
+    }
+  } catch (error) {
+    logger.error('Error in updateItemOrder controller:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+};
+
+/**
+ * Batch update multiple watchlist items' orders
+ */
+batchUpdateItemsOrder = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = parseInt(req.query.userId as string, 10) || 1;
+    const watchlistId = parseInt(req.params.watchlistId, 10);
+    const { items } = req.body as BatchUpdateItemsOrderRequest;
+
+    if (isNaN(watchlistId)) {
+      res.status(400).json({ success: false, error: 'Invalid watchlist ID' });
+      return;
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      res.status(400).json({ success: false, error: 'Items array is required and must not be empty' });
+      return;
+    }
+
+    for (const item of items) {
+      if (typeof item.id !== 'number' || typeof item.order !== 'number' || item.order < 0) {
+        res.status(400).json({
+          success: false,
+          error: 'Each item must have a valid id and a non-negative order'
+        });
+        return;
+      }
+    }
+
+    const result = await this.watchlistService.batchUpdateItemsOrder(
+      watchlistId,
+      userId,
+      items);
+
+      if (result.success) {
+        res.status(200).json({ success: true, message: 'Items order updated successfully' });
+      } else {
+        res.status(400).json({ success: false, error: result.error });
+      }
+    } catch (error) {
+      logger.error('Error in batchUpdateItemsOrder controller:', error);
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+   };
+   
+  /**
+   * Batch update category orders
+   */
+   batchUpdateCategoriesOrder = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = parseInt(req.query.userId as string, 10) || 1;
+      const watchlistId = parseInt(req.params.watchlistId, 10);
+      const { categories } = req.body as BatchUpdateCategoriesOrderRequest;
+   
+      if (isNaN(watchlistId)) {
+        res.status(400).json({ success: false, error: 'Invalid watchlist ID' });
+        return;
+      }
+   
+      if (!Array.isArray(categories) || categories.length === 0) {
+        res.status(400).json({ success: false, error: 'Categories array is required and must not be empty' });
+        return;
+      }
+   
+      for (const category of categories) {
+        if (typeof category.id !== 'number' || typeof category.order !== 'number' || category.order < 0) {
+          res.status(400).json({
+            success: false,
+            error: 'Each category must have a valid id and a non-negative order'
+          });
+          return;
+        }
+      }
+   
+      const result = await this.watchlistService.batchUpdateCategoriesOrder(
+        watchlistId,
+        userId,
+        categories
+      );
+   
+      if (result.success) {
+        res.status(200).json({ success: true, message: 'Categories order updated successfully' });
+      } else {
+        res.status(400).json({ success: false, error: result.error });
+      }
+    } catch (error) {
+      logger.error('Error in batchUpdateCategoriesOrder controller:', error);
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+   };
+   
+  /**
+   * Move an item to a different category and update its order
+   */
+   moveItem = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = parseInt(req.query.userId as string, 10) || 1;
+      const watchlistId = parseInt(req.params.watchlistId, 10);
+      const itemId = parseInt(req.params.itemId, 10);
+      const { categoryId, order } = req.body as MoveItemRequest;
+   
+      if (isNaN(watchlistId) || isNaN(itemId)) {
+        res.status(400).json({ success: false, error: 'Invalid ID parameters' });
+        return;
+      }
+   
+      if (typeof order !== 'number' || order < 0) {
+        res.status(400).json({ success: false, error: 'Order must be a non-negative number' });
+        return;
+      }
+   
+      // Parse categoryId to allow for null
+      let parsedCategoryId: number | null = null;
+      if (categoryId !== undefined && categoryId !== null) {
+        parsedCategoryId = typeof categoryId === 'number' ? categoryId : parseInt(categoryId as any, 10);
+        if (isNaN(parsedCategoryId)) {
+          parsedCategoryId = null;
+        }
+      }
+   
+      const result = await this.watchlistService.moveItem(
+        watchlistId,
+        userId,
+        itemId,
+        parsedCategoryId,
+        order
+      );
+   
+      if (result.success) {
+        res.status(200).json({ success: true, data: result.data });
+      } else {
+        res.status(400).json({ success: false, error: result.error });
+      }
+    } catch (error) {
+      logger.error('Error in moveItem controller:', error);
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+   };
+   
+   addToWatchlist = async (req: Request, res: Response): Promise<void> => {
+    try {
+      // For now, hardcode a userId or get it from query params
+      const userId = parseInt(req.query.userId as string, 10) || 1;
+      const watchlistId = parseInt(req.params.id, 10);
+      const { symbol, categoryId, order } = req.body as AddToWatchlistRequest;
+   
+      if (isNaN(watchlistId)) {
+        res.status(400).json({ success: false, error: 'Invalid watchlist ID' });
+        return;
+      }
+   
+      if (!symbol) {
+        res.status(400).json({ success: false, error: 'Stock symbol is required' });
+        return;
+      }
+   
+      // Check if categoryId is a valid number or null
+      let parsedCategoryId: number | null = null;
+      if (categoryId !== undefined) {
+        parsedCategoryId = typeof categoryId === 'number' ? categoryId : parseInt(categoryId as any, 10);
+        if (isNaN(parsedCategoryId)) {
+          parsedCategoryId = null;
+        }
+      }
+   
+      // Check if order is a valid number or null
+      let parsedOrder: number | null = null;
+      if (order !== undefined) {
+        parsedOrder = typeof order === 'number' ? order : parseInt(order as any, 10);
+        if (isNaN(parsedOrder) || parsedOrder < 0) {
+          parsedOrder = null;
+        }
+      }
+   
+      const result = await this.watchlistService.addToWatchlist(
+        watchlistId,
+        userId,
+        symbol,
+        parsedCategoryId,
+        parsedOrder
+      );
+   
+      if (result.success) {
+        res.status(201).json({ success: true, data: result.data });
+      } else {
+        res.status(400).json({ success: false, error: result.error });
+      }
+    } catch (error) {
+      logger.error('Error in addToWatchlist controller:', error);
+      res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+   };
 }
 
 export default WatchlistController;

@@ -768,90 +768,6 @@ async deleteCategory(
 }
 
 /**
- * Add a stock to a watchlist, optionally in a specific category
- * Updated version of addToWatchlist to support categories
- */
-async addToWatchlist(
-  watchlistId: number,
-  userId: number,
-  symbol: string,
-  categoryId: number | null = null
-): Promise<ServiceResponse<WatchlistItemResponse>> {
-  try {
-    // Get user_watchlist ID for this user
-    const userWatchlistId = await this.ensureUserWatchlistExists(userId);
-
-    // Check if watchlist exists and belongs to user
-    const watchlist = await this.db
-      .selectFrom('watchlist')
-      .where('id', '=', watchlistId)
-      .where('user_watchlist_id', '=', userWatchlistId)
-      .select(['id'])
-      .executeTakeFirst();
-
-    if (!watchlist) {
-      return { success: false, error: 'Watchlist not found or does not belong to user' };
-    }
-
-    // If categoryId is provided, check if it exists and belongs to this watchlist
-    if (categoryId !== null) {
-      const category = await this.db
-        .selectFrom('watchlist_category')
-        .where('id', '=', categoryId)
-        .where('watchlist_id', '=', watchlistId)
-        .select(['id'])
-        .executeTakeFirst();
-
-      if (!category) {
-        return { success: false, error: 'Category not found or does not belong to this watchlist' };
-      }
-    }
-
-    // Check if symbol already exists in this watchlist
-    const existingItem = await this.db
-      .selectFrom('watchlist_item')
-      .where('watchlist_id', '=', watchlistId)
-      .where('symbol', '=', symbol)
-      .select(['id'])
-      .executeTakeFirst();
-
-    if (existingItem) {
-      return { success: false, error: 'Symbol already exists in this watchlist' };
-    }
-
-    // Add the stock symbol to watchlist with optional category
-    const newItem = await this.db
-      .insertInto('watchlist_item')
-      .values({
-        watchlist_id: watchlistId,
-        symbol,
-        category_id: categoryId,
-      })
-      .returning(['id', 'symbol', 'added_at', 'category_id'])
-      .executeTakeFirst();
-
-    if (!newItem) {
-      return { success: false, error: 'Failed to add symbol to watchlist' };
-    }
-
-    // Format the response
-    const response: WatchlistItemResponse = {
-      id: newItem.id,
-      symbol: newItem.symbol,
-      added_at: newItem.added_at instanceof Date
-        ? newItem.added_at.toISOString()
-        : String(newItem.added_at),
-      category_id: newItem.category_id,
-    };
-
-    return { success: true, data: response };
-  } catch (error) {
-    logger.error('Error adding to watchlist:', error);
-    return { success: false, error: 'Failed to add symbol to watchlist' };
-  }
-}
-
-/**
  * Update the category of a watchlist item
  */
 async updateItemCategory(
@@ -934,6 +850,591 @@ async updateItemCategory(
   } catch (error) {
     logger.error('Error updating item category:', error);
     return { success: false, error: 'Failed to update item category' };
+    }
+  }
+
+  // Update the order 
+  async updateItemOrder(
+  watchlistId: number,
+  userId: number,
+  itemId: number,
+  newOrder: number
+  ):Promise<ServiceResponse<WatchlistItemResponse>>{
+    try {
+      // Get user_watchlist ID for this user
+      const userWatchlistId = await this.ensureUserWatchlistExists(userId);
+  
+      // Check if watchlist exists and belongs to user
+      const watchlist = await this.db
+        .selectFrom('watchlist')
+        .where('id', '=', watchlistId)
+        .where('user_watchlist_id', '=', userWatchlistId)
+        .select(['id'])
+        .executeTakeFirst();
+  
+      if (!watchlist) {
+        return { success: false, error: 'Watchlist not found or does not belong to user' };
+      }
+  
+      // Check if item exists and belongs to this watchlist
+      const item = await this.db
+        .selectFrom('watchlist_item')
+        .where('id', '=', itemId)
+        .where('watchlist_id', '=', watchlistId)
+        .select(['id', 'category_id', 'order'])
+        .executeTakeFirst();
+  
+      if (!item) {
+        return { success: false, error: 'Item not found or does not belong to this watchlist' };
+      }
+  
+      // Update the item's order
+      await this.db
+        .updateTable('watchlist_item')
+        .set({ 
+          order: newOrder,
+          updated_at: new Date() 
+        })
+        .where('id', '=', itemId)
+        .execute();
+  
+      // Get the updated item
+      const updatedItem = await this.db
+        .selectFrom('watchlist_item')
+        .where('id', '=', itemId)
+        .select(['id', 'symbol', 'added_at', 'category_id', 'order'])
+        .executeTakeFirst();
+  
+      if (!updatedItem) {
+        return { success: false, error: 'Failed to retrieve updated item' };
+      }
+  
+      // Format the response
+      const response: WatchlistItemResponse = {
+        id: updatedItem.id,
+        symbol: updatedItem.symbol,
+        added_at: updatedItem.added_at instanceof Date
+          ? updatedItem.added_at.toISOString()
+          : String(updatedItem.added_at),
+        category_id: updatedItem.category_id,
+        order: updatedItem.order ?? undefined
+      };
+  
+      return { success: true, data: response };
+    } catch (error) {
+      logger.error('Error updating item order:', error);
+      return { success: false, error: 'Failed to update item order' };
+    }
+  };
+/**
+ * Batch update orders of multiple watchlist items
+ */
+async batchUpdateItemsOrder(
+  watchlistId: number,
+  userId: number,
+  items: { id: number; order: number }[]
+): Promise<ServiceResponse<{ success: boolean }>> {
+  try {
+    // Get user_watchlist ID for this user
+    const userWatchlistId = await this.ensureUserWatchlistExists(userId);
+
+    // Check if watchlist exists and belongs to user
+    const watchlist = await this.db
+      .selectFrom('watchlist')
+      .where('id', '=', watchlistId)
+      .where('user_watchlist_id', '=', userWatchlistId)
+      .select(['id'])
+      .executeTakeFirst();
+
+    if (!watchlist) {
+      return { success: false, error: 'Watchlist not found or does not belong to user' };
+    }
+
+    // Get all valid item IDs in this watchlist
+    const watchlistItems = await this.db
+      .selectFrom('watchlist_item')
+      .where('watchlist_id', '=', watchlistId)
+      .select(['id'])
+      .execute();
+    
+    const validItemIds = new Set(watchlistItems.map(item => item.id));
+    
+    // Check if all items in the request belong to this watchlist
+    const invalidItems = items.filter(item => !validItemIds.has(item.id));
+    if (invalidItems.length > 0) {
+      return { 
+        success: false, 
+        error: `Items with IDs ${invalidItems.map(item => item.id).join(', ')} not found or do not belong to this watchlist` 
+      };
+    }
+
+    // Use a transaction to update all items at once
+    await this.db.transaction().execute(async (trx) => {
+      const now = new Date();
+      
+      // Update each item's order
+      const updatePromises = items.map(item => {
+        return trx
+          .updateTable('watchlist_item')
+          .set({ 
+            order: item.order,
+            updated_at: now 
+          })
+          .where('id', '=', item.id)
+          .where('watchlist_id', '=', watchlistId)
+          .execute();
+      });
+      
+      await Promise.all(updatePromises);
+    });
+
+    return { success: true, data: { success: true } };
+  } catch (error) {
+    logger.error('Error batch updating items order:', error);
+    return { success: false, error: 'Failed to update items order' };
+  }
+}
+
+/**
+ * Batch update orders of multiple categories
+ */
+async batchUpdateCategoriesOrder(
+  watchlistId: number,
+  userId: number,
+  categories: { id: number; order: number }[]
+): Promise<ServiceResponse<{ success: boolean }>> {
+  try {
+    // Get user_watchlist ID for this user
+    const userWatchlistId = await this.ensureUserWatchlistExists(userId);
+
+    // Check if watchlist exists and belongs to user
+    const watchlist = await this.db
+      .selectFrom('watchlist')
+      .where('id', '=', watchlistId)
+      .where('user_watchlist_id', '=', userWatchlistId)
+      .select(['id'])
+      .executeTakeFirst();
+
+    if (!watchlist) {
+      return { success: false, error: 'Watchlist not found or does not belong to user' };
+    }
+
+    // Get all valid category IDs in this watchlist
+    const watchlistCategories = await this.db
+      .selectFrom('watchlist_category')
+      .where('watchlist_id', '=', watchlistId)
+      .select(['id'])
+      .execute();
+    
+    const validCategoryIds = new Set(watchlistCategories.map(category => category.id));
+    
+    // Check if all categories in the request belong to this watchlist
+    const invalidCategories = categories.filter(category => !validCategoryIds.has(category.id));
+    if (invalidCategories.length > 0) {
+      return { 
+        success: false, 
+        error: `Categories with IDs ${invalidCategories.map(category => category.id).join(', ')} not found or do not belong to this watchlist` 
+      };
+    }
+
+    // Use a transaction to update all categories at once
+    await this.db.transaction().execute(async (trx) => {
+      const now = new Date();
+      
+      // Update each category's order
+      const updatePromises = categories.map(category => {
+        return trx
+          .updateTable('watchlist_category')
+          .set({ 
+            order: category.order,
+            updated_at: now 
+          })
+          .where('id', '=', category.id)
+          .where('watchlist_id', '=', watchlistId)
+          .execute();
+      });
+      
+      await Promise.all(updatePromises);
+    });
+
+    return { success: true, data: { success: true } };
+  } catch (error) {
+    logger.error('Error batch updating categories order:', error);
+    return { success: false, error: 'Failed to update categories order' };
+  }
+}
+
+/**
+ * Move an item to a different category and update its order
+ */
+async moveItem(
+  watchlistId: number,
+  userId: number,
+  itemId: number,
+  categoryId: number | null,
+  newOrder: number
+): Promise<ServiceResponse<WatchlistItemResponse>> {
+  try {
+    // Get user_watchlist ID for this user
+    const userWatchlistId = await this.ensureUserWatchlistExists(userId);
+
+    // Check if watchlist exists and belongs to user
+    const watchlist = await this.db
+      .selectFrom('watchlist')
+      .where('id', '=', watchlistId)
+      .where('user_watchlist_id', '=', userWatchlistId)
+      .select(['id'])
+      .executeTakeFirst();
+
+    if (!watchlist) {
+      return { success: false, error: 'Watchlist not found or does not belong to user' };
+    }
+
+    // Check if item exists and belongs to this watchlist
+    const item = await this.db
+      .selectFrom('watchlist_item')
+      .where('id', '=', itemId)
+      .where('watchlist_id', '=', watchlistId)
+      .select(['id', 'category_id'])
+      .executeTakeFirst();
+
+    if (!item) {
+      return { success: false, error: 'Item not found or does not belong to this watchlist' };
+    }
+
+    // If categoryId is provided, check if it exists and belongs to this watchlist
+    if (categoryId !== null) {
+      const category = await this.db
+        .selectFrom('watchlist_category')
+        .where('id', '=', categoryId)
+        .where('watchlist_id', '=', watchlistId)
+        .select(['id'])
+        .executeTakeFirst();
+
+      if (!category) {
+        return { success: false, error: 'Category not found or does not belong to this watchlist' };
+      }
+    }
+
+    await this.db.transaction().execute(async (trx) => {
+      // Step 1: If moving to a different category, update the category assignment
+      if (item.category_id !== categoryId) {
+        await trx
+          .updateTable('watchlist_item')
+          .set({ 
+            category_id: categoryId,
+            updated_at: new Date()
+          })
+          .where('id', '=', itemId)
+          .execute();
+      }
+
+      // Step 2: Update the order of the item
+      await trx
+        .updateTable('watchlist_item')
+        .set({ 
+          order: newOrder,
+          updated_at: new Date()
+        })
+        .where('id', '=', itemId)
+        .execute();
+
+      // Step 3: Reorder other items in the source and destination categories if needed
+      if (item.category_id !== categoryId) {
+        // If the item was moved from one category to another, adjust items in both categories
+        
+        // Update orders in source category (compact the gap)
+        if (item.category_id !== null) {
+          const sourceItems = await trx
+            .selectFrom('watchlist_item')
+            .where('watchlist_id', '=', watchlistId)
+            .where('category_id', '=', item.category_id)
+            .where('id', '!=', itemId)
+            .select(['id', 'order'])
+            .orderBy('order', 'asc')
+            .execute();
+          
+          // Compact the order gap by updating each item
+          for (let i = 0; i < sourceItems.length; i++) {
+            await trx
+              .updateTable('watchlist_item')
+              .set({ order: i + 1 }) // Reorder starting from 1
+              .where('id', '=', sourceItems[i].id)
+              .execute();
+          }
+        } else {
+          // Update orders in uncategorized items
+          const uncategorizedItems = await trx
+            .selectFrom('watchlist_item')
+            .where('watchlist_id', '=', watchlistId)
+            .where('category_id', 'is', null)
+            .where('id', '!=', itemId)
+            .select(['id', 'order'])
+            .orderBy('order', 'asc')
+            .execute();
+          
+          for (let i = 0; i < uncategorizedItems.length; i++) {
+            await trx
+              .updateTable('watchlist_item')
+              .set({ order: i + 1 })
+              .where('id', '=', uncategorizedItems[i].id)
+              .execute();
+          }
+        }
+        
+        // Update orders in destination category (make space for the inserted item)
+        if (categoryId !== null) {
+          const destItems = await trx
+            .selectFrom('watchlist_item')
+            .where('watchlist_id', '=', watchlistId)
+            .where('category_id', '=', categoryId)
+            .where('id', '!=', itemId)
+            .where('order', '>=', newOrder)
+            .select(['id', 'order'])
+            .orderBy('order', 'asc')
+            .execute();
+          
+          // Shift items to make space for the inserted item
+          for (const destItem of destItems) {
+            await trx
+              .updateTable('watchlist_item')
+              .set({ order: (destItem.order ?? 0) + 1 })
+              .where('id', '=', destItem.id)
+              .execute();
+          }
+        } else {
+          // Update orders in uncategorized items
+          const uncategorizedItems = await trx
+            .selectFrom('watchlist_item')
+            .where('watchlist_id', '=', watchlistId)
+            .where('category_id', 'is', null)
+            .where('id', '!=', itemId)
+            .where('order', '>=', newOrder)
+            .select(['id', 'order'])
+            .orderBy('order', 'asc')
+            .execute();
+          
+          for (const uncatItem of uncategorizedItems) {
+            await trx
+              .updateTable('watchlist_item')
+              .set({ order: (uncatItem.order ?? 0) + 1 })
+              .where('id', '=', uncatItem.id)
+              .execute();
+          }
+        }
+      } else {
+        // If item stayed in the same category but changed order
+        // Get items in the same category with orders that need adjustment
+        const sameCategory = item.category_id !== null 
+          ? await trx
+              .selectFrom('watchlist_item')
+              .where('watchlist_id', '=', watchlistId)
+              .where('category_id', '=', item.category_id)
+              .where('id', '!=', itemId)
+              .select(['id', 'order'])
+              .orderBy('order', 'asc')
+              .execute()
+          : await trx
+              .selectFrom('watchlist_item')
+              .where('watchlist_id', '=', watchlistId)
+              .where('category_id', 'is', null)
+              .where('id', '!=', itemId)
+              .select(['id', 'order'])
+              .orderBy('order', 'asc')
+              .execute();
+        
+        // Find the old order of the moved item
+        const oldOrder = await trx
+          .selectFrom('watchlist_item')
+          .where('id', '=', itemId)
+          .select(['order'])
+          .executeTakeFirst()
+          .then(result => result?.order || 0);
+        
+        // Adjust orders based on whether the item moved up or down
+        if (oldOrder < newOrder) {
+          // Moving down: items between old and new position move up
+          for (const sameCatItem of sameCategory) {
+            if (sameCatItem.order !== null && sameCatItem.order > oldOrder && sameCatItem.order <= newOrder) {
+              await trx
+                .updateTable('watchlist_item')
+                .set({ order: sameCatItem.order - 1 })
+                .where('id', '=', sameCatItem.id)
+                .execute();
+            }
+          }
+        } else if (oldOrder > newOrder) {
+          // Moving up: items between new and old position move down
+          for (const sameCatItem of sameCategory) {
+            if (sameCatItem.order !== null && sameCatItem.order >= newOrder && sameCatItem.order < oldOrder) {
+              await trx
+                .updateTable('watchlist_item')
+                .set({ order: sameCatItem.order + 1 })
+                .where('id', '=', sameCatItem.id)
+                .execute();
+            }
+          }
+        }
+      }
+    });
+
+    // Get the updated item
+    const updatedItem = await this.db
+      .selectFrom('watchlist_item')
+      .where('id', '=', itemId)
+      .select(['id', 'symbol', 'added_at', 'category_id', 'order'])
+      .executeTakeFirst();
+
+    if (!updatedItem) {
+      return { success: false, error: 'Failed to retrieve updated item' };
+    }
+
+    // Format the response
+    const response: WatchlistItemResponse = {
+      id: updatedItem.id,
+      symbol: updatedItem.symbol,
+      added_at: updatedItem.added_at instanceof Date
+        ? updatedItem.added_at.toISOString()
+        : String(updatedItem.added_at),
+      category_id: updatedItem.category_id,
+      order: updatedItem.order ?? undefined
+    };
+
+    return { success: true, data: response };
+  } catch (error) {
+    logger.error('Error moving item:', error);
+    return { success: false, error: 'Failed to move item' };
+  }
+}
+
+/**
+ * Update the order field when adding a new item to watchlist 
+ */
+async addToWatchlist(
+  watchlistId: number,
+  userId: number,
+  symbol: string,
+  categoryId: number | null = null,
+  order: number | null = null
+): Promise<ServiceResponse<WatchlistItemResponse>> {
+  try {
+    // Get user_watchlist ID for this user
+    const userWatchlistId = await this.ensureUserWatchlistExists(userId);
+
+    // Check if watchlist exists and belongs to user
+    const watchlist = await this.db
+      .selectFrom('watchlist')
+      .where('id', '=', watchlistId)
+      .where('user_watchlist_id', '=', userWatchlistId)
+      .select(['id'])
+      .executeTakeFirst();
+
+    if (!watchlist) {
+      return { success: false, error: 'Watchlist not found or does not belong to user' };
+    }
+
+    // If categoryId is provided, check if it exists and belongs to this watchlist
+    if (categoryId !== null) {
+      const category = await this.db
+        .selectFrom('watchlist_category')
+        .where('id', '=', categoryId)
+        .where('watchlist_id', '=', watchlistId)
+        .select(['id'])
+        .executeTakeFirst();
+
+      if (!category) {
+        return { success: false, error: 'Category not found or does not belong to this watchlist' };
+      }
+    }
+
+    // Check if symbol already exists in this watchlist
+    const existingItem = await this.db
+      .selectFrom('watchlist_item')
+      .where('watchlist_id', '=', watchlistId)
+      .where('symbol', '=', symbol)
+      .select(['id'])
+      .executeTakeFirst();
+
+    if (existingItem) {
+      return { success: false, error: 'Symbol already exists in this watchlist' };
+    }
+
+    // If order is not provided, get the highest current order in the category and add 1
+    let itemOrder = order;
+    if (itemOrder === null) {
+      const highestOrder = await this.db
+        .selectFrom('watchlist_item')
+        .where('watchlist_id', '=', watchlistId)
+        .where(qb => 
+          categoryId === null 
+            ? qb.where('category_id', 'is', null) 
+            : qb.where('category_id', '=', categoryId)
+        )
+        .select(({ fn }) => [fn.max('order').as('max_order')])
+        .executeTakeFirst();
+
+      itemOrder = (highestOrder?.max_order || 0) + 1;
+    }
+
+    // If specific order is provided, shift existing items to make space
+    if (order !== null) {
+      await this.db.transaction().execute(async (trx) => {
+        // Get all items that need to be shifted
+        const itemsToShift = await trx
+          .selectFrom('watchlist_item')
+          .where('watchlist_id', '=', watchlistId)
+          .where(qb => 
+            categoryId === null 
+              ? qb.where('category_id', 'is', null) 
+              : qb.where('category_id', '=', categoryId)
+          )
+          .where('order', '>=', order)
+          .select(['id', 'order'])
+          .orderBy('order', 'desc')
+          .execute();
+
+        // Shift each item's order up by 1
+        for (const item of itemsToShift) {
+          await trx
+            .updateTable('watchlist_item')
+            .set({ order: (item.order ?? 0) + 1 })
+            .where('id', '=', item.id)
+            .execute();
+        }
+      });
+    }
+
+    // Add the stock symbol to watchlist with category and order
+    const newItem = await this.db
+      .insertInto('watchlist_item')
+      .values({
+        watchlist_id: watchlistId,
+        symbol,
+        category_id: categoryId,
+        order: itemOrder,
+      })
+      .returning(['id', 'symbol', 'added_at', 'category_id', 'order'])
+      .executeTakeFirst();
+
+    if (!newItem) {
+      return { success: false, error: 'Failed to add symbol to watchlist' };
+    }
+
+    // Format the response
+    const response: WatchlistItemResponse = {
+      id: newItem.id,
+      symbol: newItem.symbol,
+      added_at: newItem.added_at instanceof Date
+        ? newItem.added_at.toISOString()
+        : String(newItem.added_at),
+      category_id: newItem.category_id,
+      order: newItem.order ?? undefined,
+    };
+
+    return { success: true, data: response };
+  } catch (error) {
+    logger.error('Error adding to watchlist:', error);
+    return { success: false, error: 'Failed to add symbol to watchlist' };
     }
   }
 }

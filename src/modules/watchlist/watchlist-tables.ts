@@ -46,9 +46,11 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('added_at', 'timestamp', (col) =>
       col.notNull().defaultTo(sql`now()`)
     )
+    .addColumn('order', 'integer', (col) => col.notNull().defaultTo(0)) // Added order field
     .execute();
-    // Create watchlist_category table
-    await db.schema
+    
+  // Create watchlist_category table
+  await db.schema
     .createTable('watchlist_category')
     .addColumn('id', 'serial', (col) => col.primaryKey())
     .addColumn('watchlist_id', 'integer', (col) =>
@@ -63,15 +65,8 @@ export async function up(db: Kysely<any>): Promise<void> {
       col.notNull().defaultTo(sql`now()`)
     )
     .execute();
-   // Add category_id to watchlist_item table
-   await db.schema
-   .alterTable('watchlist_item')
-   .addColumn('category_id', 'integer', (col) =>
-     col.references('watchlist_category.id').onDelete('set null')
-   )
-   .execute();
 
-  // Add indexes
+  // Add indexes 
   await db.schema
     .createIndex('user_watchlist_user_id_idx')
     .on('user_watchlist')
@@ -110,7 +105,7 @@ export async function up(db: Kysely<any>): Promise<void> {
     .columns(['watchlist_id', 'symbol'])
     .unique()
     .execute();
-
+ 
   // Create a unique index for category names within a watchlist
   await db.schema
     .createIndex('watchlist_category_unique_name')
