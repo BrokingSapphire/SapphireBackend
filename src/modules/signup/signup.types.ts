@@ -1,6 +1,6 @@
-import { JwtPayload } from 'jsonwebtoken';
+import { JwtPayloadWithoutWildcard } from '@app/types';
 
-export type JwtType = JwtPayload & {
+export type JwtType = JwtPayloadWithoutWildcard & {
     email: string;
     phone: string;
 }

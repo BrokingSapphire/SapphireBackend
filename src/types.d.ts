@@ -5,10 +5,12 @@ import jwt from 'jsonwebtoken';
 export type Request<
     A = jwt.JwtPayload | undefined,
     P = core.ParamsDictionary,
-    ReqBody = any,
     ResBody = any,
+    ReqBody = any,
     ReqQuery = core.Query,
-    Locals extends Record<string, any> = Record<string, any>,
+    Locals extends Record<string, any> = Record<string, any>
 > = express.Request<P, ResBody, ReqBody, ReqQuery, Locals> & {
-    auth: A;
+    auth?: A;
 }
+
+export type JwtPayloadWithoutWildcard = Omit<jwt.JwtPayload, keyof any>

@@ -121,7 +121,7 @@ const verifyOtp = async (req: Request, res: Response) => {
 };
 
 const verify = async (req: Request<JwtType>, res: Response) => {
-    const { email } = req.auth;
+    const { email } = req.auth!!;
     if (await redisClient.get(`need-payment:${email}`)) {
         res.status(PAYMENT_REQUIRED).json({ message: 'Needs verification' });
         return;
@@ -141,7 +141,7 @@ const verify = async (req: Request<JwtType>, res: Response) => {
 };
 
 const initiatePayment = async (req: Request<JwtType>, res: Response) => {
-    const { email } = req.auth;
+    const { email } = req.auth!!;
 
     if (!(await redisClient.get(`need-payment:${email}`))) throw new UnauthorizedError('Unauthorized access');
 
@@ -156,7 +156,7 @@ const initiatePayment = async (req: Request<JwtType>, res: Response) => {
 };
 
 const verifyPayment = async (req: Request<JwtType>, res: Response) => {
-    const { email, phone } = req.auth;
+    const { email, phone } = req.auth!!;
     const { orderId, paymentId, signature } = req.body;
 
     if (!(await redisClient.get(`need-payment:${email}`))) throw new UnauthorizedError('Unauthorized access');
@@ -185,7 +185,7 @@ const verifyPayment = async (req: Request<JwtType>, res: Response) => {
 };
 
 const getCheckpoint = async (req: Request<JwtType>, res: Response) => {
-    const { email } = req.auth;
+    const { email } = req.auth!!;
 
     const { step } = req.params;
     if (step === CheckpointStep.PAN) {
@@ -283,7 +283,7 @@ const getCheckpoint = async (req: Request<JwtType>, res: Response) => {
 };
 
 const postCheckpoint = async (req: Request<JwtType>, res: Response) => {
-    const { email, phone } = req.auth;
+    const { email, phone } = req.auth!!;
 
     const { step } = req.body;
     if (step === CheckpointStep.PAN) {
@@ -752,7 +752,7 @@ const ipvImageUpload = wrappedMulterHandler(imageUpload.single('image'));
 const putIpv = async (req: Request<JwtType>, res: Response) => {
     const { uid } = req.params;
 
-    const { email, phone } = req.auth;
+    const { email, phone } = req.auth!!;
     const value = await redisClient.get(`signup_ipv:${uid}`);
     if (!value || value !== email) throw new UnauthorizedError('IPV not authorized or expired.');
 
@@ -776,7 +776,7 @@ const putIpv = async (req: Request<JwtType>, res: Response) => {
 };
 
 const getIpv = async (req: Request<JwtType>, res: Response) => {
-    const { email } = req.auth;
+    const { email } = req.auth!!;
 
     const { ipv: url } = await db
         .selectFrom('signup_checkpoints')
@@ -794,7 +794,7 @@ const getIpv = async (req: Request<JwtType>, res: Response) => {
 const putSignature = async (req: Request<JwtType>, res: Response) => {
     const { uid } = req.params;
 
-    const { email, phone } = req.auth;
+    const { email, phone } = req.auth!!;
     const value = await redisClient.get(`signup_signature:${uid}`);
     if (!value || value !== email) throw new UnauthorizedError('Signature uri not authorized or expired.');
 
@@ -818,7 +818,7 @@ const putSignature = async (req: Request<JwtType>, res: Response) => {
 };
 
 const getSignature = async (req: Request<JwtType>, res: Response) => {
-    const { email } = req.auth;
+    const { email } = req.auth!!;
 
     const { signature: url } = await db
         .selectFrom('signup_checkpoints')
