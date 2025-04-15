@@ -1,7 +1,7 @@
-/**
- * src/controllers/watchlistController.ts
- * Controller for watchlist functionality
- */
+// /**
+//  * src/controllers/watchlistController.ts
+//  * Controller for watchlist functionality
+//  */
 
 import { Request, Response } from 'express';
 import WatchlistDbService from '../../services/watchlistDb.service';
@@ -9,256 +9,267 @@ import { Kysely } from 'kysely';
 import { DB } from '../../database/db';
 import { AddToWatchlistRequest, CreateWatchlistRequest, CreateCategoryRequest, UpdateCategoryRequest, UpdateItemCategoryRequest, UpdateItemOrderRequest, BatchUpdateItemsOrderRequest, BatchUpdateCategoriesOrderRequest, MoveItemRequest } from './watchlist.types';
 import logger from '@app/logger';
+import * as HttpStatus from '../../utils/httpstatus';
 
+// Initialize database service
+const db: Kysely<DB> = require('@app/database').db;
+const watchlistService = new WatchlistDbService(db);
 
-export class WatchlistController {
-  private watchlistService: WatchlistDbService;
-
-  constructor(db: Kysely<DB>) {
-    this.watchlistService = new WatchlistDbService(db);
-  }
-
-  /**
-   * Get all watchlists for a user
-   */
-  getUserWatchlists = async (req: Request, res: Response): Promise<void> => {
-    try {
-      // For now, hardcode a userId or get it from query params
-      // Later this will come from authentication middleware
-      const userId = parseInt(req.query.userId as string,10) || 1;
-
-      const result = await this.watchlistService.getUserWatchlists(userId);
-
-      if (result.success) {
-        res.status(200).json({ success: true, data: result.data });
-      } else {
-        res.status(400).json({ success: false, error: result.error });
-      }
-    } catch (error) {
-      logger.error('Error in getUserWatchlists controller:', error);
-      res.status(500).json({ success: false, error: 'Internal server error' });
-    }
-  };
-
-  /**
-   * Get a specific watchlist by ID with all its items
-   */
-  getWatchlistById = async (req: Request, res: Response): Promise<void> => {
-    try {
-      // For now, hardcode a userId or get it from query params
-      const userId = parseInt(req.query.userId as string,10) || 1;
-      const watchlistId = parseInt(req.params.id,10);
-
-      if (isNaN(watchlistId)) {
-        res.status(400).json({ success: false, error: 'Invalid watchlist ID' });
-        return;
-      }
-
-      const result = await this.watchlistService.getWatchlistById(watchlistId, userId);
-
-      if (result.success) {
-        res.status(200).json({ success: true, data: result.data });
-      } else {
-        const status = result.error === 'Watchlist not found' ? 404 : 400;
-        res.status(status).json({ success: false, error: result.error });
-      }
-    } catch (error) {
-      logger.error('Error in getWatchlistById controller:', error);
-      res.status(500).json({ success: false, error: 'Internal server error' });
-    }
-  };
-
-  /**
-   * Create a new watchlist
-   */
-  createWatchlist = async (req: Request, res: Response): Promise<void> => {
-    try {
-      // For now, hardcode a userId or get it from query params
-      const userId = parseInt(req.query.userId as string,10) || 1;
-      const { name, description } = req.body as CreateWatchlistRequest;
-
-      if (!name) {
-        res.status(400).json({ success: false, error: 'Watchlist name is required' });
-        return;
-      }
-
-      const result = await this.watchlistService.createWatchlist(userId, name, description || null);
-
-      if (result.success) {
-        res.status(201).json({ success: true, data: result.data });
-      } else {
-        res.status(400).json({ success: false, error: result.error });
-      }
-    } catch (error) {
-      logger.error('Error in createWatchlist controller:', error);
-      res.status(500).json({ success: false, error: 'Internal server error' });
-    }
-  };
-
-  // /**
-  //  * Add a stock symbol to a watchlist
-  //  */
-  // addToWatchlist = async (req: Request, res: Response): Promise<void> => {
-  //   try {
-  //     // For now, hardcode a userId or get it from query params
-  //     const userId = parseInt(req.query.userId as string, 10) || 1;
-  //     const watchlistId = parseInt(req.params.id, 10);
-  //     const { symbol, categoryId } = req.body as AddToWatchlistRequest;
-  
-  //     if (isNaN(watchlistId)) {
-  //       res.status(400).json({ success: false, error: 'Invalid watchlist ID' });
-  //       return;
-  //     }
-  
-  //     if (!symbol) {
-  //       res.status(400).json({ success: false, error: 'Stock symbol is required' });
-  //       return;
-  //     }
-  
-  //     // Check if categoryId is a valid number or null
-  //     let parsedCategoryId: number | null = null;
-  //     if (categoryId !== undefined) {
-  //       parsedCategoryId = typeof categoryId === 'number' ? categoryId : parseInt(categoryId as any, 10);
-  //       if (isNaN(parsedCategoryId)) {
-  //         parsedCategoryId = null;
-  //       }
-  //     }
-  
-  //     const result = await this.watchlistService.addToWatchlist(
-  //       watchlistId, 
-  //       userId, 
-  //       symbol, 
-  //       parsedCategoryId
-  //     );
-  
-  //     if (result.success) {
-  //       res.status(201).json({ success: true, data: result.data });
-  //     } else {
-  //       res.status(400).json({ success: false, error: result.error });
-  //     }
-  //   } catch (error) {
-  //     logger.error('Error in addToWatchlist controller:', error);
-  //     res.status(500).json({ success: false, error: 'Internal server error' });
-  //   }
-  // };
-
-  /**
-   * Remove a stock symbol from a watchlist
-   */
-  removeFromWatchlist = async (req: Request, res: Response): Promise<void> => {
-    try {
-      // For now, hardcode a userId or get it from query params
-      const userId = parseInt(req.query.userId as string,10) || 1;
-      const watchlistId = parseInt(req.params.watchlistId,10);
-      const itemId = parseInt(req.params.itemId,10);
-
-      if (isNaN(watchlistId) || isNaN(itemId)) {
-        res.status(400).json({ success: false, error: 'Invalid ID parameters' });
-        return;
-      }
-
-      const result = await this.watchlistService.removeFromWatchlist(watchlistId, userId, itemId);
-
-      if (result.success) {
-        res.status(200).json({ success: true, message: 'Item removed from watchlist' });
-      } else {
-        res.status(400).json({ success: false, error: result.error });
-      }
-    } catch (error) {
-      logger.error('Error in removeFromWatchlist controller:', error);
-      res.status(500).json({ success: false, error: 'Internal server error' });
-    }
-  };
-
-  /**
-   * Delete a watchlist
-   */
-  deleteWatchlist = async (req: Request, res: Response): Promise<void> => {
-    try {
-      // For now, hardcode a userId or get it from query params
-      const userId = parseInt(req.query.userId as string,10) || 1;
-      const watchlistId = parseInt(req.params.id,10);
-
-      if (isNaN(watchlistId)) {
-        res.status(400).json({ success: false, error: 'Invalid watchlist ID' });
-        return;
-      }
-
-      const result = await this.watchlistService.deleteWatchlist(watchlistId, userId);
-
-      if (result.success) {
-        res.status(200).json({ success: true, message: 'Watchlist deleted successfully' });
-      } else {
-        res.status(400).json({ success: false, error: result.error });
-      }
-    } catch (error) {
-      logger.error('Error in deleteWatchlist controller:', error);
-      res.status(500).json({ success: false, error: 'Internal server error' });
-    }
-  };
-
-  updateWatchlist = async (req: Request, res: Response): Promise<void> => {
-    try {
-      // For now, hardcode a userId or get it from query params
-      const userId = parseInt(req.query.userId as string, 10) || 1;
-      const watchlistId = parseInt(req.params.id, 10);
-      const { name, description } = req.body;
-  
-      if (isNaN(watchlistId)) {
-        res.status(400).json({ success: false, error: 'Invalid watchlist ID' });
-        return;
-      }
-  
-      if (!name && description === undefined) {
-        res.status(400).json({ success: false, error: 'At least one field (name or description) must be provided' });
-        return;
-      }
-  
-      const result = await this.watchlistService.updateWatchlist(watchlistId, userId, { name, description });
-  
-      if (result.success) {
-        res.status(200).json({ success: true, data: result.data });
-      } else {
-        const status = result.error === 'Watchlist not found' ? 404 : 400;
-        res.status(status).json({ success: false, error: result.error });
-      }
-    } catch (error) {
-      logger.error('Error in updateWatchlist controller:', error);
-      res.status(500).json({ success: false, error: 'Internal server error' });
-    }
-  };
 /**
- * Get a watchlist with categories and categorized items
+ * Get all watchlists for a user
  */
-getWatchlistWithCategories = async (req: Request, res: Response): Promise<void> => {
+export const getUserWatchlists = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // For now, hardcode a userId or get it from query params
+    // Later this will come from authentication middleware
+    const userId = parseInt(req.query.userId as string, 10) || 1;
+
+    const result = await watchlistService.getUserWatchlists(userId);
+
+    if (result.success) {
+      res.status(HttpStatus.OK).json({ success: true, data: result.data });
+    } else {
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: result.error });
+    }
+  } catch (error) {
+    logger.error('Error in getUserWatchlists controller:', error);
+    res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Internal server error' });
+  }
+};
+
+/**
+ * Get a specific watchlist by ID with all its items
+ */
+export const getWatchlistById = async (req: Request, res: Response): Promise<void> => {
   try {
     // For now, hardcode a userId or get it from query params
     const userId = parseInt(req.query.userId as string, 10) || 1;
     const watchlistId = parseInt(req.params.id, 10);
 
     if (isNaN(watchlistId)) {
-      res.status(400).json({ success: false, error: 'Invalid watchlist ID' });
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: 'Invalid watchlist ID' });
       return;
     }
 
-    const result = await this.watchlistService.getWatchlistWithCategories(watchlistId, userId);
+    const result = await watchlistService.getWatchlistById(watchlistId, userId);
 
     if (result.success) {
-      res.status(200).json({ success: true, data: result.data });
+      res.status(HttpStatus.OK).json({ success: true, data: result.data });
     } else {
-      const status = result.error === 'Watchlist not found' ? 404 : 400;
+      const status = result.error === 'Watchlist not found' ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+      res.status(status).json({ success: false, error: result.error });
+    }
+  } catch (error) {
+    logger.error('Error in getWatchlistById controller:', error);
+    res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Internal server error' });
+  }
+};
+
+/**
+ * Create a new watchlist
+ */
+export const createWatchlist = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // For now, hardcode a userId or get it from query params
+    const userId = parseInt(req.query.userId as string, 10) || 1;
+    const { name, description } = req.body as CreateWatchlistRequest;
+
+    if (!name) {
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: 'Watchlist name is required' });
+      return;
+    }
+
+    const result = await watchlistService.createWatchlist(userId, name, description || null);
+
+    if (result.success) {
+      res.status(HttpStatus.CREATED).json({ success: true, data: result.data });
+    } else {
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: result.error });
+    }
+  } catch (error) {
+    logger.error('Error in createWatchlist controller:', error);
+    res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Internal server error' });
+  }
+};
+
+/**
+ * Add a stock symbol to a watchlist
+ */
+export const addToWatchlist = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // For now, hardcode a userId or get it from query params
+    const userId = parseInt(req.query.userId as string, 10) || 1;
+    const watchlistId = parseInt(req.params.id, 10);
+    const { symbol, categoryId, order } = req.body as AddToWatchlistRequest;
+
+    if (isNaN(watchlistId)) {
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: 'Invalid watchlist ID' });
+      return;
+    }
+
+    if (!symbol) {
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: 'Stock symbol is required' });
+      return;
+    }
+
+    // Check if categoryId is a valid number or null
+    let parsedCategoryId: number | null = null;
+    if (categoryId !== undefined) {
+      parsedCategoryId = typeof categoryId === 'number' ? categoryId : parseInt(categoryId as any, 10);
+      if (isNaN(parsedCategoryId)) {
+        parsedCategoryId = null;
+      }
+    }
+
+    // Check if order is a valid number or null
+    let parsedOrder: number | null = null;
+    if (order !== undefined) {
+      parsedOrder = typeof order === 'number' ? order : parseInt(order as any, 10);
+      if (isNaN(parsedOrder) || parsedOrder < 0) {
+        parsedOrder = null;
+      }
+    }
+
+    const result = await watchlistService.addToWatchlist(
+      watchlistId,
+      userId,
+      symbol,
+      parsedCategoryId,
+      parsedOrder
+    );
+
+    if (result.success) {
+      res.status(HttpStatus.CREATED).json({ success: true, data: result.data });
+    } else {
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: result.error });
+    }
+  } catch (error) {
+    logger.error('Error in addToWatchlist controller:', error);
+    res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Internal server error' });
+  }
+};
+
+/**
+ * Remove a stock symbol from a watchlist
+ */
+export const removeFromWatchlist = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // For now, hardcode a userId or get it from query params
+    const userId = parseInt(req.query.userId as string, 10) || 1;
+    const watchlistId = parseInt(req.params.watchlistId, 10);
+    const itemId = parseInt(req.params.itemId, 10);
+
+    if (isNaN(watchlistId) || isNaN(itemId)) {
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: 'Invalid ID parameters' });
+      return;
+    }
+
+    const result = await watchlistService.removeFromWatchlist(watchlistId, userId, itemId);
+
+    if (result.success) {
+      res.status(HttpStatus.OK).json({ success: true, message: 'Item removed from watchlist' });
+    } else {
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: result.error });
+    }
+  } catch (error) {
+    logger.error('Error in removeFromWatchlist controller:', error);
+    res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Internal server error' });
+  }
+};
+
+/**
+ * Delete a watchlist
+ */
+export const deleteWatchlist = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // For now, hardcode a userId or get it from query params
+    const userId = parseInt(req.query.userId as string, 10) || 1;
+    const watchlistId = parseInt(req.params.id, 10);
+
+    if (isNaN(watchlistId)) {
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: 'Invalid watchlist ID' });
+      return;
+    }
+
+    const result = await watchlistService.deleteWatchlist(watchlistId, userId);
+
+    if (result.success) {
+      res.status(HttpStatus.OK).json({ success: true, message: 'Watchlist deleted successfully' });
+    } else {
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: result.error });
+    }
+  } catch (error) {
+    logger.error('Error in deleteWatchlist controller:', error);
+    res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Internal server error' });
+  }
+};
+
+/**
+ * Update a watchlist
+ */
+export const updateWatchlist = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // For now, hardcode a userId or get it from query params
+    const userId = parseInt(req.query.userId as string, 10) || 1;
+    const watchlistId = parseInt(req.params.id, 10);
+    const { name, description } = req.body;
+
+    if (isNaN(watchlistId)) {
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: 'Invalid watchlist ID' });
+      return;
+    }
+
+    if (!name && description === undefined) {
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: 'At least one field (name or description) must be provided' });
+      return;
+    }
+
+    const result = await watchlistService.updateWatchlist(watchlistId, userId, { name, description });
+
+    if (result.success) {
+      res.status(HttpStatus.OK).json({ success: true, data: result.data });
+    } else {
+      const status = result.error === 'Watchlist not found' ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+      res.status(status).json({ success: false, error: result.error });
+    }
+  } catch (error) {
+    logger.error('Error in updateWatchlist controller:', error);
+    res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Internal server error' });
+  }
+};
+
+/**
+ * Get a watchlist with categories and categorized items
+ */
+export const getWatchlistWithCategories = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // For now, hardcode a userId or get it from query params
+    const userId = parseInt(req.query.userId as string, 10) || 1;
+    const watchlistId = parseInt(req.params.id, 10);
+
+    if (isNaN(watchlistId)) {
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: 'Invalid watchlist ID' });
+      return;
+    }
+
+    const result = await watchlistService.getWatchlistWithCategories(watchlistId, userId);
+
+    if (result.success) {
+      res.status(HttpStatus.OK).json({ success: true, data: result.data });
+    } else {
+      const status = result.error === 'Watchlist not found' ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
       res.status(status).json({ success: false, error: result.error });
     }
   } catch (error) {
     logger.error('Error in getWatchlistWithCategories controller:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Internal server error' });
   }
 };
 
 /**
  * Create a new category in a watchlist
  */
-createCategory = async (req: Request, res: Response): Promise<void> => {
+export const createCategory = async (req: Request, res: Response): Promise<void> => {
   try {
     // For now, hardcode a userId or get it from query params
     const userId = parseInt(req.query.userId as string, 10) || 1;
@@ -266,37 +277,37 @@ createCategory = async (req: Request, res: Response): Promise<void> => {
     const { name, order } = req.body as CreateCategoryRequest;
 
     if (isNaN(watchlistId)) {
-      res.status(400).json({ success: false, error: 'Invalid watchlist ID' });
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: 'Invalid watchlist ID' });
       return;
     }
 
     if (!name) {
-      res.status(400).json({ success: false, error: 'Category name is required' });
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: 'Category name is required' });
       return;
     }
 
-    const result = await this.watchlistService.createCategory(
-      watchlistId, 
-      userId, 
-      name, 
+    const result = await watchlistService.createCategory(
+      watchlistId,
+      userId,
+      name,
       order || null
     );
 
     if (result.success) {
-      res.status(201).json({ success: true, data: result.data });
+      res.status(HttpStatus.CREATED).json({ success: true, data: result.data });
     } else {
-      res.status(400).json({ success: false, error: result.error });
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: result.error });
     }
   } catch (error) {
     logger.error('Error in createCategory controller:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Internal server error' });
   }
 };
 
 /**
  * Update a category
  */
-updateCategory = async (req: Request, res: Response): Promise<void> => {
+export const updateCategory = async (req: Request, res: Response): Promise<void> => {
   try {
     // For now, hardcode a userId or get it from query params
     const userId = parseInt(req.query.userId as string, 10) || 1;
@@ -305,16 +316,16 @@ updateCategory = async (req: Request, res: Response): Promise<void> => {
     const { name, order } = req.body as UpdateCategoryRequest;
 
     if (isNaN(watchlistId) || isNaN(categoryId)) {
-      res.status(400).json({ success: false, error: 'Invalid ID parameters' });
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: 'Invalid ID parameters' });
       return;
     }
 
     if (!name && order === undefined) {
-      res.status(400).json({ success: false, error: 'At least one field (name or order) must be provided' });
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: 'At least one field (name or order) must be provided' });
       return;
     }
 
-    const result = await this.watchlistService.updateCategory(
+    const result = await watchlistService.updateCategory(
       categoryId,
       watchlistId,
       userId,
@@ -322,20 +333,20 @@ updateCategory = async (req: Request, res: Response): Promise<void> => {
     );
 
     if (result.success) {
-      res.status(200).json({ success: true, data: result.data });
+      res.status(HttpStatus.OK).json({ success: true, data: result.data });
     } else {
-      res.status(400).json({ success: false, error: result.error });
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: result.error });
     }
   } catch (error) {
     logger.error('Error in updateCategory controller:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Internal server error' });
   }
 };
 
 /**
  * Delete a category
  */
-deleteCategory = async (req: Request, res: Response): Promise<void> => {
+export const deleteCategory = async (req: Request, res: Response): Promise<void> => {
   try {
     // For now, hardcode a userId or get it from query params
     const userId = parseInt(req.query.userId as string, 10) || 1;
@@ -343,31 +354,31 @@ deleteCategory = async (req: Request, res: Response): Promise<void> => {
     const categoryId = parseInt(req.params.categoryId, 10);
 
     if (isNaN(watchlistId) || isNaN(categoryId)) {
-      res.status(400).json({ success: false, error: 'Invalid ID parameters' });
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: 'Invalid ID parameters' });
       return;
     }
 
-    const result = await this.watchlistService.deleteCategory(
+    const result = await watchlistService.deleteCategory(
       categoryId,
       watchlistId,
       userId
     );
 
     if (result.success) {
-      res.status(200).json({ success: true, message: 'Category deleted successfully' });
+      res.status(HttpStatus.OK).json({ success: true, message: 'Category deleted successfully' });
     } else {
-      res.status(400).json({ success: false, error: result.error });
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: result.error });
     }
   } catch (error) {
     logger.error('Error in deleteCategory controller:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Internal server error' });
   }
 };
 
 /**
  * Update an item's category
  */
-updateItemCategory = async (req: Request, res: Response): Promise<void> => {
+export const updateItemCategory = async (req: Request, res: Response): Promise<void> => {
   try {
     // For now, hardcode a userId or get it from query params
     const userId = parseInt(req.query.userId as string, 10) || 1;
@@ -376,11 +387,11 @@ updateItemCategory = async (req: Request, res: Response): Promise<void> => {
     const { categoryId } = req.body as UpdateItemCategoryRequest;
 
     if (isNaN(watchlistId) || isNaN(itemId)) {
-      res.status(400).json({ success: false, error: 'Invalid ID parameters' });
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: 'Invalid ID parameters' });
       return;
     }
 
-    const result = await this.watchlistService.updateItemCategory(
+    const result = await watchlistService.updateItemCategory(
       watchlistId,
       userId,
       itemId,
@@ -388,21 +399,20 @@ updateItemCategory = async (req: Request, res: Response): Promise<void> => {
     );
 
     if (result.success) {
-      res.status(200).json({ success: true, data: result.data });
+      res.status(HttpStatus.OK).json({ success: true, data: result.data });
     } else {
-      res.status(400).json({ success: false, error: result.error });
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: result.error });
     }
   } catch (error) {
     logger.error('Error in updateItemCategory controller:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
-    }
-  };
-  // Add these methods to your WatchlistController class
+    res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Internal server error' });
+  }
+};
 
 /**
  * Update a single watchlist item's order
  */
-updateItemOrder = async (req: Request, res: Response): Promise<void> => {
+export const updateItemOrder = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = parseInt(req.query.userId as string, 10) || 1;
     const watchlistId = parseInt(req.params.watchlistId, 10);
@@ -410,16 +420,16 @@ updateItemOrder = async (req: Request, res: Response): Promise<void> => {
     const { order } = req.body as UpdateItemOrderRequest;
 
     if (isNaN(watchlistId) || isNaN(itemId)) {
-      res.status(400).json({ success: false, error: 'Invalid ID parameters' });
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: 'Invalid ID parameters' });
       return;
     }
 
     if (typeof order !== 'number' || order < 0) {
-      res.status(400).json({ success: false, error: 'Order must be a non-negative number' });
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: 'Order must be a non-negative number' });
       return;
     }
 
-    const result = await this.watchlistService.updateItemOrder(
+    const result = await watchlistService.updateItemOrder(
       watchlistId,
       userId,
       itemId,
@@ -427,38 +437,38 @@ updateItemOrder = async (req: Request, res: Response): Promise<void> => {
     );
 
     if (result.success) {
-      res.status(200).json({ success: true, data: result.data });
+      res.status(HttpStatus.OK).json({ success: true, data: result.data });
     } else {
-      res.status(400).json({ success: false, error: result.error });
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: result.error });
     }
   } catch (error) {
     logger.error('Error in updateItemOrder controller:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Internal server error' });
   }
 };
 
 /**
  * Batch update multiple watchlist items' orders
  */
-batchUpdateItemsOrder = async (req: Request, res: Response): Promise<void> => {
+export const batchUpdateItemsOrder = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = parseInt(req.query.userId as string, 10) || 1;
     const watchlistId = parseInt(req.params.watchlistId, 10);
     const { items } = req.body as BatchUpdateItemsOrderRequest;
 
     if (isNaN(watchlistId)) {
-      res.status(400).json({ success: false, error: 'Invalid watchlist ID' });
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: 'Invalid watchlist ID' });
       return;
     }
 
     if (!Array.isArray(items) || items.length === 0) {
-      res.status(400).json({ success: false, error: 'Items array is required and must not be empty' });
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: 'Items array is required and must not be empty' });
       return;
     }
 
     for (const item of items) {
       if (typeof item.id !== 'number' || typeof item.order !== 'number' || item.order < 0) {
-        res.status(400).json({
+        res.status(HttpStatus.BAD_REQUEST).json({
           success: false,
           error: 'Each item must have a valid id and a non-negative order'
         });
@@ -466,169 +476,113 @@ batchUpdateItemsOrder = async (req: Request, res: Response): Promise<void> => {
       }
     }
 
-    const result = await this.watchlistService.batchUpdateItemsOrder(
+    const result = await watchlistService.batchUpdateItemsOrder(
       watchlistId,
       userId,
-      items);
+      items
+    );
 
-      if (result.success) {
-        res.status(200).json({ success: true, message: 'Items order updated successfully' });
-      } else {
-        res.status(400).json({ success: false, error: result.error });
-      }
-    } catch (error) {
-      logger.error('Error in batchUpdateItemsOrder controller:', error);
-      res.status(500).json({ success: false, error: 'Internal server error' });
+    if (result.success) {
+      res.status(HttpStatus.OK).json({ success: true, message: 'Items order updated successfully' });
+    } else {
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: result.error });
     }
-   };
-   
-  /**
-   * Batch update category orders
-   */
-   batchUpdateCategoriesOrder = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const userId = parseInt(req.query.userId as string, 10) || 1;
-      const watchlistId = parseInt(req.params.watchlistId, 10);
-      const { categories } = req.body as BatchUpdateCategoriesOrderRequest;
-   
-      if (isNaN(watchlistId)) {
-        res.status(400).json({ success: false, error: 'Invalid watchlist ID' });
-        return;
-      }
-   
-      if (!Array.isArray(categories) || categories.length === 0) {
-        res.status(400).json({ success: false, error: 'Categories array is required and must not be empty' });
-        return;
-      }
-   
-      for (const category of categories) {
-        if (typeof category.id !== 'number' || typeof category.order !== 'number' || category.order < 0) {
-          res.status(400).json({
-            success: false,
-            error: 'Each category must have a valid id and a non-negative order'
-          });
-          return;
-        }
-      }
-   
-      const result = await this.watchlistService.batchUpdateCategoriesOrder(
-        watchlistId,
-        userId,
-        categories
-      );
-   
-      if (result.success) {
-        res.status(200).json({ success: true, message: 'Categories order updated successfully' });
-      } else {
-        res.status(400).json({ success: false, error: result.error });
-      }
-    } catch (error) {
-      logger.error('Error in batchUpdateCategoriesOrder controller:', error);
-      res.status(500).json({ success: false, error: 'Internal server error' });
-    }
-   };
-   
-  /**
-   * Move an item to a different category and update its order
-   */
-   moveItem = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const userId = parseInt(req.query.userId as string, 10) || 1;
-      const watchlistId = parseInt(req.params.watchlistId, 10);
-      const itemId = parseInt(req.params.itemId, 10);
-      const { categoryId, order } = req.body as MoveItemRequest;
-   
-      if (isNaN(watchlistId) || isNaN(itemId)) {
-        res.status(400).json({ success: false, error: 'Invalid ID parameters' });
-        return;
-      }
-   
-      if (typeof order !== 'number' || order < 0) {
-        res.status(400).json({ success: false, error: 'Order must be a non-negative number' });
-        return;
-      }
-   
-      // Parse categoryId to allow for null
-      let parsedCategoryId: number | null = null;
-      if (categoryId !== undefined && categoryId !== null) {
-        parsedCategoryId = typeof categoryId === 'number' ? categoryId : parseInt(categoryId as any, 10);
-        if (isNaN(parsedCategoryId)) {
-          parsedCategoryId = null;
-        }
-      }
-   
-      const result = await this.watchlistService.moveItem(
-        watchlistId,
-        userId,
-        itemId,
-        parsedCategoryId,
-        order
-      );
-   
-      if (result.success) {
-        res.status(200).json({ success: true, data: result.data });
-      } else {
-        res.status(400).json({ success: false, error: result.error });
-      }
-    } catch (error) {
-      logger.error('Error in moveItem controller:', error);
-      res.status(500).json({ success: false, error: 'Internal server error' });
-    }
-   };
-   
-   addToWatchlist = async (req: Request, res: Response): Promise<void> => {
-    try {
-      // For now, hardcode a userId or get it from query params
-      const userId = parseInt(req.query.userId as string, 10) || 1;
-      const watchlistId = parseInt(req.params.id, 10);
-      const { symbol, categoryId, order } = req.body as AddToWatchlistRequest;
-   
-      if (isNaN(watchlistId)) {
-        res.status(400).json({ success: false, error: 'Invalid watchlist ID' });
-        return;
-      }
-   
-      if (!symbol) {
-        res.status(400).json({ success: false, error: 'Stock symbol is required' });
-        return;
-      }
-   
-      // Check if categoryId is a valid number or null
-      let parsedCategoryId: number | null = null;
-      if (categoryId !== undefined) {
-        parsedCategoryId = typeof categoryId === 'number' ? categoryId : parseInt(categoryId as any, 10);
-        if (isNaN(parsedCategoryId)) {
-          parsedCategoryId = null;
-        }
-      }
-   
-      // Check if order is a valid number or null
-      let parsedOrder: number | null = null;
-      if (order !== undefined) {
-        parsedOrder = typeof order === 'number' ? order : parseInt(order as any, 10);
-        if (isNaN(parsedOrder) || parsedOrder < 0) {
-          parsedOrder = null;
-        }
-      }
-   
-      const result = await this.watchlistService.addToWatchlist(
-        watchlistId,
-        userId,
-        symbol,
-        parsedCategoryId,
-        parsedOrder
-      );
-   
-      if (result.success) {
-        res.status(201).json({ success: true, data: result.data });
-      } else {
-        res.status(400).json({ success: false, error: result.error });
-      }
-    } catch (error) {
-      logger.error('Error in addToWatchlist controller:', error);
-      res.status(500).json({ success: false, error: 'Internal server error' });
-    }
-   };
-}
+  } catch (error) {
+    logger.error('Error in batchUpdateItemsOrder controller:', error);
+    res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Internal server error' });
+  }
+};
 
-export default WatchlistController;
+/**
+ * Batch update category orders
+ */
+export const batchUpdateCategoriesOrder = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = parseInt(req.query.userId as string, 10) || 1;
+    const watchlistId = parseInt(req.params.watchlistId, 10);
+    const { categories } = req.body as BatchUpdateCategoriesOrderRequest;
+
+    if (isNaN(watchlistId)) {
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: 'Invalid watchlist ID' });
+      return;
+    }
+
+    if (!Array.isArray(categories) || categories.length === 0) {
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: 'Categories array is required and must not be empty' });
+      return;
+    }
+
+    for (const category of categories) {
+      if (typeof category.id !== 'number' || typeof category.order !== 'number' || category.order < 0) {
+        res.status(HttpStatus.BAD_REQUEST).json({
+          success: false,
+          error: 'Each category must have a valid id and a non-negative order'
+        });
+        return;
+      }
+    }
+
+    const result = await watchlistService.batchUpdateCategoriesOrder(
+      watchlistId,
+      userId,
+      categories
+    );
+
+    if (result.success) {
+      res.status(HttpStatus.OK).json({ success: true, message: 'Categories order updated successfully' });
+    } else {
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: result.error });
+    }
+  } catch (error) {
+    logger.error('Error in batchUpdateCategoriesOrder controller:', error);
+    res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Internal server error' });
+  }
+};
+
+/**
+ * Move an item to a different category and update its order
+ */
+export const moveItem = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = parseInt(req.query.userId as string, 10) || 1;
+    const watchlistId = parseInt(req.params.watchlistId, 10);
+    const itemId = parseInt(req.params.itemId, 10);
+    const { categoryId, order } = req.body as MoveItemRequest;
+
+    if (isNaN(watchlistId) || isNaN(itemId)) {
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: 'Invalid ID parameters' });
+      return;
+    }
+
+    if (typeof order !== 'number' || order < 0) {
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: 'Order must be a non-negative number' });
+      return;
+    }
+
+    // Parse categoryId to allow for null
+    let parsedCategoryId: number | null = null;
+    if (categoryId !== undefined && categoryId !== null) {
+      parsedCategoryId = typeof categoryId === 'number' ? categoryId : parseInt(categoryId as any, 10);
+      if (isNaN(parsedCategoryId)) {
+        parsedCategoryId = null;
+      }
+    }
+
+    const result = await watchlistService.moveItem(
+      watchlistId,
+      userId,
+      itemId,
+      parsedCategoryId,
+      order
+    );
+
+    if (result.success) {
+      res.status(HttpStatus.OK).json({ success: true, data: result.data });
+    } else {
+      res.status(HttpStatus.BAD_REQUEST).json({ success: false, error: result.error });
+    }
+  } catch (error) {
+    logger.error('Error in moveItem controller:', error);
+    res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ success: false, error: 'Internal server error' });
+  }
+};
