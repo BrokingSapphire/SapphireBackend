@@ -50,7 +50,7 @@ export const getTradeAdvice = async (req: Request, res: Response) => {
     let result;
 
     if (id) {
-      result = await TradeService.getTradeAdvice(parseInt(id));
+      result = await TradeService.getTradeAdvice(parseInt(id,10));
 
       if (!result) {
         return res.status(404).json({

@@ -1,19 +1,20 @@
 import { Server } from 'socket.io';
 import * as TradeService from './trade.service';
 import { verifySocketAuth } from './auth';
+import logger from '@app/logger';
 
 export const registerTradeSocketHandlers = (io: Server) => {
   // Create namespace for trade
   const tradeNamespace = io.of('/trade');
 
   tradeNamespace.on('connection', (socket) => {
-    console.log(`Client connected to trade socket: ${socket.id}`);
+    logger.info(`Client connected to trade socket: ${socket.id}`);
 
     // Join room for specific instrument type
     socket.on('joinInstrumentRoom', (instrumentType) => {
       if (['stock', 'future', 'option', 'commodity'].includes(instrumentType)) {
         socket.join(instrumentType);
-        console.log(`Client ${socket.id} joined ${instrumentType} room`);
+        logger.info(`Client ${socket.id} joined ${instrumentType} room`);
       } else {
         socket.emit('error', { message: 'Invalid instrument type' });
       }
@@ -49,7 +50,7 @@ export const registerTradeSocketHandlers = (io: Server) => {
     });
 
     socket.on('disconnect', () => {
-      console.log(`Client disconnected from trade socket: ${socket.id}`);
+      logger.info(`Client disconnected from trade socket: ${socket.id}`);
     });
   });
 };
