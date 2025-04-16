@@ -3,7 +3,7 @@ import { JwtPayloadWithoutWildcard } from '@app/types';
 export type JwtType = JwtPayloadWithoutWildcard & {
     email: string;
     phone: string;
-}
+};
 
 export enum CheckpointStep {
     PAN = 'pan',

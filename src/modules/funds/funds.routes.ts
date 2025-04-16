@@ -2,21 +2,14 @@ import { Router } from 'express';
 import { validate } from '@app/middlewares';
 import {
     getUserFunds,
-    addFunds,
+    depositFunds,
     withdrawFunds,
-    processWithdrawal,
     getUserTransactions,
-    getTransactionById,
-    getUserWithdrawals,
-    getWithdrawalById,
+    getTransactionInfo,
+    getBankAccounts,
 } from './funds.controller';
-import {
-    DepositRequestSchema,
-    WithdrawalRequestSchema,
-    TransactionIdSchema,
-    UserIdSchema,
-    PaginationSchema,
-} from './funds.validator';
+import { DepositRequestSchema, WithdrawalRequestSchema } from './funds.validator';
+import { jwtMiddleware } from '@app/utils/jwt';
 
 /**
  * @swagger
@@ -25,20 +18,6 @@ import {
  *   description: Funds and transactions management endpoints
  */
 const router = Router();
-
-/**
- * @swagger
- * /funds/test/connection:
- *   get:
- *     tags: [Funds]
- *     summary: Test API connection
- *     responses:
- *       200:
- *         description: API connection successful
- */
-router.get('/test/connection', (req, res) => {
-    res.json({ message: 'Funds module API is working!' });
-});
 
 /**
  * @swagger
@@ -61,7 +40,7 @@ router.get('/test/connection', (req, res) => {
  *       401:
  *         description: Unauthorized
  */
-router.get('/:userId/funds', validate(UserIdSchema), getUserFunds);
+router.get('/', jwtMiddleware, getUserFunds);
 
 /**
  * @swagger
@@ -90,7 +69,7 @@ router.get('/:userId/funds', validate(UserIdSchema), getUserFunds);
  *       401:
  *         description: Unauthorized
  */
-router.post('/:userId/deposit', validate(UserIdSchema), validate(DepositRequestSchema), addFunds);
+router.post('/desposit', [jwtMiddleware, validate(DepositRequestSchema)], depositFunds);
 
 /**
  * @swagger
@@ -119,36 +98,21 @@ router.post('/:userId/deposit', validate(UserIdSchema), validate(DepositRequestS
  *       401:
  *         description: Unauthorized
  */
-router.post('/:userId/withdraw', validate(UserIdSchema), validate(WithdrawalRequestSchema), withdrawFunds);
+router.post('/withdraw', [jwtMiddleware, validate(WithdrawalRequestSchema)], withdrawFunds);
 
 /**
  * @swagger
- * /funds/{userId}/withdraw/process:
- *   post:
+ * /funds/accounts:
+ *   get:
  *     tags: [Funds]
- *     summary: Process withdrawal with safety cut
- *     parameters:
- *       - name: userId
- *         in: path
- *         required: true
- *         description: User ID
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/WithdrawalRequestSchema'
+ *     summary: Get user bank accounts
  *     responses:
  *       200:
- *         description: Withdrawal processed successfully
- *       400:
- *         description: Invalid request
+ *         description: Bank accounts retrieved successfully
  *       401:
  *         description: Unauthorized
  */
-router.post('/:userId/withdraw/process', validate(UserIdSchema), validate(WithdrawalRequestSchema), processWithdrawal);
+router.get('/accounts', jwtMiddleware, getBankAccounts);
 
 /**
  * @swagger
@@ -181,7 +145,7 @@ router.post('/:userId/withdraw/process', validate(UserIdSchema), validate(Withdr
  *       401:
  *         description: Unauthorized
  */
-router.get('/:userId/transactions', validate(UserIdSchema), validate(PaginationSchema), getUserTransactions);
+router.get('/transactions', jwtMiddleware, getUserTransactions);
 
 /**
  * @swagger
@@ -204,62 +168,6 @@ router.get('/:userId/transactions', validate(UserIdSchema), validate(PaginationS
  *       404:
  *         description: Transaction not found
  */
-router.get('/transaction/:transactionId', validate(TransactionIdSchema), getTransactionById);
-
-/**
- * @swagger
- * /funds/{userId}/withdrawals:
- *   get:
- *     tags: [Funds]
- *     summary: Get user withdrawals
- *     parameters:
- *       - name: userId
- *         in: path
- *         required: true
- *         description: User ID
- *         schema:
- *           type: string
- *       - name: page
- *         in: query
- *         description: Page number
- *         schema:
- *           type: integer
- *       - name: limit
- *         in: query
- *         description: Number of items per page
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: User withdrawals retrieved successfully
- *       400:
- *         description: Invalid request
- *       401:
- *         description: Unauthorized
- */
-router.get('/:userId/withdrawals', validate(UserIdSchema), validate(PaginationSchema), getUserWithdrawals);
-
-/**
- * @swagger
- * /funds/withdrawal/{withdrawalId}:
- *   get:
- *     tags: [Funds]
- *     summary: Get specific withdrawal
- *     parameters:
- *       - name: withdrawalId
- *         in: path
- *         required: true
- *         description: Withdrawal ID
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Withdrawal retrieved successfully
- *       400:
- *         description: Invalid withdrawal ID
- *       404:
- *         description: Withdrawal not found
- */
-router.get('/withdrawal/:withdrawalId', validate(TransactionIdSchema), getWithdrawalById);
+router.get('/transaction/:id', jwtMiddleware, getTransactionInfo);
 
 export default router;
