@@ -2,8 +2,9 @@
 
 import { Request, Response } from 'express';
 import { db } from '@app/database';
-import { UserInvestmentSegment } from '@app/database/db';
-import { AccountStatus, AccountStatusValidationResult , SuspensionDetails, KycDetails,  SegmentValidationResult } from './rms.types';
+import { UserInvestmentSegment, AccountStatusValidationResult , SuspensionDetails, KycDetails, SegmentValidationResult, RiskProfileResponse } from '@app/database/db';
+import { AccountStatus } from './rms.types';
+import { calculateRiskScore } from '@app/services/rms.service';
 import { BadRequestError , NotFoundError} from '@app/apiError';
 import logger from '@app/logger';
 import { OK, BAD_REQUEST } from '@app/utils/httpstatus';
@@ -464,8 +465,61 @@ const segmentCheck = async (
   );
 };
 
+// Getting User Risk Profile
+const getUserRiskProfile = async (req: Request, res: Response): Promise<void> => {
+  const userId = parseInt(req.query.userId as string, 10) || 1;
+  
+  // Fetch the user's profile data from the database
+  const userProfile = await db
+  .selectFrom('user')
+  .where('id', '=', userId)
+  .select([
+    'annual_income',
+    'trading_exp', 
+    'occupation',
+    'marital_status',
+    'is_politically_exposed' 
+  ])
+  .executeTakeFirst();
+
+  if (!userProfile) {
+    throw new NotFoundError(`User profile for user ID ${userId} not found`);
+  }
+
+  // Calculate the risk score based on the user's profile
+  const riskScore = calculateRiskScore(
+    userProfile.annual_income,
+    userProfile.trading_exp,
+    userProfile.occupation,
+    userProfile.marital_status,
+    userProfile.is_politically_exposed ? 'Yes' : 'No'
+  );
+
+  const response: RiskProfileResponse = {
+    userId,
+    riskCategory: riskScore.category,
+    riskScore,
+    timestamp: new Date()
+  };
+
+  await db
+    .insertInto('risk_profile_checks')
+    .values({
+      user_id: userId,
+      risk_category: riskScore.category,
+      risk_score: riskScore.totalScore,
+      check_timestamp: response.timestamp
+    })
+    .execute();
+  
+  logger.info(`Risk profile check for user ${userId}: Category ${riskScore.category}, Score ${riskScore.totalScore}`);
+
+  res.status(OK).json({ message: `Risk profile check successful for user ID ${userId}`});
+};
+
 export {
     checkClientAccountStatus,
     updateClientAccountStatus,
-    checkSegmentActivation
+    checkSegmentActivation,
+    getUserRiskProfile
 };
