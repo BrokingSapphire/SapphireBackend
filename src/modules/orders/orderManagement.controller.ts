@@ -10,12 +10,8 @@ import {
     OrderStatus,
     OrderValidity,
     OrderCategory,
-    InstantOrderRequest,
-    NormalOrderRequest,
-    IcebergOrderRequest,
-    CoverOrderRequest,
-    OrderAttemptFailure
 } from './order.types';
+import {InstantOrderRequest , OrderAttemptFailure, NormalOrderRequest, IcebergOrderRequest, CoverOrderRequest} from "@app/database/db"
 import { calculateCharges } from '../charges/charges.service';
 import {
     ChargesDirection,
@@ -76,10 +72,6 @@ const createInstantOrder = async (req: Request, res: Response): Promise<void> =>
 
     if(!symbol || !orderSide || !quantity || !productType || !orderType) {
         throw new BadRequestError('Missing required fields');
-    }
-
-    if (!Object.values(productType).includes(productType)) {
-        throw new BadRequestError('Invalid product type');
     }
 
     if (orderType !== OrderType.MARKET_ORDER && orderType !== OrderType.LIMIT_ORDER) {

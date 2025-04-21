@@ -9,10 +9,10 @@ import {
     ChargesDirection,
     ChargeType,
     ExchangeType,
-    ChargeCalculationResult,
-    EquityDeliveryCharges,
-    CurrencyCharges
 } from "./charges.types";
+import { ChargeCalculationResult,
+    EquityDeliveryCharges,
+    CurrencyCharges} from "@app/database/db"
 import logger from '@app/logger';
 
 // Calculate charges for Equity Delivery

@@ -2,17 +2,17 @@
 
 import { Request, Response } from "express";
 import {db} from '@app/database';
-import { APIError, BadRequestError, NotFoundError } from '@app/apiError';
+import { BadRequestError, NotFoundError } from '@app/apiError';
+import { ExecuteOrderRequest,
+    ExecuteNextLegRequest,
+    ChargesData,
+    RejectOrderRequest,
+    ExecuteStopLossRequest } from '@app/database/db';
 import { 
     OrderStatus, 
     OrderCategory, 
     OrderSide, 
     ProductType, 
-    ExecuteOrderRequest,
-    ExecuteNextLegRequest,
-    ChargesData,
-    RejectOrderRequest,
-    ExecuteStopLossRequest,
 } from './order.types';
 import { applyOrderCharges } from '../charges/charges.service';
 import logger from '@app/logger';
@@ -74,10 +74,10 @@ const executeOrder = async(req: Request, res: Response): Promise<void> => {
 
         switch (order.order_category) {
             case OrderCategory.INSTANT:
-                break; // nothing additional data for instant orders
+                break; 
 
             case OrderCategory.NORMAL:
-                break; // nothing addition data for normal orders
+                break; 
 
             case OrderCategory.ICEBERG:
                 const icebergOrder = await trx
