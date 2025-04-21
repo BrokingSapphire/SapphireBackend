@@ -2,7 +2,7 @@
 
 import { Request, Response } from 'express';
 import { db } from '@app/database';
-import { UserInvestmentSegment, AccountStatusValidationResult , SuspensionDetails, KycDetails, SegmentValidationResult, RiskProfileResponse } from '@app/database/db';
+import { UserInvestmentSegment, AccountStatusValidationResult , SuspensionDetails, KycDetails, SegmentValidationResult, RiskProfileResponse, OrderTypeValidationResult, ProductOrderTypeCombination } from '@app/database/db';
 import { AccountStatus } from './rms.types';
 import { calculateRiskScore } from '@app/services/rms.service';
 import { BadRequestError , NotFoundError} from '@app/apiError';
@@ -517,9 +517,269 @@ const getUserRiskProfile = async (req: Request, res: Response): Promise<void> =>
   res.status(OK).json({ message: `Risk profile check successful for user ID ${userId}`});
 };
 
+const validateOrderType = async(req:Request,res:Response):Promise<void> =>{
+   // For now, hardcode a userId or get it from query params
+  // Later this will come from authentication middleware
+  const userId = parseInt(req.query.userId as string, 10) || 1;
+  const clientId = userId.toString();
+  
+  const { order_type, product_type, symbol, trigger_price, trade_type } = req.body;
+  
+  if (!clientId) {
+    throw new BadRequestError('Client ID is required');
+  }
+
+  // Check for the Acc is Active Or Not
+  const clientAccount = await db
+  .selectFrom('client_accounts')
+  .where('client_id', '=', clientId)
+  .select(['account_status'])
+  .executeTakeFirst();
+
+  if (!clientAccount) {
+  throw new NotFoundError(`Client Account with ${clientId} Not Found`);
+}
+
+  if (clientAccount.account_status !== AccountStatus.ACTIVE) {
+  res.status(BAD_REQUEST).json({ 
+    message: 'Account is not active',
+  });
+  return;
+}
+
+// Determining the Type of Segment 
+const segment = determineSegmentFromTradeType(trade_type, symbol);
+
+const result = await validateAllowedOrderType(
+  order_type,
+  product_type,
+  trigger_price,
+  segment
+);
+
+// Log the Validation Result
+
+await orderTypeValidationCheck(clientId, {
+  orderType: order_type,
+  productType: product_type,
+  symbol,
+  segment,
+  triggerPrice: trigger_price
+}, result);
+
+// Response
+
+if (result.isValid) {
+  res.status(OK).json({ message: 'Order type validation successful' });
+} else {
+  res.status(BAD_REQUEST).json({ 
+    message: result.reason,
+    details: result.additionalInfo || {}
+  });
+}
+};
+
+const validateAllowedOrderType = async (
+  orderType: string,
+  productType: string,
+  triggerPrice: number | undefined,
+  segment: UserInvestmentSegment
+): Promise<OrderTypeValidationResult> => {
+  // 1. Check if the product type and order type combination is valid
+  const isValidCombination = await isValidProductOrderTypeCombination(productType, orderType);
+  
+  if (!isValidCombination) {
+    return {
+      isValid: false,
+      reason: `Order type ${orderType} is not allowed for product type ${productType}`,
+      additionalInfo: {
+        allowedOrderTypes: await getAllowedOrderTypesForProduct(productType),
+        restrictionReason: "Product-OrderType restriction"
+      }
+    };
+  }
+
+  // 2. Check segment-specific order type restrictions
+  const isValidForSegment = await isOrderTypeValidForSegment(segment, orderType);
+  
+  if (!isValidForSegment) {
+    return {
+      isValid: false,
+      reason: `Order type ${orderType} is not allowed for ${segment} segment`,
+      additionalInfo: {
+        allowedOrderTypes: await getAllowedOrderTypesForSegment(segment),
+        restrictionReason: "Segment-specific restriction"
+      }
+    };
+  }
+  
+  // 3. Check if order type requires trigger price
+  if ((orderType === 'sl' || orderType === 'sl_m') && triggerPrice === undefined) {
+    return {
+      isValid: false,
+      reason: `Trigger price is required for ${orderType} orders`,
+      additionalInfo: {
+        restrictionReason: "Missing trigger price"
+      }
+    };
+  }
+  return {
+    isValid: true,
+    reason: `Order type ${orderType} is allowed for this order configuration`
+  };
+};
+
+const isValidProductOrderTypeCombination = async (
+  productType: string, 
+  orderType: string
+): Promise<boolean> => {
+  try {
+    const validCombinations = await db
+    .selectFrom('product_order_type_combinations')
+    .where('product_type', '=', productType)
+    .where('order_type', '=', orderType)
+    .executeTakeFirst() as ProductOrderTypeCombination | undefined;
+    
+    if (validCombinations) {
+      return validCombinations.is_allowed === true;
+    }
+  } catch (error) {
+    logger.warn('Error querying product_order_type_combinations table, using default values', error);
+  }
+  
+  // Default allowed combinations if table doesn't exist
+  const allowedCombinations: Record<string, string[]> = {
+    'intraday': ['market_order', 'limit_order', 'sl', 'sl_m'],
+    'delivery': ['market_order', 'limit_order', 'sl', 'sl_m'],
+    'mtf': ['market_order', 'limit_order'],
+    'futures': ['market_order', 'limit_order', 'sl', 'sl_m'],
+    'options': ['market_order', 'limit_order', 'sl', 'sl_m']
+  };
+  
+  return allowedCombinations[productType]?.includes(orderType) || false;
+};
+
+const getAllowedOrderTypesForProduct = async (productType: string): Promise<string[]> => {
+  try {
+    const allowedTypes = await db
+      .selectFrom('product_order_type_combinations')
+      .where('product_type', '=', productType)
+      .where('is_allowed', '=', true)
+      .select(['order_type'])
+      .execute();
+    
+    if (allowedTypes && allowedTypes.length > 0) {
+      return allowedTypes.map(type => type.order_type);
+    }
+  } catch (error) {
+    logger.warn('Error querying product_order_type_combinations table, using default values', error);
+  }
+  
+  // Default fallback if table doesn't exist yet
+  const defaultAllowedTypes: Record<string, string[]> = {
+    'intraday': ['market_order', 'limit_order', 'sl', 'sl_m'],
+    'delivery': ['market_order', 'limit_order', 'sl', 'sl_m'],
+    'mtf': ['market_order', 'limit_order'],
+    'futures': ['market_order', 'limit_order', 'sl', 'sl_m'],
+    'options': ['market_order', 'limit_order', 'sl', 'sl_m']
+  };
+  
+  return defaultAllowedTypes[productType] || [];
+};
+
+const isOrderTypeValidForSegment = async (
+  segment: UserInvestmentSegment, 
+  orderType: string
+): Promise<boolean> => {
+  try {
+    // Fetch segment restrictions from database if available
+    const segmentRestriction = await db
+      .selectFrom('segment_order_type_restrictions')
+      .where('segment', '=', segment)
+      .where('order_type', '=', orderType)
+      .where('is_restricted', '=', true)
+      .executeTakeFirst();
+
+    if (segmentRestriction) {
+      return false;
+    }
+  } catch (error) {
+    logger.warn('Error querying segment_order_type_restrictions table, using default values', error);
+  }
+  
+  const restrictedCombinations: Record<string, string[]> = {
+    'Currency': ['sl_m'], // SL-M ---> restricted in Currency segment
+    'Commodity': [] // No restrictions
+  };
+  
+  return !(restrictedCombinations[segment]?.includes(orderType) || false);
+};
+
+const getAllowedOrderTypesForSegment = async (segment: UserInvestmentSegment): Promise<string[]> => {
+  const allOrderTypes = ['market_order', 'limit_order', 'sl', 'sl_m'];
+  
+  try {
+    const restrictedTypes = await db
+      .selectFrom('segment_order_type_restrictions')
+      .where('segment', '=', segment)
+      .where('is_restricted', '=', true)
+      .select(['order_type'])
+      .execute();
+    
+    if (restrictedTypes && restrictedTypes.length > 0) {
+      const restrictedSet = new Set(restrictedTypes.map(type => type.order_type));
+      return allOrderTypes.filter(type => !restrictedSet.has(type));
+    }
+  } catch (error) {
+    logger.warn('Error querying segment_order_type_restrictions table, using default values', error);
+  }
+  
+  const restrictedCombinations: Record<string, string[]> = {
+    'Currency': ['sl_m'],
+    'Commodity': []
+  };
+  
+  const restrictedForSegment = restrictedCombinations[segment] || [];
+  return allOrderTypes.filter(type => !restrictedForSegment.includes(type));
+};
+const orderTypeValidationCheck = async (
+  clientId: string,
+  checkData: {
+    orderType: string;
+    productType: string;
+    symbol: string;
+    segment: UserInvestmentSegment;
+    triggerPrice?: number;
+  },
+  result: OrderTypeValidationResult
+): Promise<void> => {
+  await db
+    .insertInto('segment_checks')
+    .values({
+      client_id: clientId,
+      check_type: 'ORDER_TYPE_VALIDATION',
+      passed: result.isValid,
+      reason: result.reason,
+      additional_data: JSON.stringify({
+        orderType: checkData.orderType,
+        productType: checkData.productType,
+        symbol: checkData.symbol,
+        segment: checkData.segment,
+        triggerPrice: checkData.triggerPrice,
+        additionalInfo: result.additionalInfo
+      }),
+      timestamp: new Date()
+    })
+    .executeTakeFirstOrThrow();
+  logger.info(
+    `Order type validation check for client ${clientId}, product ${checkData.productType}, order type ${checkData.orderType}: ${result.isValid ? 'PASSED' : 'FAILED'}`
+  );
+};
+
 export {
     checkClientAccountStatus,
     updateClientAccountStatus,
     checkSegmentActivation,
-    getUserRiskProfile
+    getUserRiskProfile,
+    validateOrderType
 };
