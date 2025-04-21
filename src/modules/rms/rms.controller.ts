@@ -2,8 +2,8 @@
 
 import { Request, Response } from 'express';
 import { db } from '@app/database';
-import { UserInvestmentSegment, AccountStatusValidationResult , SuspensionDetails, KycDetails, SegmentValidationResult, RiskProfileResponse, OrderTypeValidationResult, ProductOrderTypeCombination } from '@app/database/db';
-import { AccountStatus } from './rms.types';
+import { UserInvestmentSegment, AccountStatusValidationResult , SuspensionDetails, KycDetails, SegmentValidationResult, RiskProfileResponse, OrderTypeValidationResult, ProductOrderTypeCombination , ValidityValidationResult} from '@app/database/db';
+import { AccountStatus, OrderValidity } from './rms.types';
 import { calculateRiskScore } from '@app/services/rms.service';
 import { BadRequestError , NotFoundError} from '@app/apiError';
 import logger from '@app/logger';
@@ -776,10 +776,180 @@ const orderTypeValidationCheck = async (
   );
 };
 
+const validateOrderValidity = async(req:Request , res:Response):Promise<void> =>{
+  // For now, hardcode a userId or get it from query params
+  // Later this will come from authentication middleware
+  const userId = parseInt(req.query.userId as string, 10) || 1;
+  const clientId = userId.toString();
+
+  const{
+    product_type,
+    validity_type,
+    validity_minutes,
+    symbol,
+    trade_type
+  } = req.body;
+
+  if(!product_type || !validity_type){
+    throw new BadRequestError("Product Type and validity type are required");
+  }
+
+  if(validity_type === OrderValidity.MINUTES && !validity_minutes){
+    throw new BadRequestError("Minutes Value is required")
+  }
+
+  // check Account is Active
+  const clientAccount = await db
+  .selectFrom('client_accounts')
+  .where('client_id','=',clientId)
+  .select(['account_status'])
+  .executeTakeFirst();
+
+  if(!clientAccount){
+    throw new NotFoundError(`Client Account with ${clientId} Not Found`);
+  }
+  
+  if(clientAccount.account_status !== AccountStatus.ACTIVE){
+    res.status(BAD_REQUEST).json({
+      message:"Account is Not Active"
+    });
+    return;
+  }
+
+  const segment = determineSegmentFromTradeType(trade_type , symbol);
+
+  // order-validity
+  const result = await validateValidityType(
+    product_type,
+    validity_type as OrderValidity,
+    validity_minutes,
+    segment
+  );
+  
+  // Log the validation result
+  await validityValidationCheck(clientId, {
+    productType: product_type,
+    validityType: validity_type,
+    validityMinutes: validity_minutes,
+    symbol,
+    segment
+}, result);
+
+// Return response
+if (result.isValid) {
+    res.status(OK).json({ 
+        isValid: true,
+        message: result.reason 
+    });
+  } else {
+    res.status(BAD_REQUEST).json({ 
+        isValid: false,
+        message: result.reason,
+        details: result.additionalInfo || {}
+    });
+  }
+};
+
+// Validation Logic
+
+const validateValidityType = async (
+  productType: string,
+  validityType: OrderValidity,
+  validityMinutes: number | undefined,
+  segment: UserInvestmentSegment
+): Promise<ValidityValidationResult> => {
+
+  const allowedValidityByProduct: Record<string, OrderValidity[]> = {
+    'delivery': [OrderValidity.DAY],          // Delivery --> only DAY
+    'intraday': [OrderValidity.DAY, OrderValidity.IMMEDIATE, OrderValidity.MINUTES], // Intraday --> ALL
+    'mtf': [OrderValidity.DAY],                   // MTF --> only DAY
+    'futures': [OrderValidity.DAY, OrderValidity.IMMEDIATE, OrderValidity.MINUTES], // F&O --> all
+    'options': [OrderValidity.DAY, OrderValidity.IMMEDIATE, OrderValidity.MINUTES]  // F&O --> all
+};
+
+const isValid = allowedValidityByProduct[productType]?.includes(validityType) || false;
+    
+if (!isValid) {
+    return {
+        isValid: false,
+        reason: `${validityType} validity is not allowed for ${productType} orders`,
+        additionalInfo: {
+            allowedValidityTypes: allowedValidityByProduct[productType] || [OrderValidity.DAY],
+            restrictionReason: `${productType} orders only support ${allowedValidityByProduct[productType]?.join(', ')} validity`
+        }
+    };
+}
+
+if (validityType === OrderValidity.MINUTES) {
+    if (!validityMinutes || validityMinutes <= 0 || validityMinutes > 180) { // Max 3 hours
+        return {
+            isValid: false,
+            reason: `For MINUTES validity, a value between 1 and 3600 minutes must be provided`,
+            additionalInfo: {
+                restrictionReason: "Invalid minutes value"
+            }
+        };
+    }
+}
+
+return {
+    isValid: true,
+    reason: getSuccessMessage(productType, validityType)
+  }
+};
+const getSuccessMessage = (productType: string, validityType: OrderValidity): string => {
+  switch (validityType) {
+      case OrderValidity.DAY:
+          return `DAY validity allowed for ${productType} orders.`;
+      case OrderValidity.IMMEDIATE:
+          return `IMMEDIATE validity allowed for ${productType} orders.`;
+      case OrderValidity.MINUTES:
+          return `MINUTES validity allowed for ${productType} orders.`;
+      default:
+          return `${validityType} validity allowed for ${productType} orders.`;
+  }
+};
+
+const validityValidationCheck = async (
+  clientId: string,
+  checkData: {
+      productType: string;
+      validityType: string;
+      validityMinutes?: number;
+      symbol: string;
+      segment: UserInvestmentSegment;
+  },
+  result: ValidityValidationResult
+): Promise<void> => {
+  await db
+      .insertInto('segment_checks')
+      .values({
+          client_id: clientId,
+          check_type: 'ORDER_VALIDITY_VALIDATION',
+          passed: result.isValid,
+          reason: result.reason,
+          additional_data: JSON.stringify({
+              productType: checkData.productType,
+              validityType: checkData.validityType,
+              validityMinutes: checkData.validityMinutes,
+              symbol: checkData.symbol,
+              segment: checkData.segment,
+              additionalInfo: result.additionalInfo
+          }),
+          timestamp: new Date()
+      })
+      .executeTakeFirstOrThrow();
+  
+  logger.info(
+      `Order validity validation check for client ${clientId}, product ${checkData.productType}, validity type ${checkData.validityType}: ${result.isValid ? 'PASSED' : 'FAILED'}`
+  );
+};
+
 export {
     checkClientAccountStatus,
     updateClientAccountStatus,
     checkSegmentActivation,
     getUserRiskProfile,
-    validateOrderType
+    validateOrderType,
+    validateOrderValidity
 };

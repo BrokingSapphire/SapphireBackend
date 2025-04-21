@@ -20,3 +20,9 @@ export enum OccupationRiskGroup {
   MEDIUM = 'MEDIUM',    // Private Sector, Agriculturist
   VULNERABLE = 'VULNERABLE'  // Student, Housewife, Retired, Others
 }
+
+export enum OrderValidity {
+  DAY = 'day',
+  IMMEDIATE = 'immediate',
+  MINUTES = 'minutes'
+}
