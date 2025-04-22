@@ -2,7 +2,7 @@
 
 import { Request, Response } from 'express';
 import { db } from '@app/database';
-import { UserInvestmentSegment, AccountStatusValidationResult , SuspensionDetails, KycDetails, SegmentValidationResult, RiskProfileResponse, OrderTypeValidationResult, ProductOrderTypeCombination , ValidityValidationResult} from '@app/database/db';
+import { UserInvestmentSegment, AccountStatusValidationResult , SuspensionDetails, KycDetails, SegmentValidationResult, RiskProfileResponse, OrderTypeValidationResult, ProductOrderTypeCombination ,QuantityValidationResult, ValidityValidationResult, LotSizeConfig, LotSizeConfiguration} from '@app/database/db';
 import { AccountStatus, OrderValidity } from './rms.types';
 import { calculateRiskScore } from '@app/services/rms.service';
 import { BadRequestError , NotFoundError} from '@app/apiError';
@@ -945,11 +945,291 @@ const validityValidationCheck = async (
   );
 };
 
+const validateQuantityMultiple = async (req: Request, res: Response): Promise<void> => {
+  // For now, hardcode a userId or get it from query params
+  // Later this will come from authentication middleware
+  const userId = parseInt(req.query.userId as string, 10) || 1;
+  const clientId = userId.toString();
+  
+  const { symbol, quantity, trade_type, exchange } = req.body;
+  
+  if (!symbol || !quantity) {
+    throw new BadRequestError('Symbol and quantity are required');
+  }
+
+  // Check if the account is active
+  const clientAccount = await db
+    .selectFrom('client_accounts')
+    .where('client_id', '=', clientId)
+    .select(['account_status'])
+    .executeTakeFirst();
+
+  if (!clientAccount) {
+    throw new NotFoundError(`Client Account with ${clientId} Not Found`);
+  }
+
+  if (clientAccount.account_status !== AccountStatus.ACTIVE) {
+    res.status(BAD_REQUEST).json({ 
+      message: 'Account is not active',
+    });
+    return;
+  }
+  const segment = determineSegmentFromTradeType(trade_type, symbol);
+  
+  // Validate quantity
+  const result: QuantityValidationResult = await validateQuantity(symbol, quantity, segment, trade_type, exchange);
+  
+  // Log the validation result
+  await quantityValidationCheck(clientId, {
+    symbol,
+    quantity,
+    segment,
+    trade_type,
+    exchange
+  }, result);
+  
+  // Return response
+  if (result.isValid) {
+    res.status(OK).json({ 
+      isValid: true,
+      message: result.reason 
+    });
+  } else {
+    res.status(BAD_REQUEST).json({ 
+      isValid: false,
+      message: result.reason,
+      details: result.additionalInfo || {}
+    });
+  }
+};
+
+const validateQuantity = async (
+  symbol: string,
+  quantity: number,
+  segment: UserInvestmentSegment,
+  tradeType: string,
+  exchange: string
+): Promise<QuantityValidationResult> => {
+  if (segment === 'F&O' || segment === 'Commodity' || segment === 'Currency') {
+    return validateDerivativeQuantity(symbol, quantity, segment, exchange);
+  }
+  
+  // For equity (Cash segment)
+  if (segment === 'Cash') {
+    return validateEquityQuantity(symbol, quantity, tradeType, exchange);
+  }
+  // Default case for other segments (e.g., Debt)
+  return {
+    isValid: true,
+    reason: 'Quantity validation successful'
+  };
+};
+
+const validateDerivativeQuantity = async (
+  symbol: string,
+  quantity: number,
+  segment: UserInvestmentSegment,
+  exchange: string
+): Promise<QuantityValidationResult> => {
+  
+  const lotSizeData = await db
+  .selectFrom('lot_size_config')
+  .where('symbol','=',symbol)
+  .where('segment', '=', segment)
+  .where('exchange', '=', exchange)
+  .where('effective_from', '<=', new Date())
+  .where((eb) => 
+    eb.or([
+      eb('effective_to', 'is', null),
+      eb('effective_to', '>=', new Date())
+    ])
+  )
+  .select(['lot_size', 'max_order_quantity'])
+  .executeTakeFirst() as LotSizeConfiguration | undefined;;
+
+let lotSize: LotSizeConfig;
+
+if (!lotSizeData) {
+  if (segment === 'F&O' || segment === 'Commodity' || segment === 'Currency') {
+    const defaultLotSizes: Record<'F&O' | 'Commodity' | 'Currency', number> = {
+      'F&O': 50,
+      'Commodity': 1,
+      'Currency': 1000
+    };
+
+    lotSize = {
+      symbol,
+      segment,
+      lotSize: defaultLotSizes[segment],
+      maxOrderQuantity: undefined
+    };
+    logger.warn(`Using default lot size for ${symbol} in ${segment} segment`);
+  } else {
+    throw new Error(`Unsupported segment: ${segment}`);
+  }
+} else {
+  lotSize = {
+    symbol,
+    segment,
+    lotSize: lotSizeData.lot_size,
+    maxOrderQuantity: lotSizeData.max_order_quantity || undefined
+    };
+  }
+  const maxLotsPossible = lotSize.maxOrderQuantity 
+  ? Math.floor(lotSize.maxOrderQuantity / lotSize.lotSize)
+  : undefined;
+
+// Check if quantity is multiple of lot size
+if (quantity % lotSize.lotSize !== 0) {
+  const suggestedQuantity = Math.round(quantity / lotSize.lotSize) * lotSize.lotSize;
+  return {
+    isValid: false,
+    reason: `Quantity must be a multiple of lot size (${lotSize.lotSize})`,
+    additionalInfo: {
+      requiredLotSize: lotSize.lotSize,
+      suggestedQuantity: suggestedQuantity || lotSize.lotSize,
+      maxLotsPossible
+    }
+  };
+}
+
+// Check if quantity exceeds maximum allowed
+if (lotSize.maxOrderQuantity && quantity > lotSize.maxOrderQuantity) {
+  return {
+    isValid: false,
+    reason: `Quantity exceeds maximum allowed (${lotSize.maxOrderQuantity})`,
+    additionalInfo: {
+      maxAllowedQuantity: lotSize.maxOrderQuantity,
+      suggestedQuantity: lotSize.maxOrderQuantity,
+      maxLotsPossible
+    }
+  };
+}
+
+return {
+  isValid: true,
+  reason: 'Quantity validation successful for derivative order',
+  additionalInfo: {
+    requiredLotSize: lotSize.lotSize,
+    maxAllowedQuantity: lotSize.maxOrderQuantity,
+    maxLotsPossible
+  }
+};
+};
+
+const validateEquityQuantity = async (
+  symbol: string,
+  quantity: number,
+  tradeType: string,
+  exchange: string
+): Promise<QuantityValidationResult> => {
+  try {
+    // Fetch maximum quantity limit for equity
+    const equityLimit = await db
+      .selectFrom('equity_max_quantity_limit')
+      .where('symbol', '=', symbol)
+      .where('exchange', '=', exchange)
+      .where('trade_type', '=', tradeType === 'equity_delivery' ? 'delivery' : 'intraday')
+      .where('effective_from', '<=', new Date())
+      .where((eb) => 
+        eb.or([
+          eb('effective_to', 'is', null),
+          eb('effective_to', '>=', new Date())
+        ])
+      )
+      .select(['max_order_quantity'])
+      .executeTakeFirst();
+    
+    // Default maximum quantity 
+    const maxQuantity = equityLimit?.max_order_quantity || 
+      (tradeType === 'equity_delivery' ? 10000 : 50000); // Example defaults
+    
+    // Check for QTy is negative
+    if (quantity <= 0) {
+      return {
+        isValid: false,
+        reason: 'Quantity must be a positive number',
+        additionalInfo: {
+          suggestedQuantity: 1
+        }
+      };
+    }
+    
+    // Check if quantity is a whole number
+    if (!Number.isInteger(quantity)) {
+      return {
+        isValid: false,
+        reason: 'Equity quantity must be a whole number',
+        additionalInfo: {
+          suggestedQuantity: Math.round(quantity)
+        }
+      };
+    }
+    
+    // Check if quantity exceeds maximum allowed
+    if (quantity > maxQuantity) {
+      return {
+        isValid: false,
+        reason: `Quantity exceeds maximum allowed (${maxQuantity})`,
+        additionalInfo: {
+          maxAllowedQuantity: maxQuantity,
+          suggestedQuantity: maxQuantity
+        }
+      };
+    }
+    
+    return {
+      isValid: true,
+      reason: 'Quantity validation successful for equity order'
+    };
+    
+  } catch (error) {
+    logger.error('Error validating equity quantity:', error);
+    throw error;
+  }
+};
+
+const quantityValidationCheck = async (
+  clientId: string,
+  checkData: {
+    symbol: string;
+    quantity: number;
+    segment: UserInvestmentSegment;
+    trade_type: string;
+    exchange: string;
+  },
+  result: QuantityValidationResult
+): Promise<void> => {
+  await db
+    .insertInto('segment_checks')
+    .values({
+      client_id: clientId,
+      check_type: 'QUANTITY_VALIDATION',
+      passed: result.isValid,
+      reason: result.reason,
+      additional_data: JSON.stringify({
+        symbol: checkData.symbol,
+        quantity: checkData.quantity,
+        segment: checkData.segment,
+        trade_type: checkData.trade_type,
+        exchange: checkData.exchange,
+        additionalInfo: result.additionalInfo
+      }),
+      timestamp: new Date()
+    })
+    .executeTakeFirstOrThrow();
+  
+  logger.info(
+    `Quantity validation check for client ${clientId}, symbol ${checkData.symbol}, quantity ${checkData.quantity}: ${result.isValid ? 'PASSED' : 'FAILED'}`
+  );
+};
+
 export {
     checkClientAccountStatus,
     updateClientAccountStatus,
     checkSegmentActivation,
     getUserRiskProfile,
     validateOrderType,
-    validateOrderValidity
+    validateOrderValidity,
+    validateQuantityMultiple
 };
