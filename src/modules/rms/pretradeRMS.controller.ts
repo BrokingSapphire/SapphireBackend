@@ -3,7 +3,7 @@
 import { Request, Response } from 'express';
 import { db } from '@app/database';
 import { UserInvestmentSegment, AccountStatusValidationResult , SuspensionDetails, KycDetails, SegmentValidationResult, RiskProfileResponse, OrderTypeValidationResult, ProductOrderTypeCombination ,QuantityValidationResult, ValidityValidationResult, LotSizeConfig, LotSizeConfiguration} from '@app/database/db';
-import { AccountStatus, OrderValidity } from './rms.types';
+import { AccountStatus, OrderValidity , OrderSide} from './rms.types';
 import { calculateRiskScore } from '@app/services/rms.service';
 import { BadRequestError , NotFoundError} from '@app/apiError';
 import logger from '@app/logger';
@@ -517,66 +517,92 @@ const getUserRiskProfile = async (req: Request, res: Response): Promise<void> =>
   res.status(OK).json({ message: `Risk profile check successful for user ID ${userId}`});
 };
 
-const validateOrderType = async(req:Request,res:Response):Promise<void> =>{
-   // For now, hardcode a userId or get it from query params
+const validateOrderType = async(req: Request, res: Response): Promise<void> => {
+  // For now, hardcode a userId or get it from query params
   // Later this will come from authentication middleware
   const userId = parseInt(req.query.userId as string, 10) || 1;
   const clientId = userId.toString();
   
-  const { order_type, product_type, symbol, trigger_price, trade_type } = req.body;
+  const { order_type, product_type, symbol, trigger_price, price, order_side, trade_type } = req.body;
   
   if (!clientId) {
     throw new BadRequestError('Client ID is required');
   }
 
-  // Check for the Acc is Active Or Not
+  // Check for the Account is Active Or Not
   const clientAccount = await db
-  .selectFrom('client_accounts')
-  .where('client_id', '=', clientId)
-  .select(['account_status'])
-  .executeTakeFirst();
+    .selectFrom('client_accounts')
+    .where('client_id', '=', clientId)
+    .select(['account_status'])
+    .executeTakeFirst();
 
   if (!clientAccount) {
-  throw new NotFoundError(`Client Account with ${clientId} Not Found`);
-}
+    throw new NotFoundError(`Client Account with ${clientId} Not Found`);
+  }
 
   if (clientAccount.account_status !== AccountStatus.ACTIVE) {
-  res.status(BAD_REQUEST).json({ 
-    message: 'Account is not active',
-  });
-  return;
-}
+    res.status(BAD_REQUEST).json({ 
+      message: 'Account is not active',
+    });
+    return;
+  }
 
-// Determining the Type of Segment 
-const segment = determineSegmentFromTradeType(trade_type, symbol);
+  // Determining the Type of Segment 
+  const segment = determineSegmentFromTradeType(trade_type, symbol);
 
-const result = await validateAllowedOrderType(
-  order_type,
-  product_type,
-  trigger_price,
-  segment
-);
+  // Validate allowed order type
+  const orderTypeResult = await validateAllowedOrderType(
+    order_type,
+    product_type,
+    trigger_price,
+    segment
+  );
 
-// Log the Validation Result
+  // If order type validation fails, return early
+  if (!orderTypeResult.isValid) {
+    await orderTypeValidationCheck(clientId, {
+      orderType: order_type,
+      productType: product_type,
+      symbol,
+      segment,
+      triggerPrice: trigger_price
+    }, orderTypeResult);
 
-await orderTypeValidationCheck(clientId, {
-  orderType: order_type,
-  productType: product_type,
-  symbol,
-  segment,
-  triggerPrice: trigger_price
-}, result);
+    res.status(BAD_REQUEST).json({ 
+      message: orderTypeResult.reason,
+      details: orderTypeResult.additionalInfo || {}
+    });
+    return;
+  }
 
-// Response
+  // Validate Price-Trigger 
+  const priceTriggerResult = await validatePriceTriggerRelationship(
+    order_type,
+    order_side,
+    price,
+    trigger_price
+  );
 
-if (result.isValid) {
-  res.status(OK).json({ message: 'Order type validation successful' });
-} else {
-  res.status(BAD_REQUEST).json({ 
-    message: result.reason,
-    details: result.additionalInfo || {}
-  });
-}
+  const finalResult = priceTriggerResult.isValid ? orderTypeResult : priceTriggerResult;
+
+  // Log the Validation Result
+  await orderTypeValidationCheck(clientId, {
+    orderType: order_type,
+    productType: product_type,
+    symbol,
+    segment,
+    triggerPrice: trigger_price
+  }, finalResult);
+
+  // Response
+  if (finalResult.isValid) {
+    res.status(OK).json({ message: 'Order type validation successful' });
+  } else {
+    res.status(BAD_REQUEST).json({ 
+      message: finalResult.reason,
+      details: finalResult.additionalInfo || {}
+    });
+  }
 };
 
 const validateAllowedOrderType = async (
@@ -1494,6 +1520,86 @@ const productOrderCompatibilityCheck = async (
   );
 };
 
+const validatePriceTriggerRelationship = async (
+  orderType: string,
+  orderSide: OrderSide,
+  price: number | undefined,
+  triggerPrice: number | undefined
+): Promise<OrderTypeValidationResult> => {
+
+  if (orderType !== 'sl' && orderType !== 'sl_m') {
+    return {
+      isValid: true,
+      reason: 'Price-trigger relationship validation not applicable'
+    };
+  }
+  
+  // SL-M orders only need a trigger price
+  if (orderType === 'sl_m') {
+    if (triggerPrice === undefined) {
+      return {
+        isValid: false,
+        reason: 'Trigger price is required for SL-M orders',
+        additionalInfo: {
+          restrictionReason: "Missing trigger price"
+        }
+      };
+    }
+    return {
+      isValid: true,
+      reason: 'Valid trigger price for SL-M order'
+    };
+  }
+  
+  // For SL orders, need both price and trigger price
+  if (price === undefined) {
+    return {
+      isValid: false,
+      reason: 'Limit price is required for SL orders',
+      additionalInfo: {
+        restrictionReason: "Missing limit price"
+      }
+    };
+  }
+  
+  if (triggerPrice === undefined) {
+    return {
+      isValid: false,
+      reason: 'Trigger price is required for SL orders',
+      additionalInfo: {
+        restrictionReason: "Missing trigger price"
+      }
+    };
+  }
+  
+  // For Buy SL orders: Trigger Price ≤ Limit Price
+  if (orderSide === 'buy' && triggerPrice > price) {
+    return {
+      isValid: false,
+      reason: `For buy SL orders, trigger price (₹${triggerPrice}) must be less than or equal to limit price (₹${price})`,
+      additionalInfo: {
+        restrictionReason: "Invalid price-trigger relationship for buy SL order"
+      }
+    };
+  }
+  
+  // For Sell SL orders: Trigger Price ≥ Limit Price
+  if (orderSide === 'sell' && triggerPrice < price) {
+    return {
+      isValid: false,
+      reason: `For sell SL orders, trigger price (₹${triggerPrice}) must be greater than or equal to limit price (₹${price})`,
+      additionalInfo: {
+        restrictionReason: "Invalid price-trigger relationship for sell SL order"
+      }
+    };
+  }
+  
+  return {
+    isValid: true,
+    reason: 'Valid price-trigger relationship for SL order'
+  };
+};
+
 export {
     checkClientAccountStatus,
     updateClientAccountStatus,
@@ -1502,5 +1608,6 @@ export {
     validateOrderType,
     validateOrderValidity,
     validateQuantityMultiple,
-    validateProductOrderCompatibility
+    validateProductOrderCompatibility,
+    validatePriceTriggerRelationship 
 };
