@@ -1224,6 +1224,276 @@ const quantityValidationCheck = async (
   );
 };
 
+// Product-Order Compatibility Check
+
+const validateProductOrderCompatibility = async (req: Request, res: Response): Promise<void> => {
+  // For now, hardcode a userId or get it from query params
+  // Later this will come from authentication middleware
+  const userId = parseInt(req.query.userId as string, 10) || 1;
+  const clientId = userId.toString();
+  
+  const { product_type, order_type, symbol, exchange } = req.body;
+  
+  if (!product_type || !order_type) {
+    throw new BadRequestError('Product type and order type are required');
+  }
+  
+  // Check if the account is active
+  const clientAccount = await db
+    .selectFrom('client_accounts')
+    .where('client_id', '=', clientId)
+    .select(['account_status'])
+    .executeTakeFirst();
+
+  if (!clientAccount) {
+    throw new NotFoundError(`Client Account with ${clientId} Not Found`);
+  }
+  
+  if (clientAccount.account_status !== AccountStatus.ACTIVE) {
+    res.status(BAD_REQUEST).json({ 
+      isValid: false, 
+      message: 'Account is not active',
+    });
+    return;
+  }
+  
+  // Product-Type Determination
+  const tradeType = mapProductTypeToTradeType(product_type, symbol);
+  const segment = determineSegmentFromTradeType(tradeType, symbol);
+  
+  // Check for T2T, illiquid status and MTF approval
+  const [stockAttributes, mtfApproval] = await Promise.all([
+    fetchStockAttributes(symbol, exchange),
+    fetchMTFApproval(product_type, symbol, exchange)
+  ]);
+  
+  const result = await validateProductOrderCompatibilityRules(
+    product_type,
+    order_type,
+    segment,
+    stockAttributes.isT2TStock,
+    stockAttributes.isIlliquidStock,
+    mtfApproval.isMTFApproved,
+    symbol
+  );
+  
+  // Validation Log
+  await productOrderCompatibilityCheck(clientId, {
+    productType: product_type,
+    orderType: order_type,
+    symbol,
+    segment,
+    exchange
+  }, result);
+  
+  // Response
+  if (result.isValid) {
+    res.status(OK).json({ 
+      isValid: true,
+      message: result.reason
+    });
+  } else {
+    res.status(BAD_REQUEST).json({ 
+      isValid: false,
+      message: result.reason,
+      details: result.additionalInfo || {}
+    });
+  }
+};
+
+// Mqp Product to Trade...
+const mapProductTypeToTradeType = (productType: string, symbol: string): string => {
+  switch (productType) {
+    case 'intraday':
+      return 'equity_intraday';
+    case 'delivery':
+      return 'equity_delivery';
+    case 'mtf':
+      return 'equity_delivery'; // MTF ---> delivery products
+    case 'futures':
+      return 'equity_futures';
+    case 'options':
+      return 'equity_options';
+    default:
+
+      const uppercaseSymbol = symbol.toUpperCase();
+      if (uppercaseSymbol.includes('FUT')) {
+        return 'equity_futures';
+      }
+      if (uppercaseSymbol.includes('OPT') || uppercaseSymbol.includes('CE') || uppercaseSymbol.includes('PE')) {
+        return 'equity_options';
+      }
+      return 'equity_delivery'; 
+  }
+};
+
+const fetchStockAttributes = async (symbol: string, exchange: string): Promise<{ isT2TStock: boolean, isIlliquidStock: boolean}> => {
+
+    const stockAttributes = await db
+      .selectFrom('stock_attributes')
+      .where('symbol', '=', symbol)
+      .where('exchange', '=', exchange)
+      .select(['is_t2t', 'is_illiquid'])
+      .executeTakeFirst();
+      
+    if (stockAttributes) {
+      return {
+        isT2TStock: !!stockAttributes.is_t2t,
+        isIlliquidStock: !!stockAttributes.is_illiquid
+      };
+    }
+  
+  // Else Returning Deafault : False
+  return {
+    isT2TStock: false,
+    isIlliquidStock: false
+  };
+};
+
+// Fetch MTF status 
+const fetchMTFApproval = async (productType: string, symbol: string, exchange: string): Promise<{isMTFApproved: boolean}> => {
+  
+  if (productType !== 'mtf') {
+    return { isMTFApproved: false };
+  }
+  
+  const mtfStock = await db
+  .selectFrom('mtf_approved_stocks')
+  .where('symbol', '=', symbol)
+  .where('exchange', '=', exchange)
+  .where('is_active', '=', true)
+  .executeTakeFirst();
+  
+  return { isMTFApproved: !!mtfStock };
+};
+
+const validateProductOrderCompatibilityRules = async (
+  productType: string,
+  orderType: string,
+  segment: UserInvestmentSegment,
+  isT2TStock: boolean,
+  isIlliquidStock: boolean,
+  isMTFApproved: boolean,
+  symbol: string,
+): Promise<OrderTypeValidationResult> => {
+  
+  const isValidCombination = await isValidProductOrderTypeCombination(productType, orderType);
+  
+  if (!isValidCombination) {
+    return {
+      isValid: false,
+      reason: `Order type ${orderType} is not allowed for product type ${productType}`,
+      additionalInfo: {
+        allowedOrderTypes: await getAllowedOrderTypesForProduct(productType),
+        restrictionReason: "Product-OrderType restriction"
+      }
+    };
+  }
+  
+  // T2T/Illiquid stock cannot use intraday
+  if ((isT2TStock || isIlliquidStock) && productType === 'intraday') {
+    return {
+      isValid: false,
+      reason: `${symbol} is a ${isT2TStock ? 'T2T' : 'illiquid'} stock and cannot be traded intraday`,
+      additionalInfo: {
+        allowedProductTypes: ['delivery', 'mtf'],
+        restrictionReason: `${isT2TStock ? 'T2T' : 'Illiquid'} stock restriction`
+      }
+    };
+  }
+  
+  // MTF check 
+  if (productType === 'mtf') {
+  if (!isMTFApproved) {
+    return {
+      isValid: false,
+      reason: `${symbol} is not approved for MTF trading`,
+      additionalInfo: {
+        allowedProductTypes: ['delivery', 'intraday'],
+        restrictionReason: "MTF approval required"
+        }
+     };
+    }
+  }
+  
+  // F&O specific validations - delivery not allowed
+  if (segment === 'F&O' && productType === 'delivery') {
+    return {
+      isValid: false,
+      reason: `Delivery product type cannot be used for F&O instruments`,
+      additionalInfo: {
+        allowedProductTypes: ['futures', 'options', 'intraday'],
+        restrictionReason: "F&O product type restriction"
+      }
+    };
+  }
+  
+  // Currency specific validations
+  if (segment === 'Currency' && productType === 'delivery') {
+    return {
+      isValid: false,
+      reason: `Delivery product type cannot be used for Currency instruments`,
+      additionalInfo: {
+        allowedProductTypes: ['futures', 'options', 'intraday'],
+        restrictionReason: "Currency product type restriction"
+      }
+    };
+  }
+  
+  // Commodity specific validations
+  if (segment === 'Commodity' && productType === 'delivery') {
+    return {
+      isValid: false,
+      reason: `Delivery product type cannot be used for Commodity instruments`,
+      additionalInfo: {
+        allowedProductTypes: ['futures', 'options', 'intraday'],
+        restrictionReason: "Commodity product type restriction"
+      }
+    };
+  }
+  
+  return {
+    isValid: true,
+    reason: `Order type ${orderType} is compatible with product type ${productType} for ${symbol}`
+  };
+};
+
+// Log the validation check
+const productOrderCompatibilityCheck = async (
+  clientId: string,
+  checkData: {
+    productType: string;
+    orderType: string;
+    symbol: string;
+    segment: UserInvestmentSegment;
+    exchange: string;
+  },
+  result: OrderTypeValidationResult
+): Promise<void> => {
+  await db
+    .insertInto('segment_checks')
+    .values({
+      client_id: clientId,
+      check_type: 'PRODUCT_ORDER_COMPATIBILITY',
+      passed: result.isValid,
+      reason: result.reason,
+      additional_data: JSON.stringify({
+        productType: checkData.productType,
+        orderType: checkData.orderType,
+        symbol: checkData.symbol,
+        segment: checkData.segment,
+        exchange: checkData.exchange,
+        additionalInfo: result.additionalInfo
+      }),
+      timestamp: new Date()
+    })
+    .executeTakeFirstOrThrow();
+  
+  logger.info(
+    `Product-order compatibility check for client ${clientId}, product ${checkData.productType}, order type ${checkData.orderType}: ${result.isValid ? 'PASSED' : 'FAILED'}`
+  );
+};
+
 export {
     checkClientAccountStatus,
     updateClientAccountStatus,
@@ -1231,5 +1501,6 @@ export {
     getUserRiskProfile,
     validateOrderType,
     validateOrderValidity,
-    validateQuantityMultiple
+    validateQuantityMultiple,
+    validateProductOrderCompatibility
 };
