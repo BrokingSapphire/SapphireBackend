@@ -12,6 +12,7 @@ import {
   OrderLimitSchema
 } from './order.validator';
 import { orderManagementController } from './orderManagement.controller';
+import { jwtMiddleware } from '@app/utils/jwt';
 
 /**
  * @swagger
@@ -52,7 +53,7 @@ const router = Router();
  */
 router.get(
   '/orders', 
-  [validate(OrderQuerySchema)], 
+  [jwtMiddleware , validate(OrderQuerySchema)], 
   orderManagementController.getAllOrders
 );
 
@@ -87,7 +88,7 @@ router.get(
  */
 router.get(
     '/orders/queued',
-    [validate(OrderQuerySchema)],
+    [jwtMiddleware,validate(OrderQuerySchema)],
     orderManagementController.getQueuedOrders
   );
 
@@ -123,7 +124,7 @@ router.get(
  */
 router.get(
     '/orders/executed',
-    [validate(OrderQuerySchema)],
+    [jwtMiddleware, validate(OrderQuerySchema)],
     orderManagementController.getExecutedOrders
   );
 
@@ -158,7 +159,7 @@ router.get(
  */
 router.get(
     '/orders/cancelled',
-    [validate(OrderQuerySchema)],
+    [jwtMiddleware,validate(OrderQuerySchema)],
     orderManagementController.getCancelledOrders
   );
   
@@ -194,7 +195,7 @@ router.get(
  */
 router.get(
     '/orders/rejected',
-    [validate(OrderQuerySchema)],
+    [jwtMiddleware,validate(OrderQuerySchema)],
     orderManagementController.getRejectedOrders
   );
 
@@ -218,7 +219,7 @@ router.get(
  */
 router.post(
   '/orders/instant', 
-  [validate(InstantOrderSchema)], 
+  [jwtMiddleware,validate(InstantOrderSchema)], 
   orderManagementController.createInstantOrder
 );
 
@@ -242,7 +243,7 @@ router.post(
  */
 router.post(
   '/orders/normal', 
-  [validate(NormalOrderSchema)], 
+  [jwtMiddleware,validate(NormalOrderSchema)], 
   orderManagementController.createNormalOrder
 );
 
@@ -266,7 +267,7 @@ router.post(
  */
 router.post(
   '/orders/iceberg', 
-  [validate(IcebergOrderSchema)], 
+  [jwtMiddleware,validate(IcebergOrderSchema)], 
   orderManagementController.createIcebergOrder
 );
 
@@ -290,7 +291,7 @@ router.post(
  */
 router.post(
   '/orders/cover', 
-  [validate(CoverOrderSchema)], 
+  [jwtMiddleware, validate(CoverOrderSchema)], 
   orderManagementController.createCoverOrder
 );
 
@@ -315,7 +316,7 @@ router.post(
  */
 router.get(
   '/orders/:order_id/history', 
-  [validate(OrderIdSchema)], 
+  [jwtMiddleware, validate(OrderIdSchema)], 
   orderManagementController.getOrderHistory
 );
 
@@ -338,7 +339,7 @@ router.get(
  */
 router.get(
   '/orders/recent', 
-  [validate(OrderLimitSchema)], 
+  [jwtMiddleware, validate(OrderLimitSchema)], 
   orderManagementController.getRecentOrders
 );
 

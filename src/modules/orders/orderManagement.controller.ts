@@ -145,13 +145,7 @@ if (userFunds.available_funds < requiredFunds) {
                 attempted_at: new Date()
             } as OrderAttemptFailure)
             .onConflict((oc) => 
-                oc.constraint('uq_order_attempt_failures').doUpdateSet((eb) => ({
-                    failure_reason: eb.ref('excluded.failure_reason'),
-                    required_funds: eb.ref('excluded.required_funds'),
-                    available_funds: eb.ref('excluded.available_funds'),
-                    order_reference_id: eb.ref('excluded.order_reference_id'), // needs to be add in DB
-                    attempted_at: eb.ref('excluded.attempted_at')
-                }))
+                oc.constraint('uq_instant_orders_order_id').doNothing()
             )
             .execute();
             
@@ -190,10 +184,7 @@ const result = await db.transaction().execute(async (trx) => {
         order_type: orderType,
     })
     .onConflict((oc) => 
-        oc.constraint('uq_instant_orders_order_id').doUpdateSet((eb) => ({
-            product_type: eb.ref('excluded.product_type'),
-            order_type: eb.ref('excluded.order_type')
-        }))
+        oc.constraint('uq_instant_orders_order_id').doNothing()
     )
     .returningAll()
     .executeTakeFirstOrThrow();
@@ -330,17 +321,8 @@ const createNormalOrder = async (req:Request, res: Response): Promise<void> =>{
             available_funds: userFunds.available_funds || 0, 
             attempted_at: new Date()
             } as OrderAttemptFailure)
-            .onConflict((oc) => 
-                oc.constraint('uq_order_attempt_failures').doUpdateSet((eb) => ({
-                    failure_reason: eb.ref('excluded.failure_reason'),
-                    required_funds: eb.ref('excluded.required_funds'),
-                    available_funds: eb.ref('excluded.available_funds'),
-                    order_reference_id: eb.ref('excluded.order_reference_id'),
-                    attempted_at: eb.ref('excluded.attempted_at')
-                }))
-            )
+            .onConflict((oc) => oc.constraint('uq_order_attempt_failures').doNothing())
             .execute();
-                
             throw new BadRequestError(`Insufficient funds to place this order. Required: ${requiredFunds}, Available: ${userFunds.available_funds}`);
 
         });
@@ -380,13 +362,7 @@ const result = await db.transaction().execute(async (trx) => {
         disclosed_quantity: disclosedQuantity || null
     })
     .onConflict((oc) => 
-        oc.constraint('uq_normal_orders_order_id').doUpdateSet((eb) => ({
-            order_type: eb.ref('excluded.order_type'),
-            trigger_price: eb.ref('excluded.trigger_price'),
-            validity: eb.ref('excluded.validity'),
-            validity_minutes: eb.ref('excluded.validity_minutes'),
-            disclosed_quantity: eb.ref('excluded.disclosed_quantity')
-        }))
+        oc.constraint('uq_iceberg_orders_order_id').doNothing()
     )
     .returningAll()
     .executeTakeFirstOrThrow();
@@ -480,11 +456,8 @@ const createIcebergOrder = async (req:Request, res: Response): Promise<void> =>{
     .selectFrom('user_funds')
     .where('user_id', '=', userId)
     .select(['user_id', 'available_funds'])
-    .executeTakeFirst();
+    .executeTakeFirstOrThrow();
 
-    if(!userFunds){
-        throw new NotFoundError("User Funds not found");
-    }
     // get estimate value
     const estimatePrice:number = price || getEstimatedMarketPrice(symbol);
     const estimatedValue:number = estimatePrice * quantity;
@@ -535,13 +508,7 @@ const createIcebergOrder = async (req:Request, res: Response): Promise<void> =>{
             attempted_at: new Date()
             } as OrderAttemptFailure)
             .onConflict((oc) => 
-                oc.constraint('uq_order_attempt_failures').doUpdateSet((eb) => ({
-                    failure_reason: eb.ref('excluded.failure_reason'),
-                    required_funds: eb.ref('excluded.required_funds'),
-                    available_funds: eb.ref('excluded.available_funds'),
-                    order_reference_id: eb.ref('excluded.order_reference_id'),
-                    attempted_at: eb.ref('excluded.attempted_at')
-                }))
+                oc.constraint('uq_iceberg_orders_order_id').doNothing()
             )
             .execute();
                 
@@ -568,7 +535,7 @@ const createIcebergOrder = async (req:Request, res: Response): Promise<void> =>{
                 total_charges: tradingCharges
             })
             .returningAll()
-            .executeTakeFirst();
+            .executeTakeFirstOrThrow();
 
         // Create the iceberg order details
         const icebergOrder = await trx
@@ -584,15 +551,7 @@ const createIcebergOrder = async (req:Request, res: Response): Promise<void> =>{
                 disclosed_quantity: disclosedQuantity
             })
             .onConflict((oc) => 
-                oc.constraint('uq_iceberg_orders_order_id').doUpdateSet((eb) => ({
-                    num_of_legs: eb.ref('excluded.num_of_legs'),
-                    order_type: eb.ref('excluded.order_type'),
-                    product_type: eb.ref('excluded.product_type'),
-                    trigger_price: eb.ref('excluded.trigger_price'),
-                    validity: eb.ref('excluded.validity'),
-                    validity_minutes: eb.ref('excluded.validity_minutes'),
-                    disclosed_quantity: eb.ref('excluded.disclosed_quantity')
-                }))
+                oc.constraint('uq_iceberg_orders_order_id').doNothing()
             )
             .returningAll()
             .executeTakeFirstOrThrow();
@@ -632,19 +591,18 @@ const createIcebergOrder = async (req:Request, res: Response): Promise<void> =>{
     .execute();
 
 return {
-    order,
-    icebergOrder,
-    legs,
+    orderId: order.id,
     orderReferenceId: generatedOrderId,
+    status: order.status,
+    numOfLegs: legs.length,
     fundDetails: {
-            requiredFunds,
-            tradingValue: estimatedValue,
-            tradingCharges,
-            remainingFunds: userFunds.available_funds - requiredFunds,
-            productType
-        }
-};
-});
+        requiredFunds,
+        tradingValue: estimatedValue,
+        tradingCharges,
+        remainingFunds: userFunds.available_funds - requiredFunds
+}
+}
+)
 
 logger.info(`Iceberg order successfully created for user ${userId}, Order ID: ${result.orderReferenceId}`);
 
@@ -765,15 +723,7 @@ const createCoverOrder = async(req: Request , res: Response): Promise<void> =>{
                     available_funds: userFunds?.available_funds || 0,
                     attempted_at: new Date()
                 } as OrderAttemptFailure)
-                .onConflict((oc) => 
-                    oc.constraint('uq_order_attempt_failures').doUpdateSet((eb) => ({
-                        failure_reason: eb.ref('excluded.failure_reason'),
-                        required_funds: eb.ref('excluded.required_funds'),
-                        available_funds: eb.ref('excluded.available_funds'),
-                        order_reference_id: eb.ref('excluded.order_reference_id'),
-                        attempted_at: eb.ref('excluded.attempted_at')
-                    }))
-                )
+                .onConflict((oc) => oc.constraint('uq_order_attempt_failures').doNothing())
                 .execute();
             
                 throw new BadRequestError(`Insufficient funds to place this order. Order ID: ${generatedOrderId}, Required: ${requiredFunds}, Available: ${userFunds?.available_funds}`);
@@ -890,10 +840,10 @@ function getEstimatedMarketPrice(symbol: string): number {
 }
 
 // #################################################################################
+// get All Orders
 
-// Get all orders of users
 const getAllOrders = async (req: Request, res: Response): Promise<void> => {
-    const userId: number = parseInt(req.params.user_id , 10);
+    const userId: number = parseInt(req.params.user_id, 10);
 
     if (isNaN(userId)) {
         throw new BadRequestError("Invalid User ID");
@@ -909,45 +859,24 @@ const getAllOrders = async (req: Request, res: Response): Promise<void> => {
     const currentPage: number = page;
     const offset: number = (currentPage - 1) * pageSize;
 
-    // Build query
-    let query = db
+    // Create a function that returns a base query with all conditions
+    const createBaseQuery = () => db
         .selectFrom('orders')
-        .where('user_id', '=', userId);
+        .where('user_id', '=', userId)
+        .$if(status !== undefined, (qb) => qb.where('status', '=', status as any))
+        .$if(category !== undefined, (qb) => qb.where('order_category', '=', category as OrderCategory));
 
-    // Add filters
-    if (status) {
-        query = query.where('status', '=', status as any);
-    }
-
-    if (category) {
-        query = query.where('order_category', '=', category);
-    }
-
-    // Adding pagination
-    let countQuery = db
-        .selectFrom('orders')
-        .where('user_id', '=', userId);
-
-    // Apply the same filters as the main query
-    if (status) {
-        countQuery = countQuery.where('status', '=', status as any);
-    }
-
-    if (category) {
-        countQuery = countQuery.where('order_category', '=', category);
-    }
-
-    // Select count
-    const totalResult = await countQuery
+    // Create separate queries for count and data
+    const countResult = await createBaseQuery()
         .select(db.fn.count('id').as('total'))
         .executeTakeFirst();
 
-    const total: number = totalResult && 'total' in totalResult
-        ? Number(totalResult.total)
+    const total: number = countResult && 'total' in countResult
+        ? Number(countResult.total)
         : 0;
 
     // Get orders with pagination
-    const orders = await query
+    const orders = await createBaseQuery()
         .orderBy('placed_at', 'desc')
         .limit(pageSize)
         .offset(offset)
@@ -1150,19 +1079,15 @@ const getOrderHistory = async(req:Request, res: Response):Promise<void> =>{
       const order = await db
         .selectFrom('orders')
         .where('id', '=', orderId)
-        .selectAll()
-        .executeTakeFirst();
-    
-      if (!order) {
-        throw new NotFoundError('Order not found');
-      }
+        .select(['id', 'status', 'symbol', 'quantity', 'price', 'order_side', 'order_category'])
+        .executeTakeFirstOrThrow();
     
       // Get order history
       const history = await db
         .selectFrom('order_history')
         .where('order_id', '=', orderId)
         .orderBy('changed_at', 'asc')
-        .selectAll()
+        .select(['previous_status', 'new_status', 'changed_at', 'remarks', 'changed_by'])
         .execute();
     
       res.status(OK).json({

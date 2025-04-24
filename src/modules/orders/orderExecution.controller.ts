@@ -440,6 +440,22 @@ const executeNextIcebergLeg = async(req:Request , res: Response): Promise<void> 
       .returningAll()
       .executeTakeFirst();
 
+      // Using Subquery 
+      await trx
+      .updateTable('iceberg_legs')
+      .set({
+        status: OrderStatus.QUEUED
+      })
+      .where('id', '=', 
+        trx.selectFrom('iceberg_legs')
+          .where('iceberg_order_id', '=', icebergOrderId)
+          .where('leg_number', '>', nextLeg.leg_number)
+          .orderBy('leg_number', 'asc')
+          .select('id')
+          .limit(1)
+      )
+      .execute(); 
+
     // Get the next leg after this one
     const followingLeg = await trx
       .selectFrom('iceberg_legs')
@@ -801,7 +817,11 @@ await trx
     .where('id', '=', orderId)
     .execute();
 
-return updatedOrder;
+    return {
+        id: orderId,
+        status: OrderStatus.REJECTED,
+        rejectionReason: rejectionReason
+    };
 });
 res.status(OK).json({
     data: result,
@@ -841,17 +861,6 @@ const executeStopLoss = async(req: Request, res: Response): Promise<void> => {
             throw new BadRequestError('Stop loss already executed');
         }
 
-        // Get the order details
-        const order = await trx
-            .selectFrom('orders')
-            .where('id', '=', coverOrderId)
-            .selectAll()
-            .executeTakeFirst();
-
-        if (!order) {
-            throw new NotFoundError('Order not found');
-        }
-
         // Update cover order details
         const updatedCoverOrderDetails = await trx
             .updateTable('cover_order_details')
@@ -861,8 +870,21 @@ const executeStopLoss = async(req: Request, res: Response): Promise<void> => {
                 stop_loss_order_id: exchangeOrderId || null
             })
             .where('cover_order_id', '=', coverOrderId)
+            .where(
+                eb => eb.exists(
+                    eb.selectFrom('orders')
+                      .where('id', '=', coverOrderId)
+                      .select('id')
+                )
+            )
             .returningAll()
-            .executeTakeFirst();
+            .executeTakeFirstOrThrow();
+        // Get the order details for later calculations
+        const order = await trx
+            .selectFrom('orders')
+            .where('id', '=', coverOrderId)
+            .selectAll()
+            .executeTakeFirstOrThrow();
 
         // Create order history record
         await trx

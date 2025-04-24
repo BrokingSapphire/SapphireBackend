@@ -21,8 +21,7 @@ export const InstantOrderSchema = Joi.object({
   quantity: Joi.number().integer().positive().required(),
   price: Joi.number().positive().when('orderType', {
     is: OrderType.LIMIT_ORDER,
-    then: Joi.required(),
-    otherwise: Joi.optional()
+    then: Joi.required()
   }),
   productType: Joi.string()
     .valid(...Object.values(ProductType))
@@ -43,24 +42,21 @@ export const NormalOrderSchema = Joi.object({
   quantity: Joi.number().integer().positive().required(),
   price: Joi.number().positive().when('orderType', {
     is: OrderType.LIMIT_ORDER,
-    then: Joi.required(),
-    otherwise: Joi.optional()
+    then: Joi.required()
   }),
   orderType: Joi.string()
     .valid(...Object.values(OrderType))
     .required(),
   triggerPrice: Joi.number().positive().when('orderType', {
     is: [OrderType.SL, OrderType.SL_M],
-    then: Joi.required(),
-    otherwise: Joi.optional()
+    then: Joi.required()
   }),
   validity: Joi.string()
     .valid(...Object.values(OrderValidity))
     .required(),
   validityMinutes: Joi.number().integer().positive().when('validity', {
     is: OrderValidity.MINUTES,
-    then: Joi.required(),
-    otherwise: Joi.optional()
+    then: Joi.required()
   }),
   disclosedQuantity: Joi.number().integer().positive().max(Joi.ref('quantity')).optional()
 });
@@ -76,24 +72,21 @@ export const IcebergOrderSchema = Joi.object({
   quantity: Joi.number().integer().positive().required(),
   price: Joi.number().positive().when('orderType', {
     is: OrderType.LIMIT_ORDER,
-    then: Joi.required(),
-    otherwise: Joi.optional()
+    then: Joi.required()
   }),
   orderType: Joi.string()
     .valid(...Object.values(OrderType))
     .required(),
   triggerPrice: Joi.number().positive().when('orderType', {
     is: [OrderType.SL, OrderType.SL_M],
-    then: Joi.required(),
-    otherwise: Joi.optional()
+    then: Joi.required()
   }),
   validity: Joi.string()
     .valid(...Object.values(OrderValidity))
     .required(),
   validityMinutes: Joi.number().integer().positive().when('validity', {
     is: OrderValidity.MINUTES,
-    then: Joi.required(),
-    otherwise: Joi.optional()
+    then: Joi.required()
   }),
   disclosedQuantity: Joi.number().integer().positive().max(Joi.ref('quantity')).required(),
   numOfLegs: Joi.number().integer().positive().required(),
@@ -113,8 +106,7 @@ export const CoverOrderSchema = Joi.object({
   quantity: Joi.number().integer().positive().required(),
   price: Joi.number().positive().when('orderType', {
     is: OrderType.LIMIT_ORDER,
-    then: Joi.required(),
-    otherwise: Joi.optional()
+    then: Joi.required()
   }),
   orderType: Joi.string()
     .valid(OrderType.MARKET_ORDER, OrderType.LIMIT_ORDER)

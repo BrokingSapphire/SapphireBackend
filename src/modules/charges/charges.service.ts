@@ -265,7 +265,7 @@ export const calculateCharges = async (
                 {
                     type: ChargeType.STT,
                     description: "Securities Transaction Tax",
-                    value: charges.stt,
+                    value: 'stt' in charges ? charges.stt : 0,
                     percentage: 0.1,
                     baseAmount: quantity * price
                 },
@@ -320,7 +320,7 @@ export const calculateCharges = async (
                 {
                     type: ChargeType.STT,
                     description: "Securities Transaction Tax",
-                    value: charges.stt,
+                    value: 'stt' in charges ? charges.stt : 0,
                     percentage: direction === ChargesDirection.SELL || direction === ChargesDirection.BUY_SELL ? 0.025 : 0,
                     baseAmount: quantity * price
                 },
@@ -600,3 +600,118 @@ export const applyOrderCharges = async ( orderId: number,
 
         return chargesResult;
     }
+
+// Helper function to create applied charges array
+const createAppliedCharges = (
+    charges: EquityDeliveryCharges | CurrencyCharges,
+    quantity: number,
+    price: number,
+    direction: ChargesDirection,
+    exchange: ExchangeType,
+    segment: ChargesSegmentType
+) => {
+    const baseAmount = quantity * price;
+    
+    // Common charges for all segments
+    const commonCharges = [
+        {
+            type: ChargeType.BROKERAGE,
+            description: "Brokerage",
+            value: charges.brokerage,
+            percentage: segment === ChargesSegmentType.EQUITY_DELIVERY ? 0.5 :
+                         segment === ChargesSegmentType.EQUITY_INTRADAY || segment === ChargesSegmentType.EQUITY_FUTURES ? 0.05 :
+                         segment === ChargesSegmentType.CURRENCY_FUTURES ? 0.02 : 0,
+            baseAmount
+        },
+        {
+            type: ChargeType.EXCHANGE,
+            description: `${exchange.toUpperCase()} Transaction Charges`,
+            value: charges.exchangeCharges,
+            percentage: segment === ChargesSegmentType.CURRENCY_FUTURES ? 
+                        (direction === ChargesDirection.BUY_SELL ? 
+                            (exchange === ExchangeType.NSE ? 0.00035 : 0.00045) : 0) :
+                        (exchange === ExchangeType.NSE ? 0.00297 : 0.00375),
+            baseAmount
+        },
+        {
+            type: ChargeType.SEBI,
+            description: "SEBI Charges",
+            value: charges.sebiCharges,
+            percentage: 0.000001,
+            baseAmount
+        },
+        {
+            type: ChargeType.STAMP_DUTY,
+            description: "Stamp Duty",
+            value: charges.stampDuty,
+            percentage: getStampDutyPercentage(direction, segment),
+            baseAmount
+        },
+        {
+            type: ChargeType.IPFT,
+            description: "Investor Protection Fund",
+            value: charges.ipft,
+            percentage: segment === ChargesSegmentType.CURRENCY_FUTURES ? 0.00005 : 
+                         (exchange === ExchangeType.NSE ? 0.0001 : 0),
+            baseAmount
+        },
+        {
+            type: ChargeType.GST,
+            description: "GST",
+            value: charges.gst,
+            percentage: 18,
+            baseAmount: charges.brokerage + charges.exchangeCharges + charges.sebiCharges + charges.ipft
+        }
+    ];
+    
+    // Add segment-specific charges
+    if (segment === ChargesSegmentType.EQUITY_DELIVERY || segment === ChargesSegmentType.EQUITY_INTRADAY) {
+        return [
+            ...commonCharges.filter(c => c.type !== ChargeType.CTT),
+            {
+                type: ChargeType.STT,
+                description: "Securities Transaction Tax",
+                value: charges.stt,
+                percentage: getSttPercentage(direction, segment),
+                baseAmount
+            }
+        ];
+    } else if (segment === ChargesSegmentType.EQUITY_FUTURES) {
+        return [
+            ...commonCharges.filter(c => c.type !== ChargeType.STT),
+            {
+                type: ChargeType.CTT,
+                description: "Commodity Transaction Tax",
+                value: 'stt' in charges ? charges.stt : 0, // Type guard for CTT
+                percentage: direction === ChargesDirection.SELL ? 0.01 : 0,
+                baseAmount
+            }
+        ];
+    } else if (segment === ChargesSegmentType.CURRENCY_FUTURES) {
+        return commonCharges.filter(c => c.type !== ChargeType.STT && c.type !== ChargeType.CTT);
+    }
+    
+    return commonCharges;
+};
+
+// Helper function to determine STT percentage based on segment and direction
+const getSttPercentage = (direction: ChargesDirection, segment: ChargesSegmentType): number => {
+    if (segment === ChargesSegmentType.EQUITY_DELIVERY) {
+        return 0.1;
+    } else if (segment === ChargesSegmentType.EQUITY_INTRADAY) {
+        return (direction === ChargesDirection.SELL || direction === ChargesDirection.BUY_SELL) ? 0.025 : 0;
+    }
+    return 0;
+};
+
+// Helper function to determine stamp duty percentage based on segment and direction
+const getStampDutyPercentage = (direction: ChargesDirection, segment: ChargesSegmentType): number => {
+    if (segment === ChargesSegmentType.EQUITY_DELIVERY) {
+        return direction === ChargesDirection.BUY ? 0.015 : 0;
+    } else if (segment === ChargesSegmentType.EQUITY_INTRADAY || segment === ChargesSegmentType.EQUITY_FUTURES) {
+        return direction === ChargesDirection.BUY ? 0.003 : 0;
+    } else if (segment === ChargesSegmentType.CURRENCY_FUTURES) {
+        return (direction === ChargesDirection.BUY || direction === ChargesDirection.SELL) ? 0.001 : 0;
+    }
+    return 0;
+};
