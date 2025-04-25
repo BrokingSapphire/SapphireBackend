@@ -1,4 +1,3 @@
-// src/validators/compliance.types.ts
 import { ComplianceVerificationStatus } from '@app/database/db';
 
 /**

@@ -1,4 +1,3 @@
-// src/validators/compliance.validator.ts
 import Joi from 'joi';
 import { Request, Response, NextFunction } from 'express';
 import { VerificationType, VerificationStatus } from './compliance.types';
