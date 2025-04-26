@@ -26,8 +26,3 @@ export enum OrderValidity {
   IMMEDIATE = 'immediate',
   MINUTES = 'minutes'
 }
-
-export enum OrderSide {
-  BUY = 'buy',
-  SELL = 'sell'
-}

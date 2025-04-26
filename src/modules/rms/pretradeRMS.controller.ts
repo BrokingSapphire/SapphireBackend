@@ -2,8 +2,8 @@
 
 import { Request, Response } from 'express';
 import { db } from '@app/database';
-import { UserInvestmentSegment, AccountStatusValidationResult , SuspensionDetails, KycDetails, SegmentValidationResult, RiskProfileResponse, OrderTypeValidationResult, ProductOrderTypeCombination ,QuantityValidationResult, ValidityValidationResult, LotSizeConfig, LotSizeConfiguration} from '@app/database/db';
-import { AccountStatus, OrderValidity , OrderSide} from './rms.types';
+import {OrderSide, UserInvestmentSegment, AccountStatusValidationResult , SuspensionDetails, KycDetails, SegmentValidationResult, RiskProfileResponse, OrderTypeValidationResult, ProductOrderTypeCombination ,QuantityValidationResult, ValidityValidationResult, LotSizeConfig, LotSizeConfiguration , MarginValidationResult, CheckMarginRequest} from '@app/database/db';
+import { AccountStatus, OrderValidity } from './rms.types';
 import { calculateRiskScore } from '@app/services/rms.service';
 import { BadRequestError , NotFoundError} from '@app/apiError';
 import logger from '@app/logger';
@@ -1600,6 +1600,314 @@ const validatePriceTriggerRelationship = async (
   };
 };
 
+
+// Controller function for checking available margin
+const checkAvailableMargin = async (req: Request, res: Response): Promise<void> => {
+  // Get user ID from query params or auth middleware
+  const userId = parseInt(req.query.userId as string, 10) || 1;
+  const clientId = userId.toString();
+  
+  const { 
+    symbol, 
+    quantity, 
+    price, 
+    product_type, 
+    order_side, 
+    trade_type 
+  } = req.body as CheckMarginRequest;
+  
+  // Validate required fields
+  if (!symbol || !quantity || !price || !product_type || !order_side) {
+    throw new BadRequestError('Missing required order parameters');
+  }
+
+  // Check if account is active
+  const clientAccount = await db
+    .selectFrom('client_accounts')
+    .where('client_id', '=', clientId)
+    .select(['account_status'])
+    .executeTakeFirst();
+
+  if (!clientAccount) {
+    throw new NotFoundError(`Client Account with ID ${clientId} not found`);
+  }
+
+  if (clientAccount.account_status !== AccountStatus.ACTIVE) {
+    res.status(BAD_REQUEST).json({ 
+      isValid: false, 
+      message: 'Account is not active',
+    });
+    return;
+  }
+  
+  // Determine segment based on trade type
+  const segment = determineSegmentFromTradeType(trade_type, symbol);
+  
+  // Calculate margin requirement
+  const result = await validateAvailableMargin(
+    parseInt(clientId, 10),
+    symbol,
+    quantity,
+    price,
+    product_type,
+    segment
+  );
+  
+  // Log the margin check
+  await marginValidationCheck(clientId, {
+    symbol,
+    quantity,
+    price,
+    product_type,
+    order_side,
+    segment
+  }, result);
+  
+  // Return response
+  if (result.isValid) {
+    res.status(OK).json({ 
+      isValid: true, 
+      message: result.reason 
+    });
+  } else {
+    res.status(BAD_REQUEST).json({ 
+      isValid: false, 
+      message: result.reason,
+      details: result.additionalInfo || {}
+    });
+  }
+};
+
+// Calculate required margin and validate against available margin
+const validateAvailableMargin = async (
+  userId: number,
+  symbol: string,
+  quantity: number,
+  price: number,
+  productType: string,
+  segment: UserInvestmentSegment
+): Promise<MarginValidationResult> => {
+  // Fetch user's available funds
+  const userFunds = await db
+    .selectFrom('user_funds')
+    .where('user_id', '=', userId)
+    .select([
+      'total_funds',
+      'available_funds',
+      'blocked_funds',
+      'used_funds'
+    ])
+    .executeTakeFirstOrThrow();
+  
+  const availableMargin = userFunds.available_funds;
+  const marginInfo = await calculateRequiredMargin(
+    symbol,
+    quantity,
+    price,
+    productType,
+    segment
+  );
+  
+  const requiredMargin = marginInfo.requiredMargin;
+  const marginType = marginInfo.marginType;
+  
+  // Check if available margin is sufficient
+  if (availableMargin < requiredMargin) {
+    return {
+      isValid: false,
+      reason: 'Insufficient margin available for this order',
+      additionalInfo: {
+        requiredMargin,
+        availableMargin,
+        shortfall: requiredMargin - availableMargin,
+        marginType
+      }
+    };
+  }
+  
+  return {
+    isValid: true,
+    reason: 'Sufficient margin available for this order',
+    additionalInfo: {
+      requiredMargin,
+      availableMargin,
+      marginType
+    }
+  };
+};
+
+// Helper function to calculate required margin
+const calculateRequiredMargin = async (
+  symbol: string,
+  quantity: number,
+  price: number,
+  productType: string,
+  segment: UserInvestmentSegment
+): Promise<{ requiredMargin: number; marginType: string }> => {
+  const orderValue = quantity * price;
+
+  if (segment === 'F&O' || segment === 'Commodity' || segment === 'Currency') {
+    // Derivative-Margin-Calculation
+    const marginPercentage = await fetchDerivativeMarginPercentage(productType, symbol, segment);
+    return {
+      requiredMargin: orderValue * marginPercentage,
+      marginType: 'Derivative Margin'
+    };
+  } else {
+    // For equity segments
+    const marginPercentage = await fetchMarginPercentage(productType, symbol);
+    return {
+      requiredMargin: orderValue * marginPercentage,
+      marginType: productType === 'delivery' ? 'Delivery Margin' : 'Intraday Margin'
+    };
+  }
+};
+
+// Simplified derivative margin percentage
+const fetchDerivativeMarginPercentage = async (
+  productType: string,
+  symbol: string,
+  segment: UserInvestmentSegment
+): Promise<number> => {
+  // First check for product type specific margin requirements
+  const productSpecificMargin = await db
+    .selectFrom('derivative_margin_requirements')
+    .where('symbol', '=', symbol)
+    .where('segment', '=', segment)
+    .where('product_type', '=', productType)
+    .select(['margin_percentage'])
+    .executeTakeFirst();
+  
+  if (productSpecificMargin?.margin_percentage) {
+    return productSpecificMargin.margin_percentage / 100;
+  }
+  
+  // If no product-specific margin, check for general symbol margin
+  const symbolMargin = await db
+    .selectFrom('derivative_margin_requirements')
+    .where('symbol', '=', symbol)
+    .where('segment', '=', segment)
+    .select(['margin_percentage'])
+    .executeTakeFirst();
+  
+  if (symbolMargin?.margin_percentage) {
+    return symbolMargin.margin_percentage / 100;
+  }
+  
+  const productTypeDefaults: Record<string, number> = {
+    'futures': 0.15,      // 15% for futures
+    'options': 0.20,      // 20% for options (typically higher than futures)
+    'intraday': 0.10      // 10% for intraday derivative trades
+  };
+  
+  if (productType in productTypeDefaults) {
+    return productTypeDefaults[productType];
+  }
+  
+  // Default margin percentages by segment if no product type match
+  const defaultMargins: Record<UserInvestmentSegment, number> = {
+    'F&O': 0.15,       // 15% for F&O
+    'Currency': 0.05,   // 5% for Currency
+    'Commodity': 0.10,  // 10% for Commodity
+    'Cash': 0.20,       // 20% for Cash (should not reach here normally)
+    'Debt': 0.05        // 5% for Debt
+  };
+  
+  return defaultMargins[segment] || 0.20;
+};
+
+// Fetch margin percentage for equity products
+const fetchMarginPercentage = async (
+  productType: string,
+  symbol: string
+): Promise<number> => {
+  // Standard margin percentages based on product type
+  if (productType === 'delivery') {
+    const marginData = await db
+      .selectFrom('equity_margin_requirements')
+      .where('symbol', '=', symbol)
+      .select(['delivery_margin'])
+      .executeTakeFirst();
+    
+    if (marginData?.delivery_margin) {
+      return marginData.delivery_margin / 100;
+    }
+    // Default delivery margin (100%)
+    return 1.0;
+  }
+  
+  if (productType === 'intraday') {
+    const marginData = await db
+      .selectFrom('equity_margin_requirements')
+      .where('symbol', '=', symbol)
+      .select(['intraday_margin'])
+      .executeTakeFirst();
+    
+    if (marginData?.intraday_margin) {
+      return marginData.intraday_margin / 100;
+    }
+    // Default intraday margin (20%)
+    return 0.2;
+  }
+  
+  if (productType === 'mtf') {
+    const marginData = await db
+      .selectFrom('mtf_approved_stocks')
+      .where('symbol', '=', symbol)
+      .select(['margin_percentage'])
+      .executeTakeFirst();
+    
+    if (marginData?.margin_percentage) {
+      return marginData.margin_percentage / 100;
+    }
+    // Default MTF margin (40%)
+    return 0.4;
+  }
+  
+  // Default for unrecognized product types (100%)
+  return 1.0;
+};
+
+// Log the margin validation check
+const marginValidationCheck = async (
+  clientId: string,
+  checkData: {
+    symbol: string;
+    quantity: number;
+    price: number;
+    product_type: string;
+    order_side: OrderSide;
+    segment: UserInvestmentSegment;
+  },
+  result: MarginValidationResult
+): Promise<void> => {
+  await db
+    .insertInto('segment_checks')
+    .values({
+      client_id: clientId,
+      check_type: 'MARGIN_VALIDATION',
+      passed: result.isValid,
+      reason: result.reason,
+      additional_data: JSON.stringify({
+        symbol: checkData.symbol,
+        quantity: checkData.quantity,
+        price: checkData.price,
+        productType: checkData.product_type,
+        orderSide: checkData.order_side,
+        segment: checkData.segment,
+        requiredMargin: result.additionalInfo?.requiredMargin,
+        availableMargin: result.additionalInfo?.availableMargin,
+        shortfall: result.additionalInfo?.shortfall
+      }),
+      timestamp: new Date()
+    })
+    .executeTakeFirstOrThrow();
+  
+  logger.info(
+    `Margin validation check for client ${clientId}, symbol ${checkData.symbol}, amount ${result.additionalInfo?.requiredMargin}: ${result.isValid ? 'PASSED' : 'FAILED'}`
+  );
+};
+
 export {
     checkClientAccountStatus,
     updateClientAccountStatus,
@@ -1609,5 +1917,6 @@ export {
     validateOrderValidity,
     validateQuantityMultiple,
     validateProductOrderCompatibility,
-    validatePriceTriggerRelationship 
+    validatePriceTriggerRelationship,
+    checkAvailableMargin
 };
