@@ -8,7 +8,7 @@ class RazorPayService {
         key_secret: env.razorpay.keySecret,
     });
 
-    createSignupOrder(email: string, referenceId?: string) {
+    async createSignupOrder(email: string, referenceId?: string) {
         return this.instance.orders.create({
             amount: 9900,
             currency: 'INR',

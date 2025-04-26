@@ -1,0 +1,73 @@
+name: Deploy to EC2 Dev
+on:
+  push:
+    branches: [ dev ]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: dev
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20.x'
+      - name: Run install
+        uses: borales/actions-yarn@v4
+        with:
+          cmd: install
+      - name: Setup env
+        run: echo "DATABASE_URL=${{ secrets.DEV_DATABASE_URL }}" > .env
+      - name: Run codegen
+        uses: borales/actions-yarn@v4
+        with:
+          cmd: codegen
+      - name: Run build
+        uses: borales/actions-yarn@v4
+        with:
+          cmd: build
+      - name: Remove temp files
+        run: |
+          rm -rf node_modules
+          rm -rf dist
+          rm -rf .yarn
+          rm -rf coverage
+      - name: Deploy to Server
+        uses: easingthemes/ssh-deploy@main
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.EC2_DEV_PRIVATE_KEY }}
+          ARGS: "-rlgoDzvc -i --delete"
+          SOURCE: "./"
+          REMOTE_HOST: ${{ secrets.EC2_DEV_HOST }}
+          REMOTE_USER: ${{ secrets.EC2_DEV_USER }}
+          TARGET: ${{ secrets.REMOTE_TARGET }}
+          EXCLUDE: "/dist/, /node_modules/"
+          SCRIPT_BEFORE: |
+            whoami
+            mkdir -p ${{ secrets.REMOTE_TARGET }}
+          SCRIPT_BEFORE_REQUIRED: true
+          SCRIPT_AFTER: |
+            cd "${{ secrets.REMOTE_TARGET }}"
+            screen -S sapphire -X quit || true
+
+            if ! command -v nvm &> /dev/null; then
+              echo "Installing Node.js..."
+              curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
+              export NVM_DIR="$HOME/.nvm"
+              [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+            fi
+            nvm install 20
+            nvm use 20
+
+            if ! command -v yarn &> /dev/null; then
+              echo "Installing Yarn..."
+              npm install -g yarn
+            fi
+
+            echo """${{ secrets.DEV_BACKEND_ENV }}""" > .env
+            yarn install
+
+            echo "Starting server..."
+            screen -S sapphire -d -m $(which yarn) dev
+          SCRIPT_AFTER_REQUIRED: true

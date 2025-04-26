@@ -1,9 +1,11 @@
-interface JwtType {
+import { JwtPayloadWithoutWildcard } from '@app/types';
+
+export type JwtType = JwtPayloadWithoutWildcard & {
     email: string;
     phone: string;
-}
+};
 
-enum CheckpointStep {
+export enum CheckpointStep {
     PAN = 'pan',
     AADHAAR_URI = 'aadhaar_uri',
     AADHAAR = 'aadhaar',
@@ -18,7 +20,7 @@ enum CheckpointStep {
     ADD_NOMINEES = 'add_nominees',
 }
 
-enum InvestmentSegment {
+export enum InvestmentSegment {
     CASH = 'Cash',
     COMMODITY = 'Commodity',
     CURRENCY = 'Currency',
@@ -26,13 +28,13 @@ enum InvestmentSegment {
     F_AND_O = 'F&O',
 }
 
-enum MaritalStatus {
+export enum MaritalStatus {
     SINGLE = 'Single',
     MARRIED = 'Married',
     DIVORCED = 'Divorced',
 }
 
-enum AnnualIncome {
+export enum AnnualIncome {
     LE_1_LAKH = 'le_1_Lakh',
     LAKH_1_5 = '1_5_Lakh',
     LAKH_5_10 = '5_10_Lakh',
@@ -41,30 +43,19 @@ enum AnnualIncome {
     GE_1_CR = 'Ge_1_Cr',
 }
 
-enum TradingExperience {
+export enum TradingExperience {
     ONE_YEAR = '1',
     ONE_TO_FIVE = '1-5',
     FIVE_TO_TEN = '5-10',
     TEN_PLUS = '10',
 }
 
-enum AccountSettlement {
+export enum AccountSettlement {
     MONTHLY = 'Monthly',
     QUARTERLY = 'Quarterly',
 }
 
-enum ValidationType {
+export enum ValidationType {
     BANK = 'bank',
     UPI = 'upi',
 }
-
-export {
-    JwtType,
-    CheckpointStep,
-    InvestmentSegment,
-    MaritalStatus,
-    AnnualIncome,
-    TradingExperience,
-    AccountSettlement,
-    ValidationType,
-};
