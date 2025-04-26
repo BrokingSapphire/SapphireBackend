@@ -1,25 +1,21 @@
 // orderManagement.controller.ts
 
 import { Request, Response } from 'express';
-import {db} from '@app/database';
+import { db } from '@app/database';
 import { BadRequestError, NotFoundError } from '@app/apiError';
-import { 
-    OrderSide, 
-    ProductType, 
-    OrderType, 
-    OrderStatus,
-    OrderValidity,
-    OrderCategory,
-} from './order.types';
-import {InstantOrderRequest , OrderAttemptFailure, NormalOrderRequest, IcebergOrderRequest, CoverOrderRequest} from "@app/database/db"
-import { calculateCharges } from '../charges/charges.service';
+import { OrderSide, ProductType, OrderType, OrderStatus, OrderValidity, OrderCategory } from './order.types';
 import {
-    ChargesDirection,
-    ExchangeType
-} from '../charges/charges.types';
-import generateOrderId  from './orderIdGenerator';
+    InstantOrderRequest,
+    OrderAttemptFailure,
+    NormalOrderRequest,
+    IcebergOrderRequest,
+    CoverOrderRequest,
+} from '@app/database/db';
+import { calculateCharges } from '../charges/charges.service';
+import { ChargesDirection, ExchangeType } from '../charges/charges.types';
+import generateOrderId from './orderIdGenerator';
 import logger from '@app/logger';
-import {OK, CREATED} from '@app/utils/httpstatus';
+import { OK, CREATED } from '@app/utils/httpstatus';
 
 const calculateOrderCharges = async (
     orderId: number,
@@ -27,7 +23,7 @@ const calculateOrderCharges = async (
     price: number,
     orderSide: OrderSide,
     productType: ProductType,
-    exchange: ExchangeType = ExchangeType.NSE  // NSE --> Default for now 
+    exchange: ExchangeType = ExchangeType.NSE, // NSE --> Default for now
 ): Promise<number> => {
     let direction: ChargesDirection;
     switch (orderSide) {
@@ -38,39 +34,34 @@ const calculateOrderCharges = async (
             direction = ChargesDirection.SELL;
             break;
         default:
-            direction = ChargesDirection.BUY; 
+            direction = ChargesDirection.BUY;
     }
 
     // Calculate charges
-    const chargesResult = await calculateCharges(
-        orderId,
-        quantity,
-        price,
-        direction,
-        exchange,
-        productType
-    );
+    const chargesResult = await calculateCharges(orderId, quantity, price, direction, exchange, productType);
 
     return chargesResult.total_charges;
-}
+};
 
 // Creating Instant Order
 
 const createInstantOrder = async (req: Request, res: Response): Promise<void> => {
     const userId: number = parseInt(req.params.user_id, 10);
 
-    if(isNaN(userId)) {
+    if (isNaN(userId)) {
         throw new BadRequestError('Invalid user ID');
     }
-    const {  symbol,
-    orderSide,
-    quantity,
-    price,
-    productType,
-    orderType ,
-    exchange = ExchangeType.NSE} : InstantOrderRequest & { exchange?: ExchangeType } = req.body;
+    const {
+        symbol,
+        orderSide,
+        quantity,
+        price,
+        productType,
+        orderType,
+        exchange = ExchangeType.NSE,
+    }: InstantOrderRequest & { exchange?: ExchangeType } = req.body;
 
-    if(!symbol || !orderSide || !quantity || !productType || !orderType) {
+    if (!symbol || !orderSide || !quantity || !productType || !orderType) {
         throw new BadRequestError('Missing required fields');
     }
 
@@ -94,11 +85,11 @@ const createInstantOrder = async (req: Request, res: Response): Promise<void> =>
     if (!userFunds) {
         throw new NotFoundError('User funds not found');
     }
-    
+
     // get estimate value
 
-    const estimatePrice:number = price || getEstimatedMarketPrice(symbol);
-    const estimatedValue:number = estimatePrice * quantity;
+    const estimatePrice: number = price || getEstimatedMarketPrice(symbol);
+    const estimatedValue: number = estimatePrice * quantity;
 
     const generatedOrderId = await generateOrderId(db);
 
@@ -109,130 +100,127 @@ const createInstantOrder = async (req: Request, res: Response): Promise<void> =>
         estimatePrice,
         orderSide as OrderSide,
         productType as ProductType,
-        exchange as ExchangeType
+        exchange as ExchangeType,
     );
 
     // For margin products, apply appropriate margin requirement
 
     let requiredFunds: number = estimatedValue;
-    if(productType === ProductType.INTRADAY){
+    if (productType === ProductType.INTRADAY) {
         requiredFunds = estimatedValue * 0.2; // 20% margin for intraday
-    }
-    else if(productType === ProductType.MTF){
+    } else if (productType === ProductType.MTF) {
         requiredFunds = estimatedValue * 0.4; // 40% margin for MTF
     }
     requiredFunds += tradingCharges;
 
-    // Check if sufficient funds 
-if (userFunds.available_funds < requiredFunds) { 
-    // Log the failed attempt 
-    await db.transaction().execute(async (tx) => {
-        await tx
-            .insertInto('order_attempt_failures')
+    // Check if sufficient funds
+    if (userFunds.available_funds < requiredFunds) {
+        // Log the failed attempt
+        await db.transaction().execute(async (tx) => {
+            await tx
+                .insertInto('order_attempt_failures')
+                .values({
+                    user_id: userId,
+                    order_category: OrderCategory.INSTANT,
+                    order_reference_id: generatedOrderId,
+                    symbol,
+                    order_side: orderSide,
+                    quantity,
+                    price: price || estimatePrice,
+                    product_type: 'delivery', // Default for normal orders
+                    order_type: orderType,
+                    failure_reason: 'Insufficient funds',
+                    required_funds: requiredFunds,
+                    available_funds: userFunds.available_funds || 0,
+                    attempted_at: new Date(),
+                } as OrderAttemptFailure)
+                .onConflict((oc) => oc.constraint('uq_instant_orders_order_id').doNothing())
+                .execute();
+
+            throw new BadRequestError(
+                `Insufficient funds to place this order. Required: ${requiredFunds}, Available: ${userFunds.available_funds}`,
+            );
+        });
+    }
+
+    // Creating order in transaction
+
+    const result = await db.transaction().execute(async (trx) => {
+        // creating entry in main order table
+        const order = await trx
+            .insertInto('orders')
             .values({
-                user_id: userId, 
-                order_category: OrderCategory.INSTANT, 
-                order_reference_id: generatedOrderId,
-                symbol, 
-                order_side: orderSide, 
-                quantity, 
-                price: price || estimatePrice, 
-                product_type: 'delivery', // Default for normal orders 
-                order_type: orderType, 
-                failure_reason: 'Insufficient funds', 
-                required_funds: requiredFunds, 
-                available_funds: userFunds.available_funds || 0, 
-                attempted_at: new Date()
-            } as OrderAttemptFailure)
-            .onConflict((oc) => 
-                oc.constraint('uq_instant_orders_order_id').doNothing()
-            )
+                user_id: userId,
+                order_category: OrderCategory.INSTANT,
+                order_reference_id: generatedOrderId, // needs to add in db
+                symbol,
+                order_side: orderSide,
+                quantity,
+                price: price || null,
+                status: OrderStatus.QUEUED,
+                placed_at: new Date(),
+                exchange,
+                total_charges: tradingCharges,
+            })
+            .returningAll()
+            .executeTakeFirstOrThrow();
+
+        // creating entry in order details table
+        const instantOrder = await trx
+            .insertInto('instant_orders')
+            .values({
+                order_id: order!.id,
+                product_type: productType,
+                order_type: orderType,
+            })
+            .onConflict((oc) => oc.constraint('uq_instant_orders_order_id').doNothing())
+            .returningAll()
+            .executeTakeFirstOrThrow();
+
+        // deducting user funds
+
+        await trx
+            .updateTable('user_funds')
+            .set({
+                available_funds: (eb) => eb('available_funds', '-', requiredFunds),
+                used_funds: (eb) => eb('used_funds', '+', requiredFunds),
+                updated_at: new Date(),
+            })
+            .where('user_id', '=', userId)
             .execute();
-            
-            throw new BadRequestError(`Insufficient funds to place this order. Required: ${requiredFunds}, Available: ${userFunds.available_funds}`);
+
+        return {
+            order,
+            instantOrder,
+            orderReferenceId: generatedOrderId,
+            fundsImpact: {
+                required: requiredFunds,
+                tradingValue: estimatedValue,
+                tradingCharges,
+                remainingFunds: userFunds.available_funds - requiredFunds,
+            },
+        };
     });
-}
 
-// Creating order in transaction
+    logger.info(`Instant order created successfully for user ${userId}, Order ID: ${generatedOrderId}`);
 
-const result = await db.transaction().execute(async (trx) => {
-    // creating entry in main order table
-    const order = await trx
-    .insertInto('orders')
-    .values({
-        user_id: userId,
-        order_category: OrderCategory.INSTANT,
-        order_reference_id: generatedOrderId, // needs to add in db
-        symbol,
-        order_side: orderSide,
-        quantity,
-        price: price || null,
-        status: OrderStatus.QUEUED,
-        placed_at: new Date(),
-        exchange,
-        total_charges: tradingCharges
-    })
-    .returningAll()
-    .executeTakeFirstOrThrow();
-
-    // creating entry in order details table
-    const instantOrder = await trx
-    .insertInto('instant_orders')
-    .values({
-        order_id: order!.id,
-        product_type: productType,
-        order_type: orderType,
-    })
-    .onConflict((oc) => 
-        oc.constraint('uq_instant_orders_order_id').doNothing()
-    )
-    .returningAll()
-    .executeTakeFirstOrThrow();
-
-    // deducting user funds
-
-    await trx
-    .updateTable('user_funds')
-    .set({
-        available_funds: eb => eb('available_funds', '-', requiredFunds),
-        used_funds: eb => eb('used_funds', '+', requiredFunds),
-        updated_at: new Date()
-    })
-    .where('user_id', '=', userId)
-    .execute();
-
-    return {
-        order,
-        instantOrder,
-        orderReferenceId: generatedOrderId,
-        fundsImpact: {
-            required: requiredFunds,
-            tradingValue: estimatedValue,
-            tradingCharges,
-            remainingFunds: userFunds.available_funds - requiredFunds
-        }
-    };
-});
-
-logger.info(`Instant order created successfully for user ${userId}, Order ID: ${generatedOrderId}`);
-
-res.status(CREATED).json({
-    Message:"Instant Order Created Successfully",
-    data: result
-})
+    res.status(CREATED).json({
+        Message: 'Instant Order Created Successfully',
+        data: result,
+    });
 };
-
 
 // creating normal order
 
-const createNormalOrder = async (req:Request, res: Response): Promise<void> =>{
-    const userId: number = parseInt(req.params.user_id , 10);
+const createNormalOrder = async (req: Request, res: Response): Promise<void> => {
+    const userId: number = parseInt(req.params.user_id, 10);
 
-    if(isNaN(userId)){
-        throw new BadRequestError("Invalid User ID");
+    if (isNaN(userId)) {
+        throw new BadRequestError('Invalid User ID');
     }
 
-    const {symbol, 
+    const {
+        symbol,
         orderSide,
         quantity,
         price,
@@ -241,29 +229,29 @@ const createNormalOrder = async (req:Request, res: Response): Promise<void> =>{
         validity,
         validityMinutes,
         disclosedQuantity,
-        exchange = ExchangeType.NSE}: NormalOrderRequest & {exchange?: ExchangeType} = req.body;
+        exchange = ExchangeType.NSE,
+    }: NormalOrderRequest & { exchange?: ExchangeType } = req.body;
 
-    if(!userId || !orderSide || !quantity || !orderType || !validity){
-        throw new BadRequestError("Missing Fields are Required");
+    if (!userId || !orderSide || !quantity || !orderType || !validity) {
+        throw new BadRequestError('Missing Fields are Required');
     }
 
     // Limit-type order --> Price is Required
 
-    if(orderType === OrderType.LIMIT_ORDER && !price){
-        throw new BadRequestError("Price is Required for Limit order");
+    if (orderType === OrderType.LIMIT_ORDER && !price) {
+        throw new BadRequestError('Price is Required for Limit order');
     }
 
     // for stop-loss order  --> Triggered Price is Required
 
-    if(orderType === OrderType.SL || orderType === OrderType.SL_M){
-        throw new BadRequestError("Triggered Price is Required for Stop-loss orders");
+    if (orderType === OrderType.SL || orderType === OrderType.SL_M) {
+        throw new BadRequestError('Triggered Price is Required for Stop-loss orders');
     }
 
+    // check for validity
 
-    // check for validity 
-
-    if(validity === OrderValidity.MINUTES && (!validityMinutes || validityMinutes <= 0)){
-        throw new BadRequestError("Valid Minutes are Required to place order");
+    if (validity === OrderValidity.MINUTES && (!validityMinutes || validityMinutes <= 0)) {
+        throw new BadRequestError('Valid Minutes are Required to place order');
     }
 
     // check for users avlbl funds
@@ -274,18 +262,18 @@ const createNormalOrder = async (req:Request, res: Response): Promise<void> =>{
         .select(['user_id', 'available_funds'])
         .executeTakeFirst();
 
-    if(!userFunds){
-        throw new NotFoundError("User Funds not found");
+    if (!userFunds) {
+        throw new NotFoundError('User Funds not found');
     }
 
     // get estimate value
 
-    const estimatePrice:number = price || getEstimatedMarketPrice(symbol);
-    const estimatedValue:number = estimatePrice * quantity;
+    const estimatePrice: number = price || getEstimatedMarketPrice(symbol);
+    const estimatedValue: number = estimatePrice * quantity;
 
     const productType = ProductType.DELIVERY;
 
-    // generateOrderID: 
+    // generateOrderID:
     const generatedOrderId = await generateOrderId(db);
 
     // Calculate trading charges
@@ -293,122 +281,122 @@ const createNormalOrder = async (req:Request, res: Response): Promise<void> =>{
         Number(generatedOrderId),
         quantity,
         estimatePrice,
-        orderSide as OrderSide, 
+        orderSide as OrderSide,
         productType as ProductType,
-        exchange as ExchangeType
+        exchange as ExchangeType,
     );
     // normal orders,  100% margin is required
     const requiredFunds: number = estimatedValue + tradingCharges;
 
     // checking if user has sufficient funds
-    if (userFunds.available_funds < requiredFunds) { 
-        // Log the failed attempt 
+    if (userFunds.available_funds < requiredFunds) {
+        // Log the failed attempt
         await db.transaction().execute(async (trx) => {
             await trx
-            .insertInto('order_attempt_failures')
-            .values({
-            user_id: userId, 
-            order_category: OrderCategory.NORMAL, 
-            order_reference_id: generatedOrderId,
-            symbol, 
-            order_side: orderSide, 
-            quantity, 
-            price: price || estimatePrice, 
-            product_type: 'delivery', 
-            order_type: orderType, 
-            failure_reason: 'Insufficient funds', 
-            required_funds: requiredFunds, 
-            available_funds: userFunds.available_funds || 0, 
-            attempted_at: new Date()
-            } as OrderAttemptFailure)
-            .onConflict((oc) => oc.constraint('uq_order_attempt_failures').doNothing())
-            .execute();
-            throw new BadRequestError(`Insufficient funds to place this order. Required: ${requiredFunds}, Available: ${userFunds.available_funds}`);
-
+                .insertInto('order_attempt_failures')
+                .values({
+                    user_id: userId,
+                    order_category: OrderCategory.NORMAL,
+                    order_reference_id: generatedOrderId,
+                    symbol,
+                    order_side: orderSide,
+                    quantity,
+                    price: price || estimatePrice,
+                    product_type: 'delivery',
+                    order_type: orderType,
+                    failure_reason: 'Insufficient funds',
+                    required_funds: requiredFunds,
+                    available_funds: userFunds.available_funds || 0,
+                    attempted_at: new Date(),
+                } as OrderAttemptFailure)
+                .onConflict((oc) => oc.constraint('uq_order_attempt_failures').doNothing())
+                .execute();
+            throw new BadRequestError(
+                `Insufficient funds to place this order. Required: ${requiredFunds}, Available: ${userFunds.available_funds}`,
+            );
         });
     }
 
     // Creating order in transaction
 
-const result = await db.transaction().execute(async (trx) => {
-    // creating entry in main order table
-    const order = await trx
-    .insertInto('orders')
-    .values({
-        user_id: userId,
-        order_category: OrderCategory.NORMAL,
-        order_reference_id: generatedOrderId,
-        symbol,
-        order_side: orderSide,
-        quantity,
-        price: price || null,
-        status: OrderStatus.QUEUED,
-        placed_at: new Date(),
-        exchange,
-        total_charges: tradingCharges
-    })
-    .returningAll()
-    .executeTakeFirstOrThrow();
+    const result = await db.transaction().execute(async (trx) => {
+        // creating entry in main order table
+        const order = await trx
+            .insertInto('orders')
+            .values({
+                user_id: userId,
+                order_category: OrderCategory.NORMAL,
+                order_reference_id: generatedOrderId,
+                symbol,
+                order_side: orderSide,
+                quantity,
+                price: price || null,
+                status: OrderStatus.QUEUED,
+                placed_at: new Date(),
+                exchange,
+                total_charges: tradingCharges,
+            })
+            .returningAll()
+            .executeTakeFirstOrThrow();
 
-    // creating entry in order details table
-    const normalOrder = await trx
-    .insertInto('normal_orders')
-    .values({
-        order_id: order!.id,
-        order_type: orderType,
-        trigger_price: triggerPrice || null,
-        validity,
-        validity_minutes: validity === OrderValidity.MINUTES ? validityMinutes : null,
-        disclosed_quantity: disclosedQuantity || null
-    })
-    .onConflict((oc) => 
-        oc.constraint('uq_iceberg_orders_order_id').doNothing()
-    )
-    .returningAll()
-    .executeTakeFirstOrThrow();
+        // creating entry in order details table
+        const normalOrder = await trx
+            .insertInto('normal_orders')
+            .values({
+                order_id: order!.id,
+                order_type: orderType,
+                trigger_price: triggerPrice || null,
+                validity,
+                validity_minutes: validity === OrderValidity.MINUTES ? validityMinutes : null,
+                disclosed_quantity: disclosedQuantity || null,
+            })
+            .onConflict((oc) => oc.constraint('uq_iceberg_orders_order_id').doNothing())
+            .returningAll()
+            .executeTakeFirstOrThrow();
 
-    // deducting user funds
+        // deducting user funds
 
-    await trx
-    .updateTable('user_funds')
-    .set({
-        available_funds: eb => eb('available_funds', '-', requiredFunds),
-        used_funds: eb => eb('used_funds', '+', requiredFunds),
-        updated_at: new Date()
-    })
-    .where('user_id', '=', userId)
-    .execute();
+        await trx
+            .updateTable('user_funds')
+            .set({
+                available_funds: (eb) => eb('available_funds', '-', requiredFunds),
+                used_funds: (eb) => eb('used_funds', '+', requiredFunds),
+                updated_at: new Date(),
+            })
+            .where('user_id', '=', userId)
+            .execute();
 
-    return {
-        order,
-        normalOrder,
-        orderReferenceId: generatedOrderId,
-        fundsImpact: {
-            required: requiredFunds,
-            tradingValue: estimatedValue,
-            tradingCharges,
-            remainingFunds: userFunds.available_funds - requiredFunds
-        }
-    };
-});
+        return {
+            order,
+            normalOrder,
+            orderReferenceId: generatedOrderId,
+            fundsImpact: {
+                required: requiredFunds,
+                tradingValue: estimatedValue,
+                tradingCharges,
+                remainingFunds: userFunds.available_funds - requiredFunds,
+            },
+        };
+    });
 
-logger.info(`Normal order successfully created for user ${userId}`);
+    logger.info(`Normal order successfully created for user ${userId}`);
 
-res.status(CREATED).json({
-    message: "Normal Order Created Successfully",
-    data: result
-});
+    res.status(CREATED).json({
+        message: 'Normal Order Created Successfully',
+        data: result,
+    });
 };
 
 // Create Iceberg Order
 
-const createIcebergOrder = async (req:Request, res: Response): Promise<void> =>{
+const createIcebergOrder = async (req: Request, res: Response): Promise<void> => {
     const userId: number = parseInt(req.params.user_id, 10);
 
-    if(isNaN(userId)){
-        throw new BadRequestError("Invalid User ID");
+    if (isNaN(userId)) {
+        throw new BadRequestError('Invalid User ID');
     }
-    const {symbol,
+    const {
+        symbol,
         orderSide,
         quantity,
         price,
@@ -419,48 +407,49 @@ const createIcebergOrder = async (req:Request, res: Response): Promise<void> =>{
         disclosedQuantity,
         numOfLegs,
         productType,
-        exchange = ExchangeType.NSE}: IcebergOrderRequest & {exchange?: ExchangeType} = req.body;
-    if(!symbol || !orderSide || !quantity || !orderType || !validity){
-        throw new BadRequestError("Missing Fields are Required");
+        exchange = ExchangeType.NSE,
+    }: IcebergOrderRequest & { exchange?: ExchangeType } = req.body;
+    if (!symbol || !orderSide || !quantity || !orderType || !validity) {
+        throw new BadRequestError('Missing Fields are Required');
     }
     // Limit-type order --> Price is Required
     if (productType !== ProductType.INTRADAY && productType !== ProductType.DELIVERY) {
         throw new BadRequestError('Invalid product type');
     }
 
-    if(orderType === OrderType.LIMIT_ORDER && !price){
-        throw new BadRequestError("Price is Required for Limit order");
+    if (orderType === OrderType.LIMIT_ORDER && !price) {
+        throw new BadRequestError('Price is Required for Limit order');
     }
     // for stop-loss order  --> Triggered Price is Required
-    if((orderType === OrderType.SL || orderType === OrderType.SL_M) && !triggerPrice){
-        throw new BadRequestError("Triggered Price is Required for Stop-loss orders");
+    if ((orderType === OrderType.SL || orderType === OrderType.SL_M) && !triggerPrice) {
+        throw new BadRequestError('Triggered Price is Required for Stop-loss orders');
     }
 
     // check for validity
-    if(validity === OrderValidity.MINUTES && (!validityMinutes || validityMinutes <= 0)){
-        throw new BadRequestError("Valid Minutes are Required to place order");
+    if (validity === OrderValidity.MINUTES && (!validityMinutes || validityMinutes <= 0)) {
+        throw new BadRequestError('Valid Minutes are Required to place order');
     }
     // check for the number of legs
 
-    if(numOfLegs <= 0){
-        throw new BadRequestError("Number of legs should be greater than 0");
+    if (numOfLegs <= 0) {
+        throw new BadRequestError('Number of legs should be greater than 0');
     }
 
-    // disclosed Qty check 
-    if(disclosedQuantity <= 0 || disclosedQuantity > quantity){
-        throw new BadRequestError("Disclosed quantity should be greater than 0");
+    // disclosed Qty check
+    if (disclosedQuantity <= 0 || disclosedQuantity > quantity) {
+        throw new BadRequestError('Disclosed quantity should be greater than 0');
     }
 
-    // check for avlbl funds 
+    // check for avlbl funds
     const userFunds = await db
-    .selectFrom('user_funds')
-    .where('user_id', '=', userId)
-    .select(['user_id', 'available_funds'])
-    .executeTakeFirstOrThrow();
+        .selectFrom('user_funds')
+        .where('user_id', '=', userId)
+        .select(['user_id', 'available_funds'])
+        .executeTakeFirstOrThrow();
 
     // get estimate value
-    const estimatePrice:number = price || getEstimatedMarketPrice(symbol);
-    const estimatedValue:number = estimatePrice * quantity;
+    const estimatePrice: number = price || getEstimatedMarketPrice(symbol);
+    const estimatedValue: number = estimatePrice * quantity;
 
     const generatedOrderId = await generateOrderId(db);
 
@@ -469,50 +458,49 @@ const createIcebergOrder = async (req:Request, res: Response): Promise<void> =>{
         Number(generatedOrderId),
         quantity,
         estimatePrice,
-        orderSide as OrderSide, 
+        orderSide as OrderSide,
         productType as ProductType,
-        exchange as ExchangeType
+        exchange as ExchangeType,
     );
 
     // calculate funds
-    let requiredFunds: number ;
+    let requiredFunds: number;
 
-    if(productType === ProductType.INTRADAY){
+    if (productType === ProductType.INTRADAY) {
         requiredFunds = estimatedValue * 0.2; // 20% margin for intraday
-    }
-    else{
-        requiredFunds = estimatedValue // for delivery 100% margin utilization
+    } else {
+        requiredFunds = estimatedValue; // for delivery 100% margin utilization
     }
     requiredFunds += tradingCharges;
 
     // checking if user has sufficient funds
-    if(!userFunds || userFunds.available_funds < requiredFunds){
+    if (!userFunds || userFunds.available_funds < requiredFunds) {
         // log the failed attempt
 
         await db.transaction().execute(async (trx) => {
             await trx
-            .insertInto('order_attempt_failures')
-            .values({
-            user_id: userId, 
-            order_category: OrderCategory.ICEBERG, 
-            order_reference_id: generatedOrderId, 
-            symbol, 
-            order_side: orderSide, 
-            quantity, 
-            price: price || estimatePrice, 
-            product_type: productType, 
-            order_type: orderType, 
-            failure_reason: 'Insufficient funds', 
-            required_funds: requiredFunds, 
-            available_funds: userFunds.available_funds || 0, 
-            attempted_at: new Date()
-            } as OrderAttemptFailure)
-            .onConflict((oc) => 
-                oc.constraint('uq_iceberg_orders_order_id').doNothing()
-            )
-            .execute();
-                
-            throw new BadRequestError(`Insufficient funds to place this order. Order ID: ${generatedOrderId}, Required: ${requiredFunds}, Available: ${userFunds?.available_funds}`);
+                .insertInto('order_attempt_failures')
+                .values({
+                    user_id: userId,
+                    order_category: OrderCategory.ICEBERG,
+                    order_reference_id: generatedOrderId,
+                    symbol,
+                    order_side: orderSide,
+                    quantity,
+                    price: price || estimatePrice,
+                    product_type: productType,
+                    order_type: orderType,
+                    failure_reason: 'Insufficient funds',
+                    required_funds: requiredFunds,
+                    available_funds: userFunds.available_funds || 0,
+                    attempted_at: new Date(),
+                } as OrderAttemptFailure)
+                .onConflict((oc) => oc.constraint('uq_iceberg_orders_order_id').doNothing())
+                .execute();
+
+            throw new BadRequestError(
+                `Insufficient funds to place this order. Order ID: ${generatedOrderId}, Required: ${requiredFunds}, Available: ${userFunds?.available_funds}`,
+            );
         });
     }
 
@@ -532,7 +520,7 @@ const createIcebergOrder = async (req:Request, res: Response): Promise<void> =>{
                 status: OrderStatus.QUEUED,
                 placed_at: new Date(),
                 exchange,
-                total_charges: tradingCharges
+                total_charges: tradingCharges,
             })
             .returningAll()
             .executeTakeFirstOrThrow();
@@ -548,11 +536,9 @@ const createIcebergOrder = async (req:Request, res: Response): Promise<void> =>{
                 trigger_price: triggerPrice || null,
                 validity,
                 validity_minutes: validity === OrderValidity.MINUTES ? validityMinutes : null,
-                disclosed_quantity: disclosedQuantity
+                disclosed_quantity: disclosedQuantity,
             })
-            .onConflict((oc) => 
-                oc.constraint('uq_iceberg_orders_order_id').doNothing()
-            )
+            .onConflict((oc) => oc.constraint('uq_iceberg_orders_order_id').doNothing())
             .returningAll()
             .executeTakeFirstOrThrow();
 
@@ -562,9 +548,8 @@ const createIcebergOrder = async (req:Request, res: Response): Promise<void> =>{
 
         for (let i = 0; i < numOfLegs; i++) {
             // Adjust last leg quantity to account for rounding
-            const actualLegQuantity: number = i === numOfLegs - 1 
-                ? quantity - (legQuantity * (numOfLegs - 1)) 
-                : legQuantity;
+            const actualLegQuantity: number =
+                i === numOfLegs - 1 ? quantity - legQuantity * (numOfLegs - 1) : legQuantity;
 
             const leg = await trx
                 .insertInto('iceberg_legs')
@@ -572,55 +557,53 @@ const createIcebergOrder = async (req:Request, res: Response): Promise<void> =>{
                     iceberg_order_id: order!.id,
                     leg_number: i + 1,
                     quantity: actualLegQuantity,
-                    status: i === 0 ? OrderStatus.QUEUED : OrderStatus.PENDING
+                    status: i === 0 ? OrderStatus.QUEUED : OrderStatus.PENDING,
                 })
                 .returningAll()
                 .executeTakeFirst();
 
             legs.push(leg);
         }
-    // Deduct the required funds from the user's available funds
-    await trx
-    .updateTable('user_funds')
-    .set({
-        available_funds: eb => eb('available_funds', '-', requiredFunds),
-        used_funds: eb => eb('used_funds', '+', requiredFunds),
-        updated_at: new Date()
-    })
-    .where('user_id', '=', userId)
-    .execute();
+        // Deduct the required funds from the user's available funds
+        await trx
+            .updateTable('user_funds')
+            .set({
+                available_funds: (eb) => eb('available_funds', '-', requiredFunds),
+                used_funds: (eb) => eb('used_funds', '+', requiredFunds),
+                updated_at: new Date(),
+            })
+            .where('user_id', '=', userId)
+            .execute();
 
-return {
-    orderId: order.id,
-    orderReferenceId: generatedOrderId,
-    status: order.status,
-    numOfLegs: legs.length,
-    fundDetails: {
-        requiredFunds,
-        tradingValue: estimatedValue,
-        tradingCharges,
-        remainingFunds: userFunds.available_funds - requiredFunds
-}
-}
-});
+        return {
+            orderId: order.id,
+            orderReferenceId: generatedOrderId,
+            status: order.status,
+            numOfLegs: legs.length,
+            fundDetails: {
+                requiredFunds,
+                tradingValue: estimatedValue,
+                tradingCharges,
+                remainingFunds: userFunds.available_funds - requiredFunds,
+            },
+        };
+    });
 
-logger.info(`Iceberg order successfully created for user ${userId}, Order ID: ${result.orderReferenceId}`);
+    logger.info(`Iceberg order successfully created for user ${userId}, Order ID: ${result.orderReferenceId}`);
 
-res.status(CREATED).json({
-    Message:"Iceberg Order Created Successfully",
-    data:result
-})
-}
-
+    res.status(CREATED).json({
+        Message: 'Iceberg Order Created Successfully',
+        data: result,
+    });
+};
 
 // creating cover order
 
-const createCoverOrder = async(req: Request , res: Response): Promise<void> =>{
-
+const createCoverOrder = async (req: Request, res: Response): Promise<void> => {
     const userId: number = parseInt(req.params.user_id, 10);
 
-    if(isNaN(userId)){
-        throw new BadRequestError("Invalid User ID");
+    if (isNaN(userId)) {
+        throw new BadRequestError('Invalid User ID');
     }
     const {
         symbol,
@@ -629,7 +612,7 @@ const createCoverOrder = async(req: Request , res: Response): Promise<void> =>{
         price,
         orderType,
         stopLossPrice,
-        exchange = ExchangeType.NSE
+        exchange = ExchangeType.NSE,
     }: CoverOrderRequest & { exchange?: ExchangeType } = req.body;
 
     // Validate required fields
@@ -669,38 +652,37 @@ const createCoverOrder = async(req: Request , res: Response): Promise<void> =>{
     const estimatePrice: number = price || getEstimatedMarketPrice(symbol);
     const estimatedValue: number = estimatePrice * quantity;
 
-     // Generate order ID
-     const generatedOrderId = await generateOrderId(db);
+    // Generate order ID
+    const generatedOrderId = await generateOrderId(db);
 
-     // Cover orders are always intraday
-     const productType = ProductType.INTRADAY;
+    // Cover orders are always intraday
+    const productType = ProductType.INTRADAY;
 
     const mainOrderCharges = await calculateOrderCharges(
         Number(generatedOrderId),
         quantity,
         estimatePrice,
-        orderSide as OrderSide, 
+        orderSide as OrderSide,
         productType as ProductType,
-        exchange as ExchangeType
+        exchange as ExchangeType,
     );
 
-     // Calculate stop loss order charges (will execute in opposite direction)
-     const stopLossOrderSide = orderSide === OrderSide.BUY ? OrderSide.SELL : OrderSide.BUY;
-     const stopLossOrderCharges = await calculateOrderCharges(
+    // Calculate stop loss order charges (will execute in opposite direction)
+    const stopLossOrderSide = orderSide === OrderSide.BUY ? OrderSide.SELL : OrderSide.BUY;
+    const stopLossOrderCharges = await calculateOrderCharges(
         Number(generatedOrderId) + 1,
         quantity,
         stopLossPrice,
         stopLossOrderSide,
         productType,
-        exchange
-     );
- 
-     // Total charges for both orders
-     const totalCharges = mainOrderCharges + stopLossOrderCharges;
- 
-     // Cover orders require less margin (20% + charges)
-     const requiredFunds: number = (estimatedValue * 0.2) + totalCharges;
- 
+        exchange,
+    );
+
+    // Total charges for both orders
+    const totalCharges = mainOrderCharges + stopLossOrderCharges;
+
+    // Cover orders require less margin (20% + charges)
+    const requiredFunds: number = estimatedValue * 0.2 + totalCharges;
 
     // Check if sufficient funds
     if (!userFunds || userFunds.available_funds < requiredFunds) {
@@ -721,12 +703,14 @@ const createCoverOrder = async(req: Request , res: Response): Promise<void> =>{
                     failure_reason: 'Insufficient funds',
                     required_funds: requiredFunds,
                     available_funds: userFunds?.available_funds || 0,
-                    attempted_at: new Date()
+                    attempted_at: new Date(),
                 } as OrderAttemptFailure)
                 .onConflict((oc) => oc.constraint('uq_order_attempt_failures').doNothing())
                 .execute();
-            
-                throw new BadRequestError(`Insufficient funds to place this order. Order ID: ${generatedOrderId}, Required: ${requiredFunds}, Available: ${userFunds?.available_funds}`);
+
+            throw new BadRequestError(
+                `Insufficient funds to place this order. Order ID: ${generatedOrderId}, Required: ${requiredFunds}, Available: ${userFunds?.available_funds}`,
+            );
         });
     }
 
@@ -746,7 +730,7 @@ const createCoverOrder = async(req: Request , res: Response): Promise<void> =>{
                 status: OrderStatus.QUEUED,
                 placed_at: new Date(),
                 exchange,
-                total_charges: totalCharges 
+                total_charges: totalCharges,
             })
             .returningAll()
             .executeTakeFirst();
@@ -757,13 +741,13 @@ const createCoverOrder = async(req: Request , res: Response): Promise<void> =>{
             .values({
                 order_id: order!.id,
                 stop_loss_price: stopLossPrice,
-                order_type: orderType
+                order_type: orderType,
             })
-            .onConflict((oc) => 
+            .onConflict((oc) =>
                 oc.constraint('uq_cover_orders_order_id').doUpdateSet((eb) => ({
                     stop_loss_price: eb.ref('excluded.stop_loss_price'),
-                    order_type: eb.ref('excluded.order_type')
-                }))
+                    order_type: eb.ref('excluded.order_type'),
+                })),
             )
             .returningAll()
             .executeTakeFirstOrThrow();
@@ -774,13 +758,13 @@ const createCoverOrder = async(req: Request , res: Response): Promise<void> =>{
             .values({
                 cover_order_id: order!.id,
                 main_order_status: OrderStatus.QUEUED,
-                stop_loss_order_status: OrderStatus.QUEUED
+                stop_loss_order_status: OrderStatus.QUEUED,
             })
-            .onConflict((oc) => 
+            .onConflict((oc) =>
                 oc.constraint('uq_cover_order_details_cover_order_id').doUpdateSet((eb) => ({
                     main_order_status: eb.ref('excluded.main_order_status'),
-                    stop_loss_order_status: eb.ref('excluded.stop_loss_order_status')
-                }))
+                    stop_loss_order_status: eb.ref('excluded.stop_loss_order_status'),
+                })),
             )
             .returningAll()
             .executeTakeFirstOrThrow();
@@ -789,9 +773,9 @@ const createCoverOrder = async(req: Request , res: Response): Promise<void> =>{
         await trx
             .updateTable('user_funds')
             .set({
-                available_funds: eb => eb('available_funds', '-', requiredFunds),
-                used_funds: eb => eb('used_funds', '+', requiredFunds),
-                updated_at: new Date()
+                available_funds: (eb) => eb('available_funds', '-', requiredFunds),
+                used_funds: (eb) => eb('used_funds', '+', requiredFunds),
+                updated_at: new Date(),
             })
             .where('user_id', '=', userId)
             .execute();
@@ -806,16 +790,16 @@ const createCoverOrder = async(req: Request , res: Response): Promise<void> =>{
                 stopLossOrderCharges,
                 totalCharges,
                 tradingValue: estimatedValue,
-                requiredFunds
-            }
+                requiredFunds,
+            },
         };
     });
 
     logger.info(`Cover order successfully created for user ${userId}, Order ID: ${result.orderReferenceId}`);
 
     res.status(CREATED).json({
-        Message: "Cover Order Created Successfully",
-        data:result
+        Message: 'Cover Order Created Successfully',
+        data: result,
     });
 };
 
@@ -825,16 +809,16 @@ const createCoverOrder = async(req: Request , res: Response): Promise<void> =>{
 function getEstimatedMarketPrice(symbol: string): number {
     // In a real implementation, you would call a market data API
     // For this example, we'll use a mock implementation
-    
+
     // Sample price mapping
     const prices: Record<string, number> = {
-        'RELIANCE': 2500,
-        'INFY': 1500,
-        'TCS': 3200,
-        'HDFCBANK': 1650,
-        'TATASTEEL': 120
+        RELIANCE: 2500,
+        INFY: 1500,
+        TCS: 3200,
+        HDFCBANK: 1650,
+        TATASTEEL: 120,
     };
-    
+
     // Return price or default
     return prices[symbol] || 1000; // Default price if symbol not found
 }
@@ -846,7 +830,7 @@ const getAllOrders = async (req: Request, res: Response): Promise<void> => {
     const userId: number = parseInt(req.params.user_id, 10);
 
     if (isNaN(userId)) {
-        throw new BadRequestError("Invalid User ID");
+        throw new BadRequestError('Invalid User ID');
     }
 
     const status = req.query.status as OrderStatus | undefined;
@@ -860,20 +844,17 @@ const getAllOrders = async (req: Request, res: Response): Promise<void> => {
     const offset: number = (currentPage - 1) * pageSize;
 
     // Create a function that returns a base query with all conditions
-    const createBaseQuery = () => db
-        .selectFrom('orders')
-        .where('user_id', '=', userId)
-        .$if(status !== undefined, (qb) => qb.where('status', '=', status as any))
-        .$if(category !== undefined, (qb) => qb.where('order_category', '=', category as OrderCategory));
+    const createBaseQuery = () =>
+        db
+            .selectFrom('orders')
+            .where('user_id', '=', userId)
+            .$if(status !== undefined, (qb) => qb.where('status', '=', status as any))
+            .$if(category !== undefined, (qb) => qb.where('order_category', '=', category as OrderCategory));
 
     // Create separate queries for count and data
-    const countResult = await createBaseQuery()
-        .select(db.fn.count('id').as('total'))
-        .executeTakeFirst();
+    const countResult = await createBaseQuery().select(db.fn.count('id').as('total')).executeTakeFirst();
 
-    const total: number = countResult && 'total' in countResult
-        ? Number(countResult.total)
-        : 0;
+    const total: number = countResult && 'total' in countResult ? Number(countResult.total) : 0;
 
     // Get orders with pagination
     const orders = await createBaseQuery()
@@ -890,38 +871,34 @@ const getAllOrders = async (req: Request, res: Response): Promise<void> => {
                 total,
                 page: currentPage,
                 pageSize,
-                pages: Math.ceil(total / pageSize)
-            }
-        }
+                pages: Math.ceil(total / pageSize),
+            },
+        },
     });
 };
 
 // get-order-details by ID
 
-const getOrderById = async (req:Request, res:Response): Promise<void> => {
-    const orderId: number = parseInt(req.params.order_id , 10);
+const getOrderById = async (req: Request, res: Response): Promise<void> => {
+    const orderId: number = parseInt(req.params.order_id, 10);
 
-    if(isNaN(orderId)){
-        throw new BadRequestError("Invalid Order ID");
+    if (isNaN(orderId)) {
+        throw new BadRequestError('Invalid Order ID');
     }
 
     // getting order
 
-    const order = await db
-    .selectFrom('orders')
-    .where('id', '=', orderId)
-    .selectAll()
-    .executeTakeFirst();
+    const order = await db.selectFrom('orders').where('id', '=', orderId).selectAll().executeTakeFirst();
 
-    if(!order){
-        throw new NotFoundError("Order not found");
+    if (!order) {
+        throw new NotFoundError('Order not found');
     }
     let orderDetails = null;
     let additionalDetails = null;
 
     // using switch-case
 
-    switch(order.order_category){
+    switch (order.order_category) {
         case OrderCategory.INSTANT:
             orderDetails = await db
                 .selectFrom('instant_orders')
@@ -947,40 +924,40 @@ const getOrderById = async (req:Request, res:Response): Promise<void> => {
             // for iceberg-get legs
 
             additionalDetails = await db
-            .selectFrom('iceberg_legs')
-            .where('iceberg_order_id', '=', orderId)
-            .selectAll()
-            .execute();
+                .selectFrom('iceberg_legs')
+                .where('iceberg_order_id', '=', orderId)
+                .selectAll()
+                .execute();
             break;
 
-            case OrderCategory.COVER_ORDER:
-                orderDetails = await db
-                  .selectFrom('cover_orders')
-                  .where('order_id', '=', orderId)
-                  .selectAll()
-                  .executeTakeFirst();
-                
-                // Get cover order details
-                additionalDetails = await db
-                  .selectFrom('cover_order_details')
-                  .where('cover_order_id', '=', orderId)
-                  .selectAll()
-                  .executeTakeFirst();
-                break;
+        case OrderCategory.COVER_ORDER:
+            orderDetails = await db
+                .selectFrom('cover_orders')
+                .where('order_id', '=', orderId)
+                .selectAll()
+                .executeTakeFirst();
+
+            // Get cover order details
+            additionalDetails = await db
+                .selectFrom('cover_order_details')
+                .where('cover_order_id', '=', orderId)
+                .selectAll()
+                .executeTakeFirst();
+            break;
     }
     res.status(OK).json({
         success: true,
         data: {
-          order,
-          orderDetails,
-          additionalDetails: additionalDetails || undefined
-        }
-        });
+            order,
+            orderDetails,
+            additionalDetails: additionalDetails || undefined,
+        },
+    });
 };
 
 // get cancel-orders
 const cancelOrder = async (req: Request, res: Response): Promise<void> => {
-    const orderId: number = parseInt(req.params.order_id , 10);
+    const orderId: number = parseInt(req.params.order_id, 10);
 
     if (isNaN(orderId)) {
         throw new BadRequestError('Invalid order ID');
@@ -989,11 +966,7 @@ const cancelOrder = async (req: Request, res: Response): Promise<void> => {
     // Execute the transaction
     const result = await db.transaction().execute(async (trx) => {
         // Get the order
-        const order = await trx
-            .selectFrom('orders')
-            .where('id', '=', orderId)
-            .selectAll()
-            .executeTakeFirst();
+        const order = await trx.selectFrom('orders').where('id', '=', orderId).selectAll().executeTakeFirst();
 
         if (!order) {
             throw new NotFoundError('Order not found');
@@ -1009,7 +982,7 @@ const cancelOrder = async (req: Request, res: Response): Promise<void> => {
             .updateTable('orders')
             .set({
                 status: OrderStatus.CANCELLED,
-                cancelled_at: new Date()
+                cancelled_at: new Date(),
             })
             .where('id', '=', orderId)
             .returningAll()
@@ -1023,20 +996,20 @@ const cancelOrder = async (req: Request, res: Response): Promise<void> => {
                     .updateTable('iceberg_legs')
                     .set({
                         status: OrderStatus.CANCELLED,
-                        cancelled_at: new Date()
+                        cancelled_at: new Date(),
                     })
                     .where('iceberg_order_id', '=', orderId)
                     .where('status', '=', OrderStatus.QUEUED)
                     .execute();
                 break;
-                
+
             case OrderCategory.COVER_ORDER:
                 // Update cover order details
                 await trx
                     .updateTable('cover_order_details')
                     .set({
                         main_order_status: OrderStatus.CANCELLED,
-                        stop_loss_order_status: OrderStatus.CANCELLED
+                        stop_loss_order_status: OrderStatus.CANCELLED,
                     })
                     .where('cover_order_id', '=', orderId)
                     .execute();
@@ -1052,7 +1025,7 @@ const cancelOrder = async (req: Request, res: Response): Promise<void> => {
                 new_status: OrderStatus.CANCELLED,
                 changed_at: new Date(),
                 remarks: 'Order cancelled by user',
-                changed_by: 'user'
+                changed_by: 'user',
             })
             .execute();
 
@@ -1060,120 +1033,114 @@ const cancelOrder = async (req: Request, res: Response): Promise<void> => {
     });
     res.status(OK).json({
         data: result,
-        message: 'Order cancelled successfully'
+        message: 'Order cancelled successfully',
     });
 };
 
-
-
 // get-order-history
 
-const getOrderHistory = async(req:Request, res: Response):Promise<void> =>{
-    const orderId : number = parseInt(req.params.order_id , 10);
+const getOrderHistory = async (req: Request, res: Response): Promise<void> => {
+    const orderId: number = parseInt(req.params.order_id, 10);
 
     if (isNaN(orderId)) {
         throw new BadRequestError('Invalid order ID');
-      }
-    
-      // Check if order exists
-      const order = await db
+    }
+
+    // Check if order exists
+    const order = await db
         .selectFrom('orders')
         .where('id', '=', orderId)
         .select(['id', 'status', 'symbol', 'quantity', 'price', 'order_side', 'order_category'])
         .executeTakeFirstOrThrow();
-    
-      // Get order history
-      const history = await db
+
+    // Get order history
+    const history = await db
         .selectFrom('order_history')
         .where('order_id', '=', orderId)
         .orderBy('changed_at', 'asc')
         .select(['previous_status', 'new_status', 'changed_at', 'remarks', 'changed_by'])
         .execute();
-    
-      res.status(OK).json({
+
+    res.status(OK).json({
         success: true,
         data: {
-          order,
-          history
-        }
+            order,
+            history,
+        },
     });
 };
-    
+
 // get-recent-orders
 
 const getRecentOrders = async (req: Request, res: Response): Promise<void> => {
-    const userId: number = parseInt(req.params.user_id ,10);
-    
+    const userId: number = parseInt(req.params.user_id, 10);
+
     if (isNaN(userId)) {
-      throw new BadRequestError('Invalid user ID');
+        throw new BadRequestError('Invalid user ID');
     }
-    
-    const limit: number = req.query.limit ? parseInt(req.query.limit as string ,10) : 5;
-  
+
+    const limit: number = req.query.limit ? parseInt(req.query.limit as string, 10) : 5;
+
     const recentOrders = await db
-      .selectFrom('orders')
-      .where('user_id', '=', userId)
-      .orderBy('placed_at', 'desc')
-      .limit(limit)
-      .selectAll()
-      .execute();
-  
+        .selectFrom('orders')
+        .where('user_id', '=', userId)
+        .orderBy('placed_at', 'desc')
+        .limit(limit)
+        .selectAll()
+        .execute();
+
     res.status(OK).json({
-      success: true,
-      data: recentOrders
+        success: true,
+        data: recentOrders,
     });
 };
 
 // failed-orders-attempt
 
-const getFailedOrderAttempts = async(req: Request, res: Response):Promise<void> =>{
+const getFailedOrderAttempts = async (req: Request, res: Response): Promise<void> => {
     const userId: number = parseInt(req.params.user_id, 10);
-  
-  if (isNaN(userId)) {
-    throw new BadRequestError('Invalid user ID');
-  }
-  
-  const page: number = req.query.page ? parseInt(req.query.page as string, 10) : 1;
-  const limit: number = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
-  
-  // Pagination
-  const pageSize: number = limit;
-  const currentPage: number = page;
-  const offset: number = (currentPage - 1) * pageSize;
 
-  const countQuery = db
-    .selectFrom('order_attempt_failures')
-    .where('user_id', '=', userId);
-  
-  // Select count
-  const totalResult = await countQuery
-    .select(db.fn.count('id').as('total'))
-    .executeTakeFirst();
-  
-  // Parse count result
-  const total: number = totalResult && 'total' in totalResult ? Number(totalResult.total): 0;
-  // Get failed attempts with pagination
-  const failedAttempts = await db
-    .selectFrom('order_attempt_failures')
-    .where('user_id', '=', userId)
-    .orderBy('attempted_at', 'desc')
-    .limit(pageSize)
-    .offset(offset)
-    .selectAll()
-    .execute();
-
-  res.status(OK).json({
-    success: true,
-    data: {
-      failedAttempts,
-      pagination: {
-        total,
-        page: currentPage,
-        pageSize,
-        pages: Math.ceil(total / pageSize)
-      }
+    if (isNaN(userId)) {
+        throw new BadRequestError('Invalid user ID');
     }
-  });
+
+    const page: number = req.query.page ? parseInt(req.query.page as string, 10) : 1;
+    const limit: number = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
+
+    // Pagination
+    const pageSize: number = limit;
+    const currentPage: number = page;
+    const offset: number = (currentPage - 1) * pageSize;
+
+    const countQuery = db.selectFrom('order_attempt_failures').where('user_id', '=', userId);
+
+    // Select count
+    const totalResult = await countQuery.select(db.fn.count('id').as('total')).executeTakeFirst();
+
+    // Parse count result
+    const total: number = totalResult && 'total' in totalResult ? Number(totalResult.total) : 0;
+    // Get failed attempts with pagination
+    const failedAttempts = await db
+        .selectFrom('order_attempt_failures')
+        .where('user_id', '=', userId)
+        .orderBy('attempted_at', 'desc')
+        .limit(pageSize)
+        .offset(offset)
+        .selectAll()
+        .execute();
+
+    res.status(OK).json({
+        success: true,
+        data: {
+            failedAttempts,
+            pagination: {
+                total,
+                page: currentPage,
+                pageSize,
+                pages: Math.ceil(total / pageSize),
+            },
+        },
+    });
 };
 
 const getQueuedOrders = async (req: Request, res: Response): Promise<void> => {
@@ -1184,17 +1151,17 @@ const getQueuedOrders = async (req: Request, res: Response): Promise<void> => {
 const getExecutedOrders = async (req: Request, res: Response): Promise<void> => {
     req.query.status = 'EXECUTED';
     return getAllOrders(req, res);
-  };
-  
-  const getCancelledOrders = async (req: Request, res: Response): Promise<void> => {
+};
+
+const getCancelledOrders = async (req: Request, res: Response): Promise<void> => {
     req.query.status = 'CANCELLED';
     return getAllOrders(req, res);
-  };
-  
-  const getRejectedOrders = async (req: Request, res: Response): Promise<void> => {
+};
+
+const getRejectedOrders = async (req: Request, res: Response): Promise<void> => {
     req.query.status = 'REJECTED';
     return getAllOrders(req, res);
-  };
+};
 
 export const orderManagementController = {
     createInstantOrder,
