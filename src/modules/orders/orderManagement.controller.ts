@@ -107,9 +107,9 @@ const createInstantOrder = async (req: Request, res: Response): Promise<void> =>
         Number(generatedOrderId),
         quantity,
         estimatePrice,
-        orderSide,
-        productType,
-        exchange
+        orderSide as OrderSide,
+        productType as ProductType,
+        exchange as ExchangeType
     );
 
     // For margin products, apply appropriate margin requirement
@@ -293,9 +293,9 @@ const createNormalOrder = async (req:Request, res: Response): Promise<void> =>{
         Number(generatedOrderId),
         quantity,
         estimatePrice,
-        orderSide,
-        productType,
-        exchange
+        orderSide as OrderSide, 
+        productType as ProductType,
+        exchange as ExchangeType
     );
     // normal orders,  100% margin is required
     const requiredFunds: number = estimatedValue + tradingCharges;
@@ -469,9 +469,9 @@ const createIcebergOrder = async (req:Request, res: Response): Promise<void> =>{
         Number(generatedOrderId),
         quantity,
         estimatePrice,
-        orderSide,
-        productType,
-        exchange
+        orderSide as OrderSide, 
+        productType as ProductType,
+        exchange as ExchangeType
     );
 
     // calculate funds
@@ -602,7 +602,7 @@ return {
         remainingFunds: userFunds.available_funds - requiredFunds
 }
 }
-)
+});
 
 logger.info(`Iceberg order successfully created for user ${userId}, Order ID: ${result.orderReferenceId}`);
 
@@ -679,9 +679,9 @@ const createCoverOrder = async(req: Request , res: Response): Promise<void> =>{
         Number(generatedOrderId),
         quantity,
         estimatePrice,
-        orderSide,
-        productType,
-        exchange
+        orderSide as OrderSide, 
+        productType as ProductType,
+        exchange as ExchangeType
     );
 
      // Calculate stop loss order charges (will execute in opposite direction)

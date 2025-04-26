@@ -820,7 +820,7 @@ await trx
     return {
         id: orderId,
         status: OrderStatus.REJECTED,
-        rejectionReason: rejectionReason
+        rejectionReason
     };
 });
 res.status(OK).json({
