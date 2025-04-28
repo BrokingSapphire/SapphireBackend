@@ -2,7 +2,7 @@
 
 import { Request, Response } from 'express';
 import { db } from '@app/database';
-import {OrderSide, UserInvestmentSegment, AccountStatusValidationResult , SuspensionDetails, KycDetails, SegmentValidationResult, RiskProfileResponse, OrderTypeValidationResult, ProductOrderTypeCombination ,QuantityValidationResult, ValidityValidationResult, LotSizeConfig, LotSizeConfiguration , MarginValidationResult, CheckMarginRequest} from '@app/database/db';
+import {OrderSide, UserInvestmentSegment, AccountStatusValidationResult , SuspensionDetails, KycDetails, SegmentValidationResult, RiskProfileResponse, OrderTypeValidationResult, ProductOrderTypeCombination ,QuantityValidationResult, ValidityValidationResult, LotSizeConfig, LotSizeConfiguration , MarginValidationResult, CheckMarginRequest, CashCollateralValidationResult} from '@app/database/db';
 import { AccountStatus, OrderValidity } from './rms.types';
 import { calculateRiskScore } from '@app/services/rms.service';
 import { BadRequestError , NotFoundError} from '@app/apiError';
@@ -1155,7 +1155,7 @@ const validateEquityQuantity = async (
       .selectFrom('equity_max_quantity_limit')
       .where('symbol', '=', symbol)
       .where('exchange', '=', exchange)
-      .where('trade_type', '=', tradeType === 'equity_delivery' ? 'delivery' : 'intraday')
+      .where('trade_type', '=', (tradeType === 'equity_delivery' ? 'delivery' : 'intraday') as any)
       .where('effective_from', '<=', new Date())
       .where((eb) => 
         eb.or([
@@ -1626,11 +1626,7 @@ const checkAvailableMargin = async (req: Request, res: Response): Promise<void> 
     .selectFrom('client_accounts')
     .where('client_id', '=', clientId)
     .select(['account_status'])
-    .executeTakeFirst();
-
-  if (!clientAccount) {
-    throw new NotFoundError(`Client Account with ID ${clientId} not found`);
-  }
+    .executeTakeFirstOrThrow();
 
   if (clientAccount.account_status !== AccountStatus.ACTIVE) {
     res.status(BAD_REQUEST).json({ 
@@ -1908,6 +1904,177 @@ const marginValidationCheck = async (
   );
 };
 
+// Cash VS collateral Check
+
+const validateCashCollateralRatio = async (req: Request, res: Response): Promise<void> => {
+  const userId = parseInt(req.query.userId as string, 10) || 1;
+  const clientId = userId.toString();
+
+  const { 
+    symbol, 
+    quantity, 
+    price, 
+    product_type, 
+    trade_type 
+  } = req.body;
+
+   // Validate required fields
+   if (!symbol || !quantity || !price || !product_type) {
+    throw new BadRequestError('Missing required order parameters');
+  }
+
+  const clientAccount = await db
+    .selectFrom('client_accounts')
+    .where('client_id', '=', clientId)
+    .select(['account_status'])
+    .executeTakeFirstOrThrow();
+
+  if(clientAccount.account_status !== AccountStatus.ACTIVE) {
+      res.status(BAD_REQUEST).json({ 
+      isValid: false, 
+      message: 'Account is not active',
+    });
+    return;
+  }
+
+  const segment = determineSegmentFromTradeType(trade_type, symbol);
+
+  const result = await validateCashCollateral(
+    parseInt(clientId, 10),
+    symbol,
+    quantity,
+    price,
+    product_type,
+    segment
+  );
+
+  // Logging 
+  await cashCollateralValidationCheck(clientId, {
+    symbol,
+    quantity,
+    price,
+    product_type,
+    segment
+  }, result);
+  if (result.isValid) {
+    res.status(OK).json({ 
+      isValid: true, 
+      message: result.reason 
+    });
+  } else {
+    res.status(BAD_REQUEST).json({ 
+      isValid: false, 
+      message: result.reason,
+      details: result.additionalInfo || {}
+    });
+  }
+};
+
+// Validate cash vs collateral ratio
+
+const validateCashCollateral = async (
+  userId: number,
+  symbol: string,
+  quantity: number,
+  price: number,
+  productType: string,
+  segment: UserInvestmentSegment
+): Promise<CashCollateralValidationResult> => {
+  const userFunds = await db
+    .selectFrom('user_funds')
+    .where('user_id', '=', userId)
+    .select([
+      'total_funds',
+      'available_funds',
+      'blocked_funds',
+      'used_funds'
+    ])
+    .executeTakeFirstOrThrow();
+
+  // Calculating required Margin
+
+  const marginInfo = await calculateRequiredMargin(
+    symbol,
+    quantity,
+    price,
+    productType,
+    segment
+  );
+  const totalMarginRequired = marginInfo.requiredMargin;
+  const requiredCashMargin = totalMarginRequired * 0.5;
+  // Available cash margin is the available funds
+  const availableCashMargin = userFunds.available_funds;
+
+  // ********** collateral Info ******************** will come here
+
+  const availableCollateral = Math.max(0, totalMarginRequired - availableCashMargin);
+  if (availableCashMargin < requiredCashMargin) {
+    return {
+      isValid: false,
+      reason: 'Insufficient cash margin: SEBI requires at least 50% of margin in cash',
+      additionalInfo: {
+        requiredCashMargin,
+        availableCashMargin,
+        totalMarginRequired,
+        cashShortfall: requiredCashMargin - availableCashMargin,
+        availableCollateral,
+        cashCollateralRatio: `${Math.round((availableCashMargin / totalMarginRequired) * 100)}:${Math.round((availableCollateral / totalMarginRequired) * 100)}`
+      }
+    };
+  }
+  return {
+    isValid: true,
+    reason: 'Cash-collateral ratio requirements met (at least 50% in cash)',
+    additionalInfo: {
+      requiredCashMargin,
+      availableCashMargin,
+      totalMarginRequired,
+      availableCollateral,
+      cashCollateralRatio: `${Math.round((availableCashMargin / totalMarginRequired) * 100)}:${Math.round((availableCollateral / totalMarginRequired) * 100)}`
+    }
+  };
+};
+
+// Function to log cash-collateral validation check
+const cashCollateralValidationCheck = async (
+  clientId: string,
+  checkData: {
+    symbol: string;
+    quantity: number;
+    price: number;
+    product_type: string;
+    segment: UserInvestmentSegment;
+  },
+  result: CashCollateralValidationResult
+): Promise<void> => {
+  await db
+    .insertInto('segment_checks')
+    .values({
+      client_id: clientId,
+      check_type: 'CASH_COLLATERAL_VALIDATION',
+      passed: result.isValid,
+      reason: result.reason,
+      additional_data: JSON.stringify({
+        symbol: checkData.symbol,
+        quantity: checkData.quantity,
+        price: checkData.price,
+        productType: checkData.product_type,
+        segment: checkData.segment,
+        requiredCashMargin: result.additionalInfo?.requiredCashMargin,
+        availableCashMargin: result.additionalInfo?.availableCashMargin,
+        totalMarginRequired: result.additionalInfo?.totalMarginRequired,
+        cashShortfall: result.additionalInfo?.cashShortfall,
+        cashCollateralRatio: result.additionalInfo?.cashCollateralRatio
+      }),
+      timestamp: new Date()
+    })
+    .executeTakeFirstOrThrow();
+  
+  logger.info(
+    `Cash-collateral ratio check for client ${clientId}, symbol ${checkData.symbol}, required cash margin ${result.additionalInfo?.requiredCashMargin}: ${result.isValid ? 'PASSED' : 'FAILED'}`
+  );
+};
+
 export {
     checkClientAccountStatus,
     updateClientAccountStatus,
@@ -1918,5 +2085,6 @@ export {
     validateQuantityMultiple,
     validateProductOrderCompatibility,
     validatePriceTriggerRelationship,
-    checkAvailableMargin
+    checkAvailableMargin,
+    validateCashCollateralRatio
 };
