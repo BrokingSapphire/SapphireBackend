@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import * as process from 'node:process';
 
 dotenv.config();
 
@@ -14,7 +15,7 @@ export const env = {
     },
     email: {
         host: process.env.EMAIL_HOST || 'smtp.email.com',
-        port: process.env.EMAIL_PORT || 587,
+        port: process.env.EMAIL_PORT || '587',
         secure: process.env.EMAIL_SECURE === 'true',
         user: process.env.EMAIL_USER || 'noreply@email.com',
         password: process.env.EMAIL_PASS || 'password',
@@ -33,6 +34,20 @@ export const env = {
     },
     razorpay: {
         keyId: process.env.RAZORPAY_KEY_ID || 'key',
-        keySecret: process.env.RAZORPAY_KEY_SECRET,
+        keySecret: process.env.RAZORPAY_KEY_SECRET || 'secret',
+    },
+    ntt: {
+        userId: process.env.NTT_USER_ID || '123456',
+        transactionPassword: process.env.NTT_TRANSACTION_PASSWORD || 'password',
+        productId: process.env.NTT_PRODUCT_ID || 'product_id',
+        hashRequestKey: process.env.NTT_HASH_REQUEST_KEY || 'key',
+        hashResponseKey: process.env.NTT_HASH_RESPONSE_KEY || 'key',
+        aesRequestKey: process.env.NTT_AES_REQUEST_KEY || 'key',
+        aesRequestSalt: process.env.NTT_AES_REQUEST_SALT || 'key',
+        aesResponseKey: process.env.NTT_AES_RESPONSE_KEY || 'key',
+        aesResponseSalt: process.env.NTT_AES_RESPONSE_SALT || 'salt',
+        uatBankId: process.env.NTT_UAT_BANK_ID || 'band',
+        uatVpa: process.env.NTT_UAT_VPA || 'vpa',
+        mccCode: process.env.NTT_MCC_CODE || '1234',
     },
 };

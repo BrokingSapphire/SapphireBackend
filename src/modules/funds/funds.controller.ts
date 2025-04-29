@@ -1,0 +1,259 @@
+import { Response } from 'express';
+import { Request } from '@app/types.d';
+import { db } from '@app/database';
+import { JwtType } from './funds.types';
+import { CREATED, OK } from '@app/utils/httpstatus';
+import { PaymentService } from '@app/services/ntt-pg.service';
+import { env } from '@app/env';
+import { BalanceTransactionStatus, DepositTransactionType } from '@app/database/db';
+import { InternalServerError } from '@app/apiError';
+import logger from '@app/logger';
+
+/**
+ * Get user funds
+ */
+const getUserFunds = async (req: Request<JwtType>, res: Response): Promise<void> => {
+    const balance = await db
+        .selectFrom('user_balance')
+        .select([
+            'available_cash',
+            'blocked_cash',
+            'total_cash',
+            'available_margin',
+            'blocked_margin',
+            'total_margin',
+            'total_available_balance',
+            'total_balance',
+        ])
+        .where('user_id', '=', req.auth!!.userId)
+        .executeTakeFirstOrThrow();
+
+    res.status(OK).json({
+        message: 'User balance fetched successfully',
+        data: balance,
+    });
+};
+
+const getBankAccounts = async (req: Request<JwtType>, res: Response): Promise<void> => {
+    const bankAccounts = await db
+        .selectFrom('bank_account')
+        .innerJoin('bank_to_user', 'bank_to_user.bank_account_id', 'bank_account.id')
+        .select(['bank_account.id', 'account_no'])
+        .where('user_id', '=', req.auth!!.userId)
+        .where('verification', '=', 'verified')
+        .execute();
+
+    res.status(OK).json({
+        message: 'Bank accounts fetched successfully',
+        data: bankAccounts.map((account) => ({
+            id: account.id,
+            account_no: `XXXXXXXXXXXXXX${account.account_no.slice(-4)}`,
+        })),
+    });
+};
+
+/**
+ * Add funds to user account
+ */
+const depositFunds = async (req: Request<JwtType>, res: Response): Promise<void> => {
+    const { userId } = req.auth!!;
+    const { amount, mode } = req.body;
+
+    const merchantTxnId = generateReferenceNo(userId.toString());
+    const paymentService = new PaymentService(`${req.protocol}://${req.host}${env.apiPath}/webhook/deposit/callback`);
+
+    const details = await db
+        .selectFrom('user')
+        .innerJoin('phone_number', 'user.phone', 'phone_number.id')
+        .innerJoin('user_name', 'user_name.id', 'user.name')
+        .select(['user_name.full_name', 'user.email', 'phone_number.phone'])
+        .where('user.id', '=', userId)
+        .executeTakeFirstOrThrow();
+
+    const customerDetails = {
+        custId: userId.toString(),
+        custName: details.full_name,
+        custEmail: details.email,
+        custPhone: details.phone,
+    };
+
+    const paymentResponse = await paymentService.createPaymentRequest(
+        amount,
+        merchantTxnId,
+        userId.toString(),
+        customerDetails,
+        mode === 'UPI' ? 'UP' : 'NB',
+    );
+
+    if (paymentResponse.status !== OK) {
+        logger.error(paymentResponse);
+        throw new InternalServerError('Error with payment response: Returned non 200 response.');
+    }
+
+    logger.info(paymentResponse);
+    res.status(OK).json({
+        message: 'Deposit request sent successfully',
+    });
+};
+
+/**
+ * Withdraw funds - standard withdrawal
+ */
+const withdrawFunds = async (req: Request<JwtType>, res: Response): Promise<void> => {
+    const { userId } = req.auth!!;
+    const { amount, bank_account_id, type } = req.body;
+
+    const bankDetails = await db
+        .selectFrom('bank_to_user')
+        .innerJoin('bank_account', 'bank_account.id', 'bank_to_user.bank_account_id')
+        .select(['bank_account.account_no', 'bank_account.ifsc_code'])
+        .where('user_id', '=', userId)
+        .where('bank_account_id', '=', bank_account_id)
+        .executeTakeFirstOrThrow();
+
+    if (type === 'Instant') {
+        // TODO: Implement instant withdrawal logic
+
+        res.status(OK).json({
+            message: 'Withdrawal request sent successfully',
+        });
+    } else {
+        await db
+            .transaction()
+            .setIsolationLevel('serializable')
+            .execute(async (tx) => {
+                const txnId = generateReferenceNo(userId.toString());
+                await tx
+                    .insertInto('balance_transactions')
+                    .values({
+                        reference_no: txnId,
+                        transaction_id: txnId, // TODO: Get from pg
+                        user_id: userId,
+                        transaction_type: 'withdrawal',
+                        status: 'pending',
+                        bank_id: bank_account_id,
+                        amount,
+                        safety_cut_amount: 0, // TODO: Implement safety cut logic
+                        safety_cut_percentage: 0,
+                        transaction_time: new Date(),
+                    })
+                    .execute();
+            });
+
+        res.status(CREATED).json({
+            message: 'Withdrawal request created successfully',
+        });
+    }
+};
+
+/**
+ * Get user transactions
+ */
+const getUserTransactions = async (req: Request<JwtType>, res: Response): Promise<void> => {
+    const { limit, offset, transaction_type, status } = req.query;
+
+    const { count } = db.fn;
+    const result = await db
+        .with('all_txn', (tx) =>
+            tx
+                .selectFrom('balance_transactions')
+                .select(['transaction_id', 'transaction_type', 'status', 'amount', 'created_at', 'updated_at'])
+                .where('user_id', '=', req.auth!!.userId),
+        )
+        .with('count_all_txn', (tx) => tx.selectFrom('all_txn').select(count('transaction_id').as('total')))
+        .with('filtered_txn', (tx) =>
+            tx
+                .selectFrom('all_txn')
+                .selectAll()
+                .$if(status !== undefined, (qb) => qb.where('status', '=', status as BalanceTransactionStatus))
+                .$if(transaction_type !== undefined, (qb) =>
+                    qb.where('transaction_type', '=', transaction_type as DepositTransactionType),
+                )
+                .orderBy('created_at', 'desc'),
+        )
+        .with('count_filtered_txn', (tx) =>
+            tx.selectFrom('filtered_txn').select(count('transaction_id').as('filtered_total')),
+        )
+        .with('paginated_result', (tx) =>
+            tx
+                .selectFrom('filtered_txn')
+                .selectAll()
+                .$if(limit !== undefined, (qb) => qb.limit(Number(limit)))
+                .$if(offset !== undefined, (qb) => qb.offset(Number(offset))),
+        )
+        .selectFrom('paginated_result')
+        .leftJoin('count_all_txn', (eb) => eb.onTrue()) // Always true condition to join
+        .leftJoin('count_filtered_txn', (eb) => eb.onTrue()) // Always true condition to join
+        .select([
+            'paginated_result.transaction_id',
+            'paginated_result.transaction_type',
+            'paginated_result.status',
+            'paginated_result.amount',
+            'paginated_result.created_at',
+            'paginated_result.updated_at',
+            'count_filtered_txn.filtered_total',
+            'count_all_txn.total',
+        ])
+        .execute();
+
+    res.status(OK).json({
+        message: 'Users Transaction Fetched Successfully',
+        data: {
+            all: result.length > 0 ? result[0].total : 0,
+            total: result.length > 0 ? result[0].filtered_total : 0,
+            pageTotal: result.length,
+            transactions: result.map((txn) => ({
+                transaction_id: txn.transaction_id,
+                transaction_type: txn.transaction_type,
+                status: txn.status,
+                amount: txn.amount,
+                created_at: txn.created_at,
+                updated_at: txn.updated_at,
+            })),
+        },
+    });
+};
+
+/**
+ * Get transaction by ID
+ */
+const getTransactionInfo = async (req: Request<JwtType>, res: Response): Promise<void> => {
+    const { id } = req.params;
+    const transaction = await db
+        .selectFrom('balance_transactions')
+        .innerJoin('bank_account', 'balance_transactions.bank_id', 'bank_account.id')
+        .select([
+            'balance_transactions.transaction_id',
+            'balance_transactions.transaction_type',
+            'balance_transactions.status',
+            'balance_transactions.amount',
+            'balance_transactions.created_at',
+            'balance_transactions.updated_at',
+            'bank_account.account_no',
+            'bank_account.ifsc_code',
+        ])
+        .where('transaction_id', '=', id)
+        .executeTakeFirstOrThrow();
+
+    res.status(OK).json({
+        message: 'Transaction details fetched successfully',
+        data: {
+            transactionId: transaction.transaction_id,
+            transactionType: transaction.transaction_type,
+            status: transaction.status,
+            amount: transaction.amount,
+            createdAt: transaction.created_at,
+            updatedAt: transaction.updated_at,
+            bankAccount: {
+                accountNo: `XXXXXXXXXXXXXX${transaction.account_no.slice(-4)}`,
+                ifscCode: transaction.ifsc_code,
+            },
+        },
+    });
+};
+
+const generateReferenceNo = (userId: string): string => {
+    return `TXN_${Date.now()}_${userId}`; // TODO: Generate a unique transaction ID
+};
+
+export { getUserFunds, depositFunds, withdrawFunds, getUserTransactions, getTransactionInfo, getBankAccounts };
