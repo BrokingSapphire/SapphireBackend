@@ -26,3 +26,9 @@ export enum OrderValidity {
   IMMEDIATE = 'immediate',
   MINUTES = 'minutes'
 }
+
+export enum UserCategory {
+  RETAIL = 'RETAIL',         // Account Value ≤ 10,00,000
+  HNI = 'HNI',               // Account Value > 10,00,000 && ≤ 1,00,00,000
+  ULTRA_HNI = 'ULTRA_HNI'    // Account Value > 1,00,00,000
+}

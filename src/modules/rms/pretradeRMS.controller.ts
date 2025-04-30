@@ -2,8 +2,8 @@
 
 import { Request, Response } from 'express';
 import { db } from '@app/database';
-import {OrderSide, UserInvestmentSegment, AccountStatusValidationResult , SuspensionDetails, KycDetails, SegmentValidationResult, RiskProfileResponse, OrderTypeValidationResult, ProductOrderTypeCombination ,QuantityValidationResult, ValidityValidationResult, LotSizeConfig, LotSizeConfiguration , MarginValidationResult, CheckMarginRequest, CashCollateralValidationResult} from '@app/database/db';
-import { AccountStatus, OrderValidity } from './rms.types';
+import {OrderSide, UserInvestmentSegment, AccountStatusValidationResult , SuspensionDetails, KycDetails, SegmentValidationResult, RiskProfileResponse, OrderTypeValidationResult, ProductOrderTypeCombination ,QuantityValidationResult, ValidityValidationResult, LotSizeConfig, LotSizeConfiguration , MarginValidationResult, CheckMarginRequest, CashCollateralValidationResult , PositionLimitValidationResult , OpenPositionLimit , UserPositionSummary} from '@app/database/db';
+import { AccountStatus, OrderValidity , UserCategory} from './rms.types';
 import { calculateRiskScore } from '@app/services/rms.service';
 import { BadRequestError , NotFoundError} from '@app/apiError';
 import logger from '@app/logger';
@@ -2075,6 +2075,275 @@ const cashCollateralValidationCheck = async (
   );
 };
 
+// Position Limit Validation Result interface
+const PositionLimitValidationResult = {
+  isValid: false,
+  reason: '',
+  additionalInfo: {}
+};
+
+// Controller function to check position limits
+const checkPositionLimits = async (req:Request, res:Response) => {
+  // Get user ID from query params or auth middleware
+  const userId = parseInt(req.query.userId as string, 10) || 1;
+  const clientId = userId.toString();
+  
+  const { 
+    symbol, 
+    quantity, 
+    order_side, 
+    trade_type,
+    exchange 
+  } = req.body;
+  
+  // Validate required fields
+  if (!symbol || !quantity || !order_side || !trade_type) {
+    throw new BadRequestError('Missing required order parameters');
+  }
+
+  // Check if account is active
+  const clientAccount = await db
+    .selectFrom('client_accounts')
+    .where('client_id', '=', clientId)
+    .select(['account_status'])
+    .executeTakeFirstOrThrow();
+
+  if (clientAccount.account_status !== AccountStatus.ACTIVE) {
+    res.status(BAD_REQUEST).json({ 
+      isValid: false, 
+      message: 'Account is not active',
+    });
+    return;
+  }
+  
+  // Determine segment based on trade type
+  const segment = determineSegmentFromTradeType(trade_type, symbol);
+  
+  // Only check position limits for F&O segment
+  if (segment !== 'F&O') {
+    res.status(OK).json({ 
+      isValid: true, 
+      message: 'Position limits check not applicable for this segment' 
+    });
+    return;
+  }
+  
+  // Calculate order lots for F&O segment
+  const lotSize = await getLotSize(
+    symbol,
+    segment,
+    exchange
+  )
+  const orderLots = Math.ceil(quantity / lotSize);
+  
+  // Validate position limits
+  const result = await validatePositionLimits(
+    parseInt(clientId, 10),
+    symbol,
+    orderLots,
+    segment
+  );
+  
+  // Log the position limit check
+  await positionLimitCheck(clientId, {
+    symbol,
+    quantity,
+    orderLots,
+    order_side,
+    segment
+  }, result);
+  
+  // Return response
+  if (result.isValid) {
+    res.status(OK).json({ 
+      isValid: true, 
+      message: result.reason 
+    });
+  } else {
+    res.status(BAD_REQUEST).json({ 
+      isValid: false, 
+      message: result.reason,
+      details: result.additionalInfo || {}
+    });
+  }
+};
+
+// Validate position limits against configured limits and current open positions
+const validatePositionLimits = async (
+  userId: number,
+  symbol: string,
+  orderLots: number,
+  segment: UserInvestmentSegment,
+) => {
+  // Get current positions
+  const currentPositions = await getCurrentPositions(userId, symbol, segment);
+
+  const symbolMaxLots = 25;
+  const segmentMaxLots = 100;
+
+  // Calculate new positions after this order
+  const newSymbolLots = currentPositions.symbol_lots + orderLots;
+  const newSegmentLots = currentPositions.segment_lots + orderLots;
+  
+  // Check the symbol-specific limit (max 25 lots per symbol)
+  if (newSymbolLots > symbolMaxLots) {
+    return {
+      isValid: false,
+      reason: `Order exceeds maximum allowed lots (${symbolMaxLots}) for ${symbol}`,
+      additionalInfo: {
+        currentLots: currentPositions.symbol_lots,
+        orderLots: orderLots,
+        newPositionLots: newSymbolLots,
+        maxAllowedLots: symbolMaxLots,
+        segment: segment,
+        instrument: symbol
+      }
+    };
+  }
+  
+  // Check the segment-wide limit (max 100 lots total in F&O)
+  if (newSegmentLots > segmentMaxLots) {
+    return {
+      isValid: false,
+      reason: `Order exceeds maximum allowed total F&O lots (${segmentMaxLots})`,
+      additionalInfo: {
+        currentSegmentLots: currentPositions.segment_lots,
+        orderLots: orderLots,
+        newSegmentLots: newSegmentLots,
+        maxAllowedLots: segmentMaxLots,
+        segment: segment,
+        instrument: symbol
+      }
+    };
+  }
+  
+  // All checks passed
+  return {
+    isValid: true,
+    reason: 'Position limits check passed',
+    additionalInfo: {
+      currentLots: currentPositions.symbol_lots,
+      newPositionLots: newSymbolLots,
+      maxAllowedLots: symbolMaxLots,
+      currentSegmentLots: currentPositions.segment_lots,
+      newSegmentLots: newSegmentLots,
+      maxSegmentLots: segmentMaxLots,
+      segment: segment,
+      instrument: symbol
+    }
+  };
+};
+
+// Helper function to get current positions
+const getCurrentPositions = async (
+  userId: number,
+  symbol: string,
+  segment: UserInvestmentSegment
+) => {
+  try {
+    // Get positions for this specific symbol
+    const symbolPositions = await db
+      .selectFrom('user_positions')
+      .where('user_id', '=', userId)
+      .where('symbol', '=', symbol)
+      .select(['lots'])
+      .execute();
+    
+    // Get all positions for this segment
+    const segmentPositions = await db
+      .selectFrom('user_positions')
+      .where('user_id', '=', userId)
+      .where('segment', '=', segment)
+      .select(['lots'])
+      .execute();
+    
+    // Calculate total lots for this symbol
+    const symbol_lots = symbolPositions.reduce((sum, pos) => sum + Math.abs(pos.lots), 0);
+    
+    // Calculate total lots for this segment
+    const segment_lots = segmentPositions.reduce((sum, pos) => sum + Math.abs(pos.lots), 0);
+    
+    return {
+      symbol_lots,
+      segment_lots
+    };
+  } catch (error) {
+    logger.warn(`Error fetching positions for user ${userId}, symbol ${symbol}, defaulting to zero`);
+    return {
+      symbol_lots: 0,
+      segment_lots: 0
+    };
+  }
+};
+
+// Helper function to get lot size
+const getLotSize = async (
+  symbol:string, 
+  segment:UserInvestmentSegment, 
+  exchange:string) => {
+  try {
+    // Try to fetch from the database
+    const lotSizeData = await db
+      .selectFrom('lot_size_config')
+      .where('symbol', '=', symbol)
+      .where('segment', '=', segment)
+      .where('exchange', '=', exchange)
+      .where('effective_from', '<=', new Date())
+      .where((eb) => 
+        eb.or([
+          eb('effective_to', 'is', null),
+          eb('effective_to', '>=', new Date())
+        ])
+      )
+      .select(['lot_size'])
+      .executeTakeFirst();
+    
+    if (lotSizeData?.lot_size) {
+      return lotSizeData.lot_size;
+    }
+  } catch (error) {
+    logger.warn(`Error fetching lot size for ${symbol}, using default`);
+  }
+  
+  // Default F&O lot size if not found
+  return 50;
+};
+
+// Log the position limit check
+const positionLimitCheck = async (
+  clientId, 
+  checkData,
+  result
+) => {
+  await db
+    .insertInto('segment_checks')
+    .values({
+      client_id: clientId,
+      check_type: 'POSITION_LIMIT_VALIDATION',
+      passed: result.isValid,
+      reason: result.reason,
+      additional_data: JSON.stringify({
+        symbol: checkData.symbol,
+        quantity: checkData.quantity,
+        orderLots: checkData.orderLots,
+        orderSide: checkData.order_side,
+        segment: checkData.segment,
+        currentLots: result.additionalInfo?.currentLots,
+        newPositionLots: result.additionalInfo?.newPositionLots,
+        maxAllowedLots: result.additionalInfo?.maxAllowedLots,
+        currentSegmentLots: result.additionalInfo?.currentSegmentLots,
+        newSegmentLots: result.additionalInfo?.newSegmentLots,
+        maxSegmentLots: result.additionalInfo?.maxSegmentLots
+      }),
+      timestamp: new Date()
+    })
+    .executeTakeFirstOrThrow();
+  
+  logger.info(
+    `Position limit check for client ${clientId}, symbol ${checkData.symbol}, lots ${checkData.orderLots}: ${result.isValid ? 'PASSED' : 'FAILED'}`
+  );
+};
+
 export {
     checkClientAccountStatus,
     updateClientAccountStatus,
@@ -2086,5 +2355,6 @@ export {
     validateProductOrderCompatibility,
     validatePriceTriggerRelationship,
     checkAvailableMargin,
-    validateCashCollateralRatio
+    validateCashCollateralRatio,
+    checkPositionLimits
 };
