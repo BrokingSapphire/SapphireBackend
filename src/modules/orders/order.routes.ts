@@ -1,5 +1,3 @@
-// order.routes.ts
-
 import { Router } from 'express';
 import { validate } from '@app/middlewares';
 import {

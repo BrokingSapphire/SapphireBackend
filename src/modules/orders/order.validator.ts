@@ -1,5 +1,3 @@
-// order.validator.ts
-
 import Joi from 'joi';
 import { OrderSide, ProductType, OrderType, OrderValidity, OrderCategory, OrderStatus } from './order.types';
 
@@ -153,4 +151,38 @@ export const OrderQuerySchema = Joi.object({
  */
 export const OrderLimitSchema = Joi.object({
     limit: Joi.number().integer().positive().optional(),
+});
+
+/**
+ * Validator for order execution request
+ */
+export const ExecuteOrderSchema = Joi.object({
+    executionPrice: Joi.number().positive().required(),
+    exchangeOrderId: Joi.string().optional(),
+    remarks: Joi.string().optional(),
+});
+
+/**
+ * Validator for executing the next leg of an iceberg order
+ */
+export const ExecuteNextLegSchema = Joi.object({
+    executionPrice: Joi.number().positive().required(),
+    exchangeOrderId: Joi.string().optional(),
+    remarks: Joi.string().optional(),
+});
+
+/**
+ * Validator for rejecting an order
+ */
+export const RejectOrderSchema = Joi.object({
+    rejectionReason: Joi.string().required(),
+});
+
+/**
+ * Validator for executing a stop loss order
+ */
+export const ExecuteStopLossSchema = Joi.object({
+    executionPrice: Joi.number().positive().required(),
+    exchangeOrderId: Joi.string().optional(),
+    remarks: Joi.string().optional(),
 });

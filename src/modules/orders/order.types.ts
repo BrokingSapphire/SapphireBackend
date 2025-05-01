@@ -1,4 +1,8 @@
-// order.types.ts
+import { JwtPayloadWithoutWildcard } from '@app/types';
+
+export type JwtType = JwtPayloadWithoutWildcard & {
+    userId: number;
+};
 
 export enum OrderSide {
     BUY = 'buy',
