@@ -1,59 +1,73 @@
-// src/routes/compliance.routes.ts
-import express from 'express';
+import { Router } from 'express';
 import {
     finalizeVerification,
     getVerificationStatus,
-    handleGetCheckpointDetails,
-    renderVerificationDetail,
+    getVerificationDetail,
     updateVerificationStatus,
+    getVerificationStepStatus,
 } from './compliance.controller';
-
-import validators from './compliance.validator';
 import { jwtMiddleware } from '@app/utils/jwt';
+import {
+    CheckpointIdParamSchema,
+    GetVerificationDetailParamSchema,
+    UpdateVerificationStatusSchema,
+} from '@app/modules/compliance/compliance.validator';
+import { validate } from '@app/middlewares';
 
-const router = express.Router();
+const router = Router();
 
 /**
- * Route to render verification details for a specific checkpoint ID and verification step
- * POST /verification/:checkpointId/details
+ * Route to get verification status for a specific checkpoint ID
+ * GET /:checkpointId/status
  */
-router.post(
-    '/verification/:checkpointId/details',
-    jwtMiddleware,
-    validators.checkpointIdParam,
-    validators.renderVerificationDetail,
-    renderVerificationDetail,
-);
+router.get('/:checkpointId/status', jwtMiddleware, validate(CheckpointIdParamSchema, 'params'), getVerificationStatus);
 
 /**
  * Route to update verification status for a specific verification type
- * POST /verification/:checkpointId/status
+ * PUT /:checkpointId/status
  */
-router.post(
-    '/verification/:checkpointId/status',
+router.put(
+    '/:checkpointId/status',
     jwtMiddleware,
-    validators.checkpointIdParam,
-    validators.updateVerificationStatus,
+    validate(CheckpointIdParamSchema, 'params'),
+    validate(UpdateVerificationStatusSchema),
     updateVerificationStatus,
 );
 
 /**
  * Route to get current verification status for a checkpoint
- * GET /verification/:checkpointId
+ * GET /:checkpointId/:step/status
  */
-router.get('/verification/:checkpointId', jwtMiddleware, validators.checkpointIdParam, getVerificationStatus);
+router.get(
+    '/:checkpointId/:step/status',
+    jwtMiddleware,
+    validate(CheckpointIdParamSchema, 'params'),
+    validate(GetVerificationDetailParamSchema, 'params'),
+    getVerificationStepStatus,
+);
 
 /**
- * Route to get checkpoint details (dashboard data)
- * GET /:checkpointId
+ * Route to render verification details for a specific checkpoint ID and verification step
+ * GET /:checkpointId/:step
  */
-router.get('/:checkpointId', jwtMiddleware, validators.checkpointIdParam, handleGetCheckpointDetails);
+router.get(
+    '/:checkpointId/:step',
+    jwtMiddleware,
+    validate(CheckpointIdParamSchema, 'params'),
+    validate(GetVerificationDetailParamSchema, 'params'),
+    getVerificationDetail,
+);
 
 /**
  * Route to finalize verification - checks all statuses,
  * updates overall status, creates user, and deletes checkpoint
  * POST /finalize-verification/:checkpointId
  */
-router.post('/finalize-verification/:checkpointId', jwtMiddleware, validators.checkpointIdParam, finalizeVerification);
+router.post(
+    '/:checkpointId/finalize',
+    jwtMiddleware,
+    validate(CheckpointIdParamSchema, 'params'),
+    finalizeVerification,
+);
 
 export default router;
