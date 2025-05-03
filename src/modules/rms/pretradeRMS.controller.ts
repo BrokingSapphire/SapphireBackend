@@ -2,7 +2,7 @@
 
 import { Request, Response } from 'express';
 import { db } from '@app/database';
-import {OrderSide, UserInvestmentSegment, AccountStatusValidationResult , SuspensionDetails, KycDetails, SegmentValidationResult, RiskProfileResponse, OrderTypeValidationResult, ProductOrderTypeCombination ,QuantityValidationResult, ValidityValidationResult, LotSizeConfig, LotSizeConfiguration , MarginValidationResult, CheckMarginRequest, CashCollateralValidationResult , PositionLimitValidationResult , OpenPositionLimit , UserPositionSummary} from '@app/database/db';
+import {OrderSide, UserInvestmentSegment, AccountStatusValidationResult , SuspensionDetails, KycDetails, SegmentValidationResult, RiskProfileResponse, OrderTypeValidationResult, ProductOrderTypeCombination ,QuantityValidationResult, ValidityValidationResult, LotSizeConfig, LotSizeConfiguration , MarginValidationResult, CheckMarginRequest, CashCollateralValidationResult , PositionLimitValidationResult , PositionLimitCheckData, MtmLossLimitResult, MtmLossLimitCheck, UserMtmLossLimit, UserDailyMtmLoss } from '@app/database/db';
 import { AccountStatus, OrderValidity , UserCategory} from './rms.types';
 import { calculateRiskScore } from '@app/services/rms.service';
 import { BadRequestError , NotFoundError} from '@app/apiError';
@@ -2075,13 +2075,6 @@ const cashCollateralValidationCheck = async (
   );
 };
 
-// Position Limit Validation Result interface
-const PositionLimitValidationResult = {
-  isValid: false,
-  reason: '',
-  additionalInfo: {}
-};
-
 // Controller function to check position limits
 const checkPositionLimits = async (req:Request, res:Response) => {
   // Get user ID from query params or auth middleware
@@ -2311,9 +2304,9 @@ const getLotSize = async (
 
 // Log the position limit check
 const positionLimitCheck = async (
-  clientId, 
-  checkData,
-  result
+  clientId:string, 
+  checkData:PositionLimitCheckData,
+  result:PositionLimitValidationResult
 ) => {
   await db
     .insertInto('segment_checks')
@@ -2344,6 +2337,336 @@ const positionLimitCheck = async (
   );
 };
 
+// MTM-loss Function
+const checkMtmLossLimit = async (req: Request, res: Response): Promise<void> => {
+  const userId = parseInt(req.query.userId as string, 10) || 1;
+  const clientId = userId.toString();
+
+  const { 
+    symbol, 
+    quantity, 
+    price, 
+    product_type, 
+    order_side, 
+    trade_type 
+  } = req.body;
+
+  if (!symbol || !quantity || !price || !product_type || !order_side) {
+    throw new BadRequestError('Missing required order parameters');
+  }
+   // Check if account is active
+   const clientAccount = await db
+   .selectFrom('client_accounts')
+   .where('client_id', '=', clientId)
+   .select(['account_status'])
+   .executeTakeFirstOrThrow();
+
+ if (clientAccount.account_status !== 'ACTIVE') {
+   res.status(BAD_REQUEST).json({ 
+     isValid: false, 
+     message: 'Account is not active',
+   });
+   return;
+ }
+
+ // Determining segment
+ const segment = determineSegmentFromTradeType(trade_type, symbol);
+
+ // validate MTM loss limit
+ const result = await validateMtmLossLimit(
+  parseInt(clientId, 10),
+    symbol,
+    quantity,
+    price,
+    product_type,
+    order_side,
+    segment
+ )
+
+ await mtmLossLimitCheck(clientId, {
+  symbol,
+  quantity,
+  price,
+  product_type,
+  order_side,
+  segment
+}, result);
+// Return response
+if (result.isValid) {
+  res.status(OK).json({ 
+    isValid: true, 
+    message: result.reason 
+  });
+} else {
+  res.status(BAD_REQUEST).json({ 
+    isValid: false, 
+    message: result.reason,
+    details: result.additionalInfo || {}
+  });
+}
+};
+
+const validateMtmLossLimit = async (
+  userId:number,
+  symbol:string,
+  quantity:number,
+  price:number,
+  productType:string,
+  orderSide:OrderSide,
+  segment:UserInvestmentSegment
+):Promise<MtmLossLimitResult> =>{
+  
+  // get user MTM loss limit
+  const userMtmLossLimit = await db
+    .selectFrom('user_mtm_loss_limits')
+    .where('user_id', '=', userId)
+    .where('is_active', '=', true)
+    .select(['mtm_loss_limit'])
+    .executeTakeFirst();
+
+  if (!userMtmLossLimit) {
+    return {
+      isValid: true,
+      reason: 'MTM loss limit validation passed - no limits configured'
+    };
+  }
+
+  const mtmLossLimit = userMtmLossLimit.mtm_loss_limit;
+
+  // Get current trading date 
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // users MTM loss limit
+  const currentMtmLoss = await db
+    .selectFrom('user_daily_mtm_loss')
+    .where('user_id', '=', userId)
+    .where('trading_date', '=', today)
+    .select(['realized_loss', 'unrealized_loss', 'total_loss'])
+    .executeTakeFirst();
+
+  // check for the record  
+  const dailyRealized = currentMtmLoss?.realized_loss || 0;
+  const dailyUnrealized = currentMtmLoss?.unrealized_loss || 0;
+  const totalDailyLoss = dailyRealized + dailyUnrealized;
+
+  let potentialAdditionalLoss = 0;
+    
+  if (orderSide === 'buy') {
+    const conservativeLossPercentage = 0.05; // 5% potential loss
+    potentialAdditionalLoss = quantity * price * conservativeLossPercentage;
+  }
+
+  const isSquareOff = await isSquareOffOrder(userId, symbol, quantity, orderSide);
+  if (isSquareOff) {
+    return {
+      isValid: true,
+      reason: 'MTM loss limit validation passed - square-off order allowed',
+      additionalInfo: {
+        currentLoss: totalDailyLoss,
+        lossLimit: mtmLossLimit,
+        remainingLossCapacity: Math.max(0, mtmLossLimit - totalDailyLoss),
+        dailyRealized: dailyRealized,
+        dailyUnrealized: dailyUnrealized
+      }
+    };
+  }
+  
+  // Check if current + potential loss exceeds the limit
+  if (totalDailyLoss + potentialAdditionalLoss >= mtmLossLimit) {
+    return {
+      isValid: false,
+      reason: 'MTM loss limit exceeded - only square-off orders are allowed',
+      additionalInfo: {
+        currentLoss: totalDailyLoss,
+        lossLimit: mtmLossLimit,
+        remainingLossCapacity: Math.max(0, mtmLossLimit - totalDailyLoss),
+        dailyRealized: dailyRealized,
+        dailyUnrealized: dailyUnrealized
+      }
+    };
+  }
+  
+  // Limit not exceeded
+  return {
+    isValid: true,
+    reason: 'MTM loss limit validation passed',
+    additionalInfo: {
+      currentLoss: totalDailyLoss,
+      lossLimit: mtmLossLimit,
+      remainingLossCapacity: Math.max(0, mtmLossLimit - totalDailyLoss),
+      dailyRealized: dailyRealized,
+      dailyUnrealized: dailyUnrealized
+    }
+  };
+};
+  const isSquareOffOrder = async (
+    userId: number, 
+    symbol: string, 
+    quantity: number, 
+    orderSide: OrderSide
+  ): Promise<boolean> => {
+    const positions = await db
+      .selectFrom('trading_positions')
+      .where('user_id', '=', userId)
+      .where('symbol', '=', symbol)
+      .select(['quantity', 'order_side'])
+      .execute();
+    
+    if (positions.length === 0) {
+      return false; // No existing position to square off
+    }
+    let netPosition = 0;
+    for (const position of positions) {
+      if (position.order_side === 'buy') {
+        netPosition += position.quantity;
+      } else {
+        netPosition -= position.quantity;
+      }
+    }
+    
+    // Check if this order would reduce the position
+    if ((netPosition > 0 && orderSide === 'sell') || 
+        (netPosition < 0 && orderSide === 'buy')) {
+      // Further check if quantity doesn't exceed the position size
+      if ((orderSide === 'sell' && quantity <= netPosition) || 
+          (orderSide === 'buy' && quantity <= Math.abs(netPosition))) {
+        return true; // This is a square-off order
+      }
+    }
+    
+    return false;  
+  }
+
+// Function to log MTM loss limit check
+const mtmLossLimitCheck = async (
+  clientId: string,
+  checkData: MtmLossLimitCheck,
+  result: MtmLossLimitResult
+): Promise<void> => {
+  await db
+    .insertInto('segment_checks')
+    .values({
+      client_id: clientId,
+      check_type: 'MTM_LOSS_LIMIT_VALIDATION',
+      passed: result.isValid,
+      reason: result.reason,
+      additional_data: JSON.stringify({
+        symbol: checkData.symbol,
+        quantity: checkData.quantity,
+        price: checkData.price,
+        productType: checkData.product_type,
+        orderSide: checkData.order_side,
+        segment: checkData.segment,
+        currentLoss: result.additionalInfo?.currentLoss,
+        lossLimit: result.additionalInfo?.lossLimit,
+        remainingLossCapacity: result.additionalInfo?.remainingLossCapacity,
+        dailyRealized: result.additionalInfo?.dailyRealized,
+        dailyUnrealized: result.additionalInfo?.dailyUnrealized
+      }),
+      timestamp: new Date()
+    })
+    .executeTakeFirstOrThrow();
+  
+  logger.info(
+    `MTM loss limit check for client ${clientId}, symbol ${checkData.symbol}: ${result.isValid ? 'PASSED' : 'FAILED'}`
+  );
+};
+
+// fn for update User MTM Loss
+const updateUserMtmLoss = async (
+  userId: number,
+  realizedLoss: number,
+  unrealizedLoss: number
+): Promise<void> => {
+  // Get current trading date
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const existingRecord = await db
+    .selectFrom('user_daily_mtm_loss')
+    .where('user_id', '=', userId)
+    .where('trading_date', '=', today)
+    .select(['realized_loss', 'unrealized_loss'])
+    .executeTakeFirst();
+  
+  if(existingRecord){
+    await db
+        .updateTable('user_daily_mtm_loss')
+        .set({
+          realized_loss: existingRecord.realized_loss + realizedLoss,
+          unrealized_loss: unrealizedLoss, // Overwrite with current unrealized
+          total_loss: existingRecord.realized_loss + realizedLoss + unrealizedLoss,
+          last_updated: new Date()
+        })
+        .where('user_id', '=', userId)
+        .where('trading_date', '=', today)
+        .execute();
+  }
+  else {
+    // Create new record
+    await db
+      .insertInto('user_daily_mtm_loss')
+      .values({
+        user_id: userId,
+        trading_date: today,
+        realized_loss: realizedLoss,
+        unrealized_loss: unrealizedLoss,
+        total_loss: realizedLoss + unrealizedLoss,
+        last_updated: new Date()
+      })
+      .execute();
+  }
+  
+  logger.info(`Updated MTM loss for user ${userId}: realized=${realizedLoss}, unrealized=${unrealizedLoss}`);
+}
+
+// Function to get MTM loss status for a user
+const getUserMtmLossStatus = async (req: Request, res: Response): Promise<void> => {
+  const userId = parseInt(req.params.userId, 10);
+  
+  if (!userId) {
+    throw new BadRequestError('User ID is required');
+  }
+  const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Get user's MTM configuration
+    const mtmConfig = await db
+      .selectFrom('user_mtm_loss_limits')
+      .where('user_id', '=', userId)
+      .select(['mtm_loss_limit', 'is_active'])
+      .executeTakeFirst();
+    
+    // Get user's current MTM loss for today
+    const mtmLoss = await db
+      .selectFrom('user_daily_mtm_loss')
+      .where('user_id', '=', userId)
+      .where('trading_date', '=', today)
+      .select(['realized_loss', 'unrealized_loss', 'total_loss', 'last_updated'])
+      .executeTakeFirst();
+    
+    res.status(OK).json({
+      userId,
+      mtmLossLimit: mtmConfig?.mtm_loss_limit || null,
+      isActive: mtmConfig?.is_active || false,
+      todayLoss: {
+        realized: mtmLoss?.realized_loss || 0,
+        unrealized: mtmLoss?.unrealized_loss || 0,
+        total: mtmLoss?.total_loss || 0,
+        lastUpdated: mtmLoss?.last_updated || null
+      },
+      remainingCapacity: mtmConfig?.mtm_loss_limit 
+        ? Math.max(0, mtmConfig.mtm_loss_limit - (mtmLoss?.total_loss || 0))
+        : null,
+      status: (!mtmConfig?.is_active || !mtmConfig?.mtm_loss_limit) 
+        ? 'No active MTM limits'
+        : ((mtmLoss?.total_loss || 0) >= mtmConfig.mtm_loss_limit
+          ? 'MTM limit exceeded - only square-off allowed'
+          : 'Within MTM limits')
+    });
+}
+
 export {
     checkClientAccountStatus,
     updateClientAccountStatus,
@@ -2356,5 +2679,8 @@ export {
     validatePriceTriggerRelationship,
     checkAvailableMargin,
     validateCashCollateralRatio,
-    checkPositionLimits
+    checkPositionLimits,
+    checkMtmLossLimit,
+    getUserMtmLossStatus,
+    updateUserMtmLoss
 };
