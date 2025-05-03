@@ -173,10 +173,13 @@ const verifyPayment = async (req: Request<JwtType>, res: Response) => {
             .returning('order_id')
             .executeTakeFirstOrThrow();
 
-        await tx
+        const checkpoint = await tx
             .insertInto('signup_checkpoints')
             .values({ email, phone_id: phoneId.id, payment_id: razorPayDataId.order_id })
-            .execute();
+            .returning('id')
+            .executeTakeFirstOrThrow();
+
+        await tx.insertInto('signup_verification_status').values({ id: checkpoint.id }).execute();
     });
 
     await redisClient.del(`need-payment:${email}`);
@@ -356,11 +359,19 @@ const postCheckpoint = async (req: Request<JwtType>, res: Response) => {
                 .returning('id')
                 .executeTakeFirstOrThrow();
 
-            await updateCheckpoint(tx, email, phone, {
+            const checkpoint = await updateCheckpoint(tx, email, phone, {
                 name: nameId,
                 dob: new Date(panResponse.data.data.dob),
                 pan_id: panId.id,
-            }).execute();
+            })
+                .returning('id')
+                .executeTakeFirstOrThrow();
+
+            await tx
+                .updateTable('signup_verification_status')
+                .set({ pan_status: 'pending', updated_at: new Date() })
+                .where('id', '=', checkpoint.id)
+                .execute();
 
             if (exists) {
                 await tx.deleteFrom('pan_detail').where('id', '=', exists.id).execute();
@@ -460,10 +471,22 @@ const postCheckpoint = async (req: Request<JwtType>, res: Response) => {
                 .returning('id')
                 .executeTakeFirstOrThrow();
 
-            await updateCheckpoint(tx, email, phone, {
+            const checkpoint = await updateCheckpoint(tx, email, phone, {
                 aadhaar_id: aadhaarId.id,
                 address_id: addressId,
-            }).execute();
+            })
+                .returning('id')
+                .executeTakeFirstOrThrow();
+
+            await tx
+                .updateTable('signup_verification_status')
+                .set({
+                    aadhaar_status: 'pending',
+                    address_status: 'pending',
+                    updated_at: new Date(),
+                })
+                .where('id', '=', checkpoint.id)
+                .execute();
         });
 
         res.status(OK).json({
@@ -524,10 +547,18 @@ const postCheckpoint = async (req: Request<JwtType>, res: Response) => {
     } else if (step === CheckpointStep.OCCUPATION) {
         const { occupation, politically_exposed } = req.body;
         await db.transaction().execute(async (tx) => {
-            await updateCheckpoint(tx, email, phone, {
+            const checkpoint = await updateCheckpoint(tx, email, phone, {
                 occupation,
                 is_politically_exposed: politically_exposed,
-            }).execute();
+            })
+                .returning('id')
+                .executeTakeFirstOrThrow();
+
+            await tx
+                .updateTable('signup_verification_status')
+                .set({ trading_preferences_status: 'pending', updated_at: new Date() })
+                .where('id', '=', checkpoint.id)
+                .execute();
         });
 
         res.status(CREATED).json({ message: 'Occupation saved' });
@@ -623,6 +654,12 @@ const postCheckpoint = async (req: Request<JwtType>, res: Response) => {
                         is_primary: true,
                     })
                     .execute();
+
+                await tx
+                    .updateTable('signup_verification_status')
+                    .set({ bank_status: 'pending', updated_at: new Date() })
+                    .where('id', '=', checkpointId.id)
+                    .execute();
             });
 
             res.status(CREATED).json({ message: 'UPI validation completed' });
@@ -688,6 +725,12 @@ const postCheckpoint = async (req: Request<JwtType>, res: Response) => {
                         bank_account_id: bankId.id,
                         is_primary: true,
                     })
+                    .execute();
+
+                await tx
+                    .updateTable('signup_verification_status')
+                    .set({ bank_status: 'pending', updated_at: new Date() })
+                    .where('id', '=', checkpointId.id)
                     .execute();
             });
 
@@ -764,9 +807,17 @@ const putIpv = async (req: Request<JwtType>, res: Response) => {
     }
 
     await db.transaction().execute(async (tx) => {
-        await updateCheckpoint(tx, email, phone, {
+        const checkpoint = await updateCheckpoint(tx, email, phone, {
             ipv: uploadResult.file.location,
-        }).execute();
+        })
+            .returning('id')
+            .executeTakeFirstOrThrow();
+
+        await tx
+            .updateTable('signup_verification_status')
+            .set({ ipv_status: 'pending', updated_at: new Date() })
+            .where('id', '=', checkpoint.id)
+            .execute();
     });
 
     await redisClient.del(`signup_ipv:${uid}`);
@@ -806,9 +857,17 @@ const putSignature = async (req: Request<JwtType>, res: Response) => {
     }
 
     await db.transaction().execute(async (tx) => {
-        await updateCheckpoint(tx, email, phone, {
+        const checkpoint = await updateCheckpoint(tx, email, phone, {
             signature: uploadResult.file.location,
-        }).execute();
+        })
+            .returning('id')
+            .executeTakeFirstOrThrow();
+
+        await tx
+            .updateTable('signup_verification_status')
+            .set({ signature_status: 'pending', updated_at: new Date() })
+            .where('id', '=', checkpoint.id)
+            .execute();
     });
 
     await redisClient.del(`signup_signature:${uid}`);

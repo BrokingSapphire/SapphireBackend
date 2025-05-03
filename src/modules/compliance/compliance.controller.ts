@@ -10,8 +10,24 @@ import BankDetailsService, { BankDetails } from '@app/services/bank-details.serv
  */
 const getVerificationDetail = async (req: Request, res: Response) => {
     const checkpointId = Number(req.params.checkpointId);
-    let responseData;
 
+    const verified = await db
+        .selectFrom('signup_verification_status')
+        .select(verificationTypeToFieldMap[req.params.step as VerificationType])
+        .where('id', '=', checkpointId)
+        .executeTakeFirstOrThrow();
+
+    if (verified[verificationTypeToFieldMap[req.params.step as VerificationType]] === 'processing') {
+        res.status(OK).json({
+            message: 'Verification is still in progress',
+            data: {
+                status: verified[verificationTypeToFieldMap[req.params.step as VerificationType]],
+            },
+        });
+        return;
+    }
+
+    let responseData;
     switch (req.params.step) {
         case VerificationType.PAN:
             responseData = await fetchPanVerificationData(checkpointId);
@@ -61,17 +77,11 @@ const getVerificationDetail = async (req: Request, res: Response) => {
             throw new Error(`Invalid verification step: ${req.params.step}`);
     }
 
-    const verified = await db
-        .selectFrom('signup_verification_status')
-        .select(verificationTypeToFieldMap[req.params.step])
-        .where('id', '=', checkpointId)
-        .executeTakeFirstOrThrow();
-
     res.status(OK).json({
         message: 'Verification details fetched successfully',
         data: {
             [req.params.step]: responseData,
-            verified: verified[verificationTypeToFieldMap[req.params.step]],
+            status: verified[verificationTypeToFieldMap[req.params.step]],
         },
     });
 };
