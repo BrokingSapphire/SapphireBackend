@@ -5,6 +5,8 @@ import {
     getVerificationDetail,
     updateVerificationStatus,
     getVerificationStepStatus,
+    getCheckpointDetails,
+    assignOfficer,
 } from './compliance.controller';
 import { jwtMiddleware } from '@app/utils/jwt';
 import {
@@ -16,11 +18,15 @@ import { validate } from '@app/middlewares';
 
 const router = Router();
 
+router.post('/:checkpointId/assign', jwtMiddleware, validate(CheckpointIdParamSchema, 'params'), assignOfficer);
+
 /**
  * Route to get verification status for a specific checkpoint ID
  * GET /:checkpointId/status
  */
 router.get('/:checkpointId/status', jwtMiddleware, validate(CheckpointIdParamSchema, 'params'), getVerificationStatus);
+
+router.get('/:checkpointId/details', jwtMiddleware, validate(CheckpointIdParamSchema, 'params'), getCheckpointDetails);
 
 /**
  * Route to update verification status for a specific verification type

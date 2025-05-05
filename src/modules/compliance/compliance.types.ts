@@ -1,4 +1,9 @@
 import { SignupVerificationStatus } from '@app/database/db';
+import { JwtPayloadWithoutWildcard } from '@app/types';
+
+export type JwtType = JwtPayloadWithoutWildcard & {
+    userId: number;
+};
 
 /**
  * Valid verification types from the database

@@ -5,10 +5,12 @@ import webhookRouter from './webhooks';
 import { db } from '@app/database';
 import { OK } from '@app/utils/httpstatus';
 import redisClient from '@app/services/redis.service';
+import complianceRouter from './compliance';
 
 const router = Router();
 
 router.use('/auth/signup', signupRouter);
+router.use('/compliance', complianceRouter);
 router.use('/funds', fundsRouter);
 router.use('/webhook', webhookRouter);
 

@@ -1,9 +1,33 @@
-import { Request, Response } from 'express';
+import { Request, Response } from '@app/types.d';
 import { db } from '@app/database';
 import { OK } from '@app/utils/httpstatus';
-import { UpdateVerificationRequest, VerificationType, verificationTypeToFieldMap } from './compliance.types';
-import { BadRequestError } from '@app/apiError';
+import { JwtType, UpdateVerificationRequest, VerificationType, verificationTypeToFieldMap } from './compliance.types';
+import { BadRequestError, ForbiddenError, UnauthorizedError } from '@app/apiError';
 import BankDetailsService, { BankDetails } from '@app/services/bank-details.service';
+
+const assignOfficer = async (req: Request<JwtType>, res: Response) => {
+    const checkpointId = Number(req.params.checkpointId);
+
+    const result = await db.transaction().execute(async (tx) => {
+        return await tx
+            .insertInto('compliance_processing')
+            .values({
+                officer_id: req.auth!!.userId,
+                checkpoint_id: checkpointId,
+            })
+            .onConflict((oc) => oc.constraint('PK_Compliance_Checkpoint_Id').doNothing())
+            .returning('checkpoint_id')
+            .execute();
+    });
+
+    if (result.length > 0) {
+        res.status(OK).json({
+            message: 'Compliance officer assigned successfully.',
+        });
+    } else {
+        throw new ForbiddenError('Officer already assigned.');
+    }
+};
 
 /**
  * Render verification details page
@@ -189,7 +213,7 @@ const fetchBankVerificationData = async (checkpointId: number) => {
         return acc;
     }, new Map());
 
-    const formattedBankAccounts = bankAccounts.map((account) => {
+    return bankAccounts.map((account) => {
         const bankDetail = bankDetails.get(account.ifsc_code);
 
         return {
@@ -202,8 +226,6 @@ const fetchBankVerificationData = async (checkpointId: number) => {
             verificationMethod: 'Reverse Penny Drop',
         };
     });
-
-    return formattedBankAccounts;
 };
 
 /**
@@ -393,8 +415,19 @@ const fetchTradingPreferencesData = async (checkpointId: number) => {
 /**
  * Update verification status for a checkpoint
  */
-const updateVerificationStatus = async (req: Request, res: Response) => {
+const updateVerificationStatus = async (req: Request<JwtType>, res: Response) => {
     const checkpointId = Number(req.params.checkpointId);
+
+    const officer = await db
+        .selectFrom('compliance_processing')
+        .select('officer_id')
+        .where('checkpoint_id', '=', checkpointId)
+        .executeTakeFirstOrThrow();
+
+    if (officer.officer_id !== req.auth?.userId) {
+        throw new UnauthorizedError();
+    }
+
     const { verificationType, status } = req.body as UpdateVerificationRequest;
 
     const statusFieldName = verificationTypeToFieldMap[verificationType];
@@ -616,6 +649,7 @@ const finalizeVerification = async (req: Request, res: Response) => {
 };
 
 export {
+    assignOfficer,
     getVerificationDetail,
     updateVerificationStatus,
     getVerificationStepStatus,
