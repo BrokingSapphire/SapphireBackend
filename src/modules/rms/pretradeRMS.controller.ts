@@ -2,8 +2,8 @@
 
 import { Request, Response } from 'express';
 import { db } from '@app/database';
-import {OrderSide, UserInvestmentSegment, AccountStatusValidationResult , SuspensionDetails, KycDetails, SegmentValidationResult, RiskProfileResponse, OrderTypeValidationResult, ProductOrderTypeCombination ,QuantityValidationResult, ValidityValidationResult, LotSizeConfig, LotSizeConfiguration , MarginValidationResult, CheckMarginRequest, CashCollateralValidationResult , PositionLimitValidationResult , PositionLimitCheckData, MtmLossLimitResult, MtmLossLimitCheck, UserMtmLossLimit, UserDailyMtmLoss } from '@app/database/db';
-import { AccountStatus, OrderValidity , UserCategory} from './rms.types';
+import {OrderSide, UserInvestmentSegment, AccountStatusValidationResult , SuspensionDetails, KycDetails, SegmentValidationResult, RiskProfileResponse, OrderTypeValidationResult, ProductOrderTypeCombination ,QuantityValidationResult, ValidityValidationResult, LotSizeConfig, LotSizeConfiguration , MarginValidationResult, CheckMarginRequest, CashCollateralValidationResult , PositionLimitValidationResult , PositionLimitCheckData, MtmLossLimitResult, MtmLossLimitCheck,NetPositionRestrictionResult ,NetPositionCheckData , InstrumentRestriction} from '@app/database/db';
+import { AccountStatus, OrderValidity } from './rms.types';
 import { calculateRiskScore } from '@app/services/rms.service';
 import { BadRequestError , NotFoundError} from '@app/apiError';
 import logger from '@app/logger';
@@ -2185,10 +2185,10 @@ const validatePositionLimits = async (
       reason: `Order exceeds maximum allowed lots (${symbolMaxLots}) for ${symbol}`,
       additionalInfo: {
         currentLots: currentPositions.symbol_lots,
-        orderLots: orderLots,
+        orderLots,
         newPositionLots: newSymbolLots,
         maxAllowedLots: symbolMaxLots,
-        segment: segment,
+        segment,
         instrument: symbol
       }
     };
@@ -2201,10 +2201,10 @@ const validatePositionLimits = async (
       reason: `Order exceeds maximum allowed total F&O lots (${segmentMaxLots})`,
       additionalInfo: {
         currentSegmentLots: currentPositions.segment_lots,
-        orderLots: orderLots,
-        newSegmentLots: newSegmentLots,
+        orderLots,
+        newSegmentLots,
         maxAllowedLots: segmentMaxLots,
-        segment: segment,
+        segment,
         instrument: symbol
       }
     };
@@ -2219,9 +2219,9 @@ const validatePositionLimits = async (
       newPositionLots: newSymbolLots,
       maxAllowedLots: symbolMaxLots,
       currentSegmentLots: currentPositions.segment_lots,
-      newSegmentLots: newSegmentLots,
+      newSegmentLots,
       maxSegmentLots: segmentMaxLots,
-      segment: segment,
+      segment,
       instrument: symbol
     }
   };
@@ -2251,20 +2251,20 @@ const getCurrentPositions = async (
       .execute();
     
     // Calculate total lots for this symbol
-    const symbol_lots = symbolPositions.reduce((sum, pos) => sum + Math.abs(pos.lots), 0);
+    const symbolLots = symbolPositions.reduce((sum, pos) => sum + Math.abs(pos.lots), 0);
     
     // Calculate total lots for this segment
-    const segment_lots = segmentPositions.reduce((sum, pos) => sum + Math.abs(pos.lots), 0);
+    const segmentLots = segmentPositions.reduce((sum, pos) => sum + Math.abs(pos.lots), 0);
     
     return {
-      symbol_lots,
-      segment_lots
+      symbolLots,
+      segmentLots
     };
   } catch (error) {
     logger.warn(`Error fetching positions for user ${userId}, symbol ${symbol}, defaulting to zero`);
     return {
-      symbol_lots: 0,
-      segment_lots: 0
+      symbolLots: 0,
+      segmentLots: 0
     };
   }
 };
@@ -2466,8 +2466,8 @@ const validateMtmLossLimit = async (
         currentLoss: totalDailyLoss,
         lossLimit: mtmLossLimit,
         remainingLossCapacity: Math.max(0, mtmLossLimit - totalDailyLoss),
-        dailyRealized: dailyRealized,
-        dailyUnrealized: dailyUnrealized
+        dailyRealized,
+        dailyUnrealized
       }
     };
   }
@@ -2481,8 +2481,8 @@ const validateMtmLossLimit = async (
         currentLoss: totalDailyLoss,
         lossLimit: mtmLossLimit,
         remainingLossCapacity: Math.max(0, mtmLossLimit - totalDailyLoss),
-        dailyRealized: dailyRealized,
-        dailyUnrealized: dailyUnrealized
+        dailyRealized,
+        dailyUnrealized
       }
     };
   }
@@ -2495,8 +2495,8 @@ const validateMtmLossLimit = async (
       currentLoss: totalDailyLoss,
       lossLimit: mtmLossLimit,
       remainingLossCapacity: Math.max(0, mtmLossLimit - totalDailyLoss),
-      dailyRealized: dailyRealized,
-      dailyUnrealized: dailyUnrealized
+      dailyRealized,
+      dailyUnrealized
     }
   };
 };
@@ -2667,6 +2667,442 @@ const getUserMtmLossStatus = async (req: Request, res: Response): Promise<void> 
     });
 }
 
+// Check net buy/sell restrictions
+const checkNetBuySellRestrictions = async (req: Request, res: Response): Promise<void> => {
+  const userId = parseInt(req.query.userId as string, 10) || 1;
+  const clientId = userId.toString();
+  
+  const { 
+    symbol, 
+    quantity, 
+    price,
+    order_side,
+    trade_type,
+    exchange 
+  } = req.body;
+  
+  if (!symbol || !quantity || !price || !order_side || !trade_type) {
+    throw new BadRequestError('Missing required order parameters');
+  }
+
+  // Check if account is active
+  const clientAccount = await db
+    .selectFrom('client_accounts')
+    .where('client_id', '=', clientId)
+    .select(['account_status'])
+    .executeTakeFirstOrThrow();
+
+  if (clientAccount.account_status !== AccountStatus.ACTIVE) {
+    res.status(BAD_REQUEST).json({ 
+      isValid: false, 
+      message: 'Account is not active',
+    });
+    return;
+  }
+  
+  // Determine segment based on trade type
+  const segment = determineSegmentFromTradeType(trade_type, symbol);
+  
+  // Validate net buy/sell restrictions
+  const result = await validateNetBuySellRestrictions(
+    parseInt(clientId, 10),
+    symbol,
+    quantity,
+    price,
+    order_side,
+    segment,
+    exchange
+  );
+  
+  // Log the validation result
+  await netPositionRestrictionCheck(clientId, {
+    symbol,
+    quantity,
+    price,
+    order_side,
+    trade_type,
+    exchange
+  }, result);
+  
+  // Return response
+  if (result.isValid) {
+    res.status(OK).json({ 
+      isValid: true, 
+      message: result.reason 
+    });
+  } else {
+    res.status(BAD_REQUEST).json({ 
+      isValid: false, 
+      message: result.reason,
+      details: result.additionalInfo || {}
+    });
+  }
+};
+
+// Validate net buy/sell restrictions
+const validateNetBuySellRestrictions = async (
+  userId: number,
+  symbol: string,
+  quantity: number,
+  price: number,
+  orderSide: OrderSide,
+  segment: UserInvestmentSegment,
+  exchange: string
+): Promise<NetPositionRestrictionResult> => {
+  // 1. Check if the instrument has any restrictions
+  const restriction = await getInstrumentRestrictions(symbol, segment, exchange);
+  
+  if (!restriction || !restriction.is_restricted) {
+    return {
+      isValid: true,
+      reason: 'No net buy/sell restrictions applicable for this instrument'
+    };
+  }
+  
+  // 2. Get current net position
+  const currentPosition = await getUserNetPosition(userId, symbol);
+  
+  // 3. Check if this is a square-off order
+  const isSquareOff = checkIsSquareOffOrderByPosition(currentPosition, orderSide, quantity);
+  
+  // 4. Apply restriction based on type
+  switch (restriction.restriction_type) {
+    case 'TIME_BASED':
+      return validateTimeBasedRestriction(
+        restriction,
+        currentPosition,
+        orderSide,
+        quantity,
+        isSquareOff
+      );
+      
+    case 'VALUE_BASED':
+      return await validateValueBasedRestriction(
+        userId,
+        restriction,
+        currentPosition,
+        orderSide,
+        quantity,
+        price,
+        isSquareOff
+      );
+      
+    case 'INTRADAY_ONLY':
+      return {
+        isValid: true,
+        reason: 'Intraday-only restriction - ensure position is squared off by end of day',
+        additionalInfo: {
+          netPositionAllowed: true,
+          currentPosition,
+          orderAction: 'ALLOWED'
+        }
+      };
+      
+    default:
+      return {
+        isValid: true,
+        reason: 'No specific restrictions apply to this instrument'
+      };
+  }
+};
+
+// Get instrument restrictions
+const getInstrumentRestrictions = async (
+  symbol: string,
+  segment: UserInvestmentSegment,
+  exchange: string
+): Promise<InstrumentRestriction | null> => {
+  const currentTime = new Date();
+  
+  const restriction = await db
+    .selectFrom('instrument_restrictions')
+    .where('symbol', '=', symbol)
+    .where('exchange', '=', exchange)
+    .where('segment', '=', segment)
+    .where('is_restricted', '=', true)
+    .where('effective_from', '<=', currentTime)
+    .where((eb) => 
+      eb.or([
+        eb('effective_to', 'is', null),
+        eb('effective_to', '>=', currentTime)
+      ])
+    )
+    .select([
+      'restriction_type',
+      'cutoff_time',
+      'max_net_buy_value',
+      'max_net_position'
+    ])
+    .executeTakeFirst() as InstrumentRestriction | undefined;
+  
+  if (restriction) {
+    return restriction;
+  }
+  
+  // Default restrictions for illiquid/SME stocks, currency pairs
+  if (segment === 'Currency') {
+    return {
+      symbol,
+      exchange,
+      segment,
+      is_restricted: true,
+      restriction_type: 'TIME_BASED',
+      cutoff_time: '17:00:00', // 5:00 PM
+      effective_from: new Date()
+    };
+  }
+  
+  // Check if symbol is likely an illiquid stock
+  if (segment === 'Cash' && (symbol.includes('SME') || symbol.includes('ILL'))) {
+    return {
+      symbol,
+      exchange,
+      segment,
+      is_restricted: true,
+      restriction_type: 'VALUE_BASED',
+      max_net_buy_value: 200000, // ₹2 lakhs
+      effective_from: new Date()
+    };
+  }
+  
+  return null;
+};
+
+// Get user's current net position for a symbol
+const getUserNetPosition = async (
+  userId: number,
+  symbol: string
+): Promise<number> => {
+  const positions = await db
+    .selectFrom('trading_positions')
+    .where('user_id', '=', userId)
+    .where('symbol', '=', symbol)
+    .select(['quantity', 'order_side'])
+    .execute();
+  
+  let netPosition = 0;
+  for (const position of positions) {
+    if (position.order_side === 'buy') {
+      netPosition += position.quantity;
+    } else {
+      netPosition -= position.quantity;
+    }
+  }
+  
+  return netPosition;
+};
+
+// Check if order is a square-off order
+const checkIsSquareOffOrderByPosition = (
+  currentPosition: number, 
+  orderSide: OrderSide, 
+  quantity: number
+): boolean => {
+  if (currentPosition > 0 && orderSide === 'sell') {
+    return quantity <= currentPosition;
+  }
+  
+  if (currentPosition < 0 && orderSide === 'buy') {
+    return quantity <= Math.abs(currentPosition);
+  }
+  
+  return false;
+};
+
+// Validate time-based restrictions
+const validateTimeBasedRestriction = (
+  restriction: InstrumentRestriction,
+  currentPosition: number,
+  orderSide: OrderSide,
+  quantity: number,
+  isSquareOff: boolean
+): NetPositionRestrictionResult => {
+  if (!restriction.cutoff_time) {
+    return {
+      isValid: true,
+      reason: 'No cutoff time specified for this instrument'
+    };
+  }
+  
+  const now = new Date();
+  const currentTimeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+  
+  // Check if current time is after cutoff time
+  if (currentTimeStr > restriction.cutoff_time) {
+    if (isSquareOff) {
+      return {
+        isValid: true,
+        reason: `After cutoff time (${restriction.cutoff_time}), but square-off order is allowed`,
+        additionalInfo: {
+          cutoffTime: restriction.cutoff_time,
+          netPositionAllowed: false,
+          currentPosition,
+          orderAction: 'SQUARE_OFF_ONLY'
+        }
+      };
+    } else {
+      return {
+        isValid: false,
+        reason: `Only square-off orders are allowed after cutoff time (${restriction.cutoff_time})`,
+        additionalInfo: {
+          cutoffTime: restriction.cutoff_time,
+          netPositionAllowed: false,
+          currentPosition,
+          orderAction: 'REJECTED'
+        }
+      };
+    }
+  }
+  
+  return {
+    isValid: true,
+    reason: `Before cutoff time (${restriction.cutoff_time}), net position change is allowed`,
+    additionalInfo: {
+      cutoffTime: restriction.cutoff_time,
+      netPositionAllowed: true,
+      currentPosition,
+      orderAction: 'ALLOWED'
+    }
+  };
+};
+
+// Get daily net buy value
+const getDailyNetBuyValue = async (
+  userId: number,
+  symbol: string
+): Promise<number> => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const buyOrders = await db
+    .selectFrom('orders')
+    .where('user_id', '=', userId)
+    .where('symbol', '=', symbol)
+    .where('order_side', '=', 'buy')
+    .where('status', '=', 'executed')
+    .where('executed_at', '>=', today)
+    .select(['quantity', 'price'])
+    .execute();
+  
+  let totalBuyValue = 0;
+  for (const order of buyOrders) {
+    if (order.price !== null) {
+        totalBuyValue += order.quantity * order.price;
+    }
+  }
+  
+  return totalBuyValue;
+};
+
+// Validate value-based restrictions
+const validateValueBasedRestriction = async (
+  userId: number,
+  restriction: InstrumentRestriction,
+  currentPosition: number,
+  orderSide: OrderSide,
+  quantity: number,
+  price: number,
+  isSquareOff: boolean
+): Promise<NetPositionRestrictionResult> => {
+  if (!restriction.max_net_buy_value) {
+    return {
+      isValid: true,
+      reason: 'No maximum net buy value specified for this instrument'
+    };
+  }
+  
+  // If it's not a buy order, no restriction applies
+  if (orderSide !== 'buy') {
+    return {
+      isValid: true,
+      reason: 'Value-based restriction only applies to buy orders',
+      additionalInfo: {
+        maxNetBuyValue: restriction.max_net_buy_value,
+        currentPosition,
+        orderAction: 'ALLOWED'
+      }
+    };
+  }
+  
+  // If it's a square-off order, always allow
+  if (isSquareOff) {
+    return {
+      isValid: true,
+      reason: 'Square-off buy order is always allowed',
+      additionalInfo: {
+        maxNetBuyValue: restriction.max_net_buy_value,
+        currentPosition,
+        orderAction: 'ALLOWED'
+      }
+    };
+  }
+  
+  // Calculate total buy value today
+  const currentNetBuyValue = await getDailyNetBuyValue(userId, restriction.symbol);
+  const orderValue = quantity * price;
+  
+  // Check if this order would exceed the max net buy value
+  if (currentNetBuyValue + orderValue > restriction.max_net_buy_value) {
+    return {
+      isValid: false,
+      reason: `Order would exceed maximum net buy value of ₹${restriction.max_net_buy_value}`,
+      additionalInfo: {
+        maxNetBuyValue: restriction.max_net_buy_value,
+        currentNetBuyValue,
+        currentPosition,
+        orderAction: 'REJECTED'
+      }
+    };
+  }
+  
+  return {
+    isValid: true,
+    reason: 'Order is within maximum net buy value limit',
+    additionalInfo: {
+      maxNetBuyValue: restriction.max_net_buy_value,
+      currentNetBuyValue,
+      currentPosition,
+      orderAction: 'ALLOWED'
+    }
+  };
+};
+
+// Log the net position restriction check
+const netPositionRestrictionCheck = async (
+  clientId: string,
+  checkData: NetPositionCheckData,
+  result: NetPositionRestrictionResult
+): Promise<void> => {
+  await db
+    .insertInto('segment_checks')
+    .values({
+      client_id: clientId,
+      check_type: 'NET_POSITION_RESTRICTION',
+      passed: result.isValid,
+      reason: result.reason,
+      additional_data: JSON.stringify({
+        symbol: checkData.symbol,
+        quantity: checkData.quantity,
+        price: checkData.price,
+        orderSide: checkData.order_side,
+        tradeType: checkData.trade_type,
+        exchange: checkData.exchange,
+        cutoffTime: result.additionalInfo?.cutoffTime,
+        netPositionAllowed: result.additionalInfo?.netPositionAllowed,
+        maxNetBuyValue: result.additionalInfo?.maxNetBuyValue,
+        currentNetBuyValue: result.additionalInfo?.currentNetBuyValue,
+        currentPosition: result.additionalInfo?.currentPosition,
+        orderAction: result.additionalInfo?.orderAction
+      }),
+      timestamp: new Date()
+    })
+    .executeTakeFirstOrThrow();
+  
+  logger.info(
+    `Net position restriction check for client ${clientId}, symbol ${checkData.symbol}: ${result.isValid ? 'PASSED' : 'FAILED'}`
+  );
+};
+
 export {
     checkClientAccountStatus,
     updateClientAccountStatus,
@@ -2682,5 +3118,6 @@ export {
     checkPositionLimits,
     checkMtmLossLimit,
     getUserMtmLossStatus,
-    updateUserMtmLoss
+    updateUserMtmLoss,
+    checkNetBuySellRestrictions
 };
