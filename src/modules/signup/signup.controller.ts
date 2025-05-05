@@ -1,10 +1,20 @@
-import { Response } from 'express';
-import { Request } from '@app/types.d';
+import { ParamsDictionary } from 'express-serve-static-core';
+import { Response, DefaultResponseData, Request } from '@app/types.d';
 import redisClient from '@app/services/redis.service';
 import { EmailOtpVerification, PhoneOtpVerification } from './signup.services';
 import { BadRequestError, NotFoundError, UnauthorizedError, UnprocessableEntityError } from '@app/apiError';
 import { db } from '@app/database';
-import { CheckpointStep, JwtType, ValidationType } from './signup.types';
+import {
+    CheckpointStep,
+    PostCheckpointType,
+    JwtType,
+    RequestOtpType,
+    ResponseWithToken,
+    ValidationType,
+    VerifyOtpType,
+    GetCheckpointType,
+    UIDParams,
+} from './signup.types';
 import { CredentialsType } from '@app/modules/common.types';
 import DigiLockerService from '@app/services/surepass/digilocker.service';
 import AadhaarXMLParser from '@app/utils/aadhaar-xml.parser';
@@ -20,8 +30,11 @@ import { imageUpload, wrappedMulterHandler } from '@app/services/multer-s3.servi
 import logger from '@app/logger';
 import razorPay from '@app/services/razorpay.service';
 
-const requestOtp = async (req: Request, res: Response) => {
-    const { type, phone, email } = req.body;
+const requestOtp = async (
+    req: Request<undefined, ParamsDictionary, DefaultResponseData, RequestOtpType>,
+    res: Response,
+) => {
+    const { type, email } = req.body;
     if (type === CredentialsType.EMAIL) {
         const userExists = await db.selectFrom('user').where('email', '=', email).executeTakeFirst();
         if (userExists) {
@@ -31,6 +44,7 @@ const requestOtp = async (req: Request, res: Response) => {
         const emailOtp = new EmailOtpVerification(email);
         await emailOtp.sendOtp();
     } else if (type === CredentialsType.PHONE) {
+        const { phone } = req.body;
         const phoneExists = await db
             .selectFrom('user')
             .innerJoin('phone_number', 'user.phone', 'phone_number.id')
@@ -62,8 +76,11 @@ const requestOtp = async (req: Request, res: Response) => {
     res.status(OK).json({ message: 'OTP sent' });
 };
 
-const verifyOtp = async (req: Request, res: Response) => {
-    const { type, phone, email, otp } = req.body;
+const verifyOtp = async (
+    req: Request<undefined, ParamsDictionary, DefaultResponseData, VerifyOtpType>,
+    res: Response<ResponseWithToken>,
+) => {
+    const { type, email, otp } = req.body;
     if (type === CredentialsType.EMAIL) {
         const emailOtp = new EmailOtpVerification(email);
         await emailOtp.verifyOtp(otp);
@@ -72,6 +89,7 @@ const verifyOtp = async (req: Request, res: Response) => {
 
         res.status(OK).json({ message: 'OTP verified' });
     } else if (type === CredentialsType.PHONE) {
+        const { phone } = req.body;
         if (!(await redisClient.get(`email-verified:${email}`))) throw new UnauthorizedError('Email not verified.');
 
         const phoneOtp = new PhoneOtpVerification(email, phone);
@@ -187,7 +205,7 @@ const verifyPayment = async (req: Request<JwtType>, res: Response) => {
     res.status(OK).json({ message: 'Payment verified' });
 };
 
-const getCheckpoint = async (req: Request<JwtType>, res: Response) => {
+const getCheckpoint = async (req: Request<JwtType, GetCheckpointType>, res: Response) => {
     const { email } = req.auth!!;
 
     const { step } = req.params;
@@ -285,7 +303,10 @@ const getCheckpoint = async (req: Request<JwtType>, res: Response) => {
     }
 };
 
-const postCheckpoint = async (req: Request<JwtType>, res: Response) => {
+const postCheckpoint = async (
+    req: Request<JwtType, ParamsDictionary, DefaultResponseData, PostCheckpointType>,
+    res: Response,
+) => {
     const { email, phone } = req.auth!!;
 
     const { step } = req.body;
@@ -509,7 +530,7 @@ const postCheckpoint = async (req: Request<JwtType>, res: Response) => {
             await tx
                 .insertInto('investment_segments_to_checkpoint')
                 .values(
-                    segments.map((segment: string) => ({
+                    segments.map((segment) => ({
                         checkpoint_id: signupCheckpoint.id,
                         segment,
                     })),
@@ -676,9 +697,6 @@ const postCheckpoint = async (req: Request<JwtType>, res: Response) => {
             if (!bankResponse.data.data.account_exists)
                 throw new UnprocessableEntityError('Bank account does not exist');
 
-            if (!bankResponse.data.data.ifsc_details.micr !== bank.micr_code)
-                throw new UnprocessableEntityError('MICR code does not match');
-
             await db.transaction().execute(async (tx) => {
                 const checkpointId = await tx
                     .selectFrom('signup_checkpoints')
@@ -792,7 +810,7 @@ const postCheckpoint = async (req: Request<JwtType>, res: Response) => {
 };
 
 const ipvImageUpload = wrappedMulterHandler(imageUpload.single('image'));
-const putIpv = async (req: Request<JwtType>, res: Response) => {
+const putIpv = async (req: Request<JwtType, UIDParams>, res: Response) => {
     const { uid } = req.params;
 
     const { email, phone } = req.auth!!;
@@ -842,7 +860,7 @@ const getIpv = async (req: Request<JwtType>, res: Response) => {
     }
 };
 
-const putSignature = async (req: Request<JwtType>, res: Response) => {
+const putSignature = async (req: Request<JwtType, UIDParams>, res: Response) => {
     const { uid } = req.params;
 
     const { email, phone } = req.auth!!;

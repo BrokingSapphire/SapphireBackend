@@ -1,8 +1,13 @@
-import { JwtPayloadWithoutWildcard } from '@app/types';
+import { DefaultResponseData, JwtPayloadWithoutWildcard } from '@app/types';
+import { CredentialsType } from '../common.types';
 
 export type JwtType = JwtPayloadWithoutWildcard & {
     email: string;
     phone: string;
+};
+
+export type ResponseWithToken = DefaultResponseData & {
+    token?: string;
 };
 
 export enum CheckpointStep {
@@ -59,3 +64,100 @@ export enum ValidationType {
     BANK = 'bank',
     UPI = 'upi',
 }
+
+export type RequestOtpType =
+    | {
+          type: CredentialsType.EMAIL;
+          email: string;
+      }
+    | {
+          type: CredentialsType.PHONE;
+          email: string;
+          phone: string;
+      };
+
+export type VerifyOtpType =
+    | {
+          type: CredentialsType.EMAIL;
+          email: string;
+          otp: string;
+      }
+    | {
+          type: CredentialsType.PHONE;
+          email: string;
+          phone: string;
+          otp: string;
+      };
+
+export type GetCheckpointType = {
+    step: CheckpointStep;
+};
+
+export type PostCheckpointType =
+    | {
+          step: CheckpointStep.PAN;
+          pan_number: string;
+      }
+    | {
+          step: CheckpointStep.AADHAAR_URI;
+          redirect: string;
+      }
+    | {
+          step: CheckpointStep.AADHAAR;
+      }
+    | {
+          step: CheckpointStep.INVESTMENT_SEGMENT;
+          segments: InvestmentSegment[];
+      }
+    | {
+          step: CheckpointStep.USER_DETAIL;
+          marital_status: MaritalStatus;
+          father_name: string;
+          mother_name: string;
+      }
+    | {
+          step: CheckpointStep.ACCOUNT_DETAIL;
+          settlement: AccountSettlement;
+          annual_income: AnnualIncome;
+          experience: TradingExperience;
+      }
+    | {
+          step: CheckpointStep.OCCUPATION;
+          occupation: string;
+          politically_exposed: boolean;
+      }
+    | {
+          step: CheckpointStep.BANK_VALIDATION_START;
+          validation_type: ValidationType;
+      }
+    | {
+          step: CheckpointStep.BANK_VALIDATION;
+          validation_type: ValidationType.UPI;
+      }
+    | {
+          step: CheckpointStep.BANK_VALIDATION;
+          validation_type: ValidationType.BANK;
+          bank: {
+              account_number: string;
+              ifsc_code: string;
+          };
+      }
+    | {
+          step: CheckpointStep.SIGNATURE;
+      }
+    | {
+          step: CheckpointStep.IPV;
+      }
+    | {
+          step: CheckpointStep.ADD_NOMINEES;
+          nominees: {
+              name: string;
+              gov_id: Date;
+              relation: string;
+              share: number;
+          }[];
+      };
+
+export type UIDParams = {
+    uid: string;
+};
