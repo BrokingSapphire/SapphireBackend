@@ -1,17 +1,16 @@
-// order.routes.ts
-
 import { Router } from 'express';
 import { validate } from '@app/middlewares';
-import { 
-  InstantOrderSchema, 
-  NormalOrderSchema, 
-  IcebergOrderSchema, 
-  CoverOrderSchema,
-  OrderIdSchema,
-  OrderQuerySchema,
-  OrderLimitSchema
+import {
+    InstantOrderSchema,
+    NormalOrderSchema,
+    IcebergOrderSchema,
+    CoverOrderSchema,
+    OrderIdSchema,
+    OrderQuerySchema,
+    OrderLimitSchema,
 } from './order.validator';
 import { orderManagementController } from './orderManagement.controller';
+import { jwtMiddleware } from '@app/utils/jwt';
 
 /**
  * @swagger
@@ -26,7 +25,7 @@ const router = Router();
  * /orders:
  *   get:
  *     tags: [Orders]
- *     summary: Get all orders 
+ *     summary: Get all orders
  *     parameters:
  *       - name: category
  *         in: query
@@ -50,11 +49,7 @@ const router = Router();
  *       200:
  *         description: List of orders retrieved successfully
  */
-router.get(
-  '/orders', 
-  [validate(OrderQuerySchema)], 
-  orderManagementController.getAllOrders
-);
+router.get('/orders', [jwtMiddleware, validate(OrderQuerySchema)], orderManagementController.getAllOrders);
 
 /**
  * @swagger
@@ -85,12 +80,7 @@ router.get(
  *       200:
  *         description: List of queued orders retrieved successfully
  */
-router.get(
-    '/orders/queued',
-    [validate(OrderQuerySchema)],
-    orderManagementController.getQueuedOrders
-  );
-
+router.get('/orders/queued', [jwtMiddleware, validate(OrderQuerySchema)], orderManagementController.getQueuedOrders);
 
 /**
  * @swagger
@@ -123,9 +113,9 @@ router.get(
  */
 router.get(
     '/orders/executed',
-    [validate(OrderQuerySchema)],
-    orderManagementController.getExecutedOrders
-  );
+    [jwtMiddleware, validate(OrderQuerySchema)],
+    orderManagementController.getExecutedOrders,
+);
 
 /**
  * @swagger
@@ -158,10 +148,9 @@ router.get(
  */
 router.get(
     '/orders/cancelled',
-    [validate(OrderQuerySchema)],
-    orderManagementController.getCancelledOrders
-  );
-  
+    [jwtMiddleware, validate(OrderQuerySchema)],
+    orderManagementController.getCancelledOrders,
+);
 
 /**
  * @swagger
@@ -194,9 +183,9 @@ router.get(
  */
 router.get(
     '/orders/rejected',
-    [validate(OrderQuerySchema)],
-    orderManagementController.getRejectedOrders
-  );
+    [jwtMiddleware, validate(OrderQuerySchema)],
+    orderManagementController.getRejectedOrders,
+);
 
 /**
  * @swagger
@@ -217,9 +206,9 @@ router.get(
  *         description: Invalid request data
  */
 router.post(
-  '/orders/instant', 
-  [validate(InstantOrderSchema)], 
-  orderManagementController.createInstantOrder
+    '/orders/instant',
+    [jwtMiddleware, validate(InstantOrderSchema)],
+    orderManagementController.createInstantOrder,
 );
 
 /**
@@ -241,9 +230,9 @@ router.post(
  *         description: Invalid request data
  */
 router.post(
-  '/orders/normal', 
-  [validate(NormalOrderSchema)], 
-  orderManagementController.createNormalOrder
+    '/orders/normal',
+    [jwtMiddleware, validate(NormalOrderSchema)],
+    orderManagementController.createNormalOrder,
 );
 
 /**
@@ -265,9 +254,9 @@ router.post(
  *         description: Invalid request data
  */
 router.post(
-  '/orders/iceberg', 
-  [validate(IcebergOrderSchema)], 
-  orderManagementController.createIcebergOrder
+    '/orders/iceberg',
+    [jwtMiddleware, validate(IcebergOrderSchema)],
+    orderManagementController.createIcebergOrder,
 );
 
 /**
@@ -288,11 +277,7 @@ router.post(
  *       400:
  *         description: Invalid request data
  */
-router.post(
-  '/orders/cover', 
-  [validate(CoverOrderSchema)], 
-  orderManagementController.createCoverOrder
-);
+router.post('/orders/cover', [jwtMiddleware, validate(CoverOrderSchema)], orderManagementController.createCoverOrder);
 
 /**
  * @swagger
@@ -314,9 +299,9 @@ router.post(
  *         description: Order not found
  */
 router.get(
-  '/orders/:order_id/history', 
-  [validate(OrderIdSchema)], 
-  orderManagementController.getOrderHistory
+    '/orders/:order_id/history',
+    [jwtMiddleware, validate(OrderIdSchema)],
+    orderManagementController.getOrderHistory,
 );
 
 /**
@@ -336,10 +321,6 @@ router.get(
  *       200:
  *         description: Recent orders retrieved successfully
  */
-router.get(
-  '/orders/recent', 
-  [validate(OrderLimitSchema)], 
-  orderManagementController.getRecentOrders
-);
+router.get('/orders/recent', [jwtMiddleware, validate(OrderLimitSchema)], orderManagementController.getRecentOrders);
 
 export default router;
