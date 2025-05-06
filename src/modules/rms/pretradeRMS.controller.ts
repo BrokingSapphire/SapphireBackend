@@ -1070,7 +1070,7 @@ const validateDerivativeQuantity = async (
       eb('effective_to', '>=', new Date())
     ])
   )
-  .select(['lot_size', 'max_order_quantity'])
+  .select(['lot_size', 'max_order_quantity', 'exchange', 'effective_from', 'effective_to'])
   .executeTakeFirst() as LotSizeConfiguration | undefined;;
 
 let lotSize: LotSizeConfig;
@@ -1086,8 +1086,11 @@ if (!lotSizeData) {
     lotSize = {
       symbol,
       segment,
-      lotSize: defaultLotSizes[segment],
-      maxOrderQuantity: undefined
+      exchange: 'DEFAULT', 
+      lot_size: defaultLotSizes[segment], 
+      max_order_quantity: undefined, 
+      effective_from: new Date(), 
+      effective_to: undefined 
     };
     logger.warn(`Using default lot size for ${symbol} in ${segment} segment`);
   } else {
@@ -1097,36 +1100,39 @@ if (!lotSizeData) {
   lotSize = {
     symbol,
     segment,
-    lotSize: lotSizeData.lot_size,
-    maxOrderQuantity: lotSizeData.max_order_quantity || undefined
-    };
-  }
-  const maxLotsPossible = lotSize.maxOrderQuantity 
-  ? Math.floor(lotSize.maxOrderQuantity / lotSize.lotSize)
+    exchange: lotSizeData.exchange,
+    lot_size: lotSizeData.lot_size,
+    max_order_quantity: lotSizeData.max_order_quantity,
+    effective_from: lotSizeData.effective_from,
+    effective_to: lotSizeData.effective_to??undefined
+  };
+}
+  const maxLotsPossible = lotSize.max_order_quantity 
+  ? Math.floor(lotSize.max_order_quantity / lotSize.lot_size)
   : undefined;
 
 // Check if quantity is multiple of lot size
-if (quantity % lotSize.lotSize !== 0) {
-  const suggestedQuantity = Math.round(quantity / lotSize.lotSize) * lotSize.lotSize;
+if (quantity % lotSize.lot_size !== 0) {
+  const suggestedQuantity = Math.round(quantity / lotSize.lot_size) * lotSize.lot_size;
   return {
     isValid: false,
-    reason: `Quantity must be a multiple of lot size (${lotSize.lotSize})`,
+    reason: `Quantity must be a multiple of lot size (${lotSize.lot_size})`,
     additionalInfo: {
-      requiredLotSize: lotSize.lotSize,
-      suggestedQuantity: suggestedQuantity || lotSize.lotSize,
+      requiredLotSize: lotSize.lot_size,
+      suggestedQuantity: suggestedQuantity || lotSize.lot_size,
       maxLotsPossible
     }
   };
 }
 
 // Check if quantity exceeds maximum allowed
-if (lotSize.maxOrderQuantity && quantity > lotSize.maxOrderQuantity) {
+if (lotSize.max_order_quantity && quantity > lotSize.max_order_quantity) {
   return {
     isValid: false,
-    reason: `Quantity exceeds maximum allowed (${lotSize.maxOrderQuantity})`,
+    reason: `Quantity exceeds maximum allowed (${lotSize.max_order_quantity})`,
     additionalInfo: {
-      maxAllowedQuantity: lotSize.maxOrderQuantity,
-      suggestedQuantity: lotSize.maxOrderQuantity,
+      maxAllowedQuantity: lotSize.max_order_quantity,
+      suggestedQuantity: lotSize.max_order_quantity,
       maxLotsPossible
     }
   };
@@ -1136,8 +1142,8 @@ return {
   isValid: true,
   reason: 'Quantity validation successful for derivative order',
   additionalInfo: {
-    requiredLotSize: lotSize.lotSize,
-    maxAllowedQuantity: lotSize.maxOrderQuantity,
+    requiredLotSize: lotSize.lot_size,
+    maxAllowedQuantity: lotSize.max_order_quantity,
     maxLotsPossible
   }
 };
@@ -2175,8 +2181,8 @@ const validatePositionLimits = async (
   const segmentMaxLots = 100;
 
   // Calculate new positions after this order
-  const newSymbolLots = currentPositions.symbol_lots + orderLots;
-  const newSegmentLots = currentPositions.segment_lots + orderLots;
+  const newSymbolLots = currentPositions.symbolLots + orderLots;
+  const newSegmentLots = currentPositions.segmentLots + orderLots;
   
   // Check the symbol-specific limit (max 25 lots per symbol)
   if (newSymbolLots > symbolMaxLots) {
@@ -2184,7 +2190,7 @@ const validatePositionLimits = async (
       isValid: false,
       reason: `Order exceeds maximum allowed lots (${symbolMaxLots}) for ${symbol}`,
       additionalInfo: {
-        currentLots: currentPositions.symbol_lots,
+        currentLots: currentPositions.symbolLots,
         orderLots,
         newPositionLots: newSymbolLots,
         maxAllowedLots: symbolMaxLots,
@@ -2200,7 +2206,7 @@ const validatePositionLimits = async (
       isValid: false,
       reason: `Order exceeds maximum allowed total F&O lots (${segmentMaxLots})`,
       additionalInfo: {
-        currentSegmentLots: currentPositions.segment_lots,
+        currentSegmentLots: currentPositions.segmentLots,
         orderLots,
         newSegmentLots,
         maxAllowedLots: segmentMaxLots,
@@ -2215,10 +2221,10 @@ const validatePositionLimits = async (
     isValid: true,
     reason: 'Position limits check passed',
     additionalInfo: {
-      currentLots: currentPositions.symbol_lots,
+      currentLots: currentPositions.symbolLots,
       newPositionLots: newSymbolLots,
       maxAllowedLots: symbolMaxLots,
-      currentSegmentLots: currentPositions.segment_lots,
+      currentSegmentLots: currentPositions.segmentLots,
       newSegmentLots,
       maxSegmentLots: segmentMaxLots,
       segment,
