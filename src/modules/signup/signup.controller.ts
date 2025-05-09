@@ -14,6 +14,7 @@ import {
     VerifyOtpType,
     GetCheckpointType,
     UIDParams,
+    AccountType
 } from './signup.types';
 import { CredentialsType } from '@app/modules/common.types';
 import DigiLockerService from '@app/services/surepass/digilocker.service';
@@ -248,23 +249,43 @@ const getCheckpoint = async (req: Request<JwtType, GetCheckpointType>, res: Resp
             message: 'Investment segment fetched',
         });
     } else if (step === CheckpointStep.USER_DETAIL) {
-        const { father_name, mother_name, marital_status } = await db
+        const { father_name, mother_name } = await db
             .selectFrom('signup_checkpoints')
             .innerJoin('user_name as father', 'signup_checkpoints.father_name', 'father.id')
             .innerJoin('user_name as mother', 'signup_checkpoints.mother_name', 'mother.id')
             .select([
                 'father.full_name as father_name',
                 'mother.full_name as mother_name',
-                'signup_checkpoints.marital_status',
             ])
             .where('email', '=', email)
             .where('father_name', 'is not', null)
             .where('mother_name', 'is not', null)
-            .where('marital_status', 'is not', null)
             .executeTakeFirstOrThrow();
 
-        res.status(OK).json({ data: { father_name, mother_name, marital_status }, message: 'User details fetched' });
-    } else if (step === CheckpointStep.ACCOUNT_DETAIL) {
+        res.status(OK).json({ data: { father_name, mother_name }, message: 'User details fetched' });
+    }
+    else if (step === CheckpointStep.PERSONAL_DETAIL) {
+        const { marital_status, annual_income, trading_exp, account_settlement } = await db
+            .selectFrom('signup_checkpoints')
+            .select(['marital_status', 'annual_income', 'trading_exp', 'account_settlement'])
+            .where('email', '=', email)
+            .where('marital_status', 'is not', null)
+            .where('annual_income', 'is not', null)
+            .where('trading_exp', 'is not', null)
+            .where('account_settlement', 'is not', null)
+            .executeTakeFirstOrThrow();
+    
+        res.status(OK).json({ 
+            data: { 
+                marital_status, 
+                annual_income, 
+                trading_exp, 
+                acc_settlement: account_settlement 
+            }, 
+            message: 'Personal details fetched' 
+        });
+    } 
+    else if (step === CheckpointStep.ACCOUNT_DETAIL) {
         const { annual_income, trading_exp, account_settlement } = await db
             .selectFrom('signup_checkpoints')
             .select(['annual_income', 'trading_exp', 'account_settlement'])
@@ -293,7 +314,7 @@ const getCheckpoint = async (req: Request<JwtType, GetCheckpointType>, res: Resp
             .selectFrom('signup_checkpoints')
             .innerJoin('bank_to_checkpoint', 'signup_checkpoints.id', 'bank_to_checkpoint.checkpoint_id')
             .innerJoin('bank_account', 'bank_to_checkpoint.bank_account_id', 'bank_account.id')
-            .select(['bank_account.account_no', 'bank_account.ifsc_code'])
+            .select(['bank_account.account_no', 'bank_account.ifsc_code','bank_account.account_type'])
             .where('email', '=', email)
             .executeTakeFirstOrThrow();
 
@@ -540,20 +561,40 @@ const postCheckpoint = async (
 
         res.status(CREATED).json({ message: 'Investment segment saved' });
     } else if (step === CheckpointStep.USER_DETAIL) {
-        const { marital_status, father_name, mother_name } = req.body;
+        const { father_name, mother_name } = req.body;
 
         await db.transaction().execute(async (tx) => {
             const fatherNameId = await insertNameGetId(tx, splitName(father_name));
             const motherNameId = await insertNameGetId(tx, splitName(mother_name));
 
             await updateCheckpoint(tx, email, phone, {
-                marital_status,
                 father_name: fatherNameId,
                 mother_name: motherNameId,
             }).execute();
         });
 
         res.status(CREATED).json({ message: 'User details saved' });
+    } else if (step === CheckpointStep.PERSONAL_DETAIL) {
+        const { marital_status, annual_income, trading_exp, acc_settlement } = req.body;
+
+        await db.transaction().execute(async (tx) => {
+            const checkpoint = await updateCheckpoint(tx, email, phone, {
+                marital_status,
+                annual_income,
+                trading_exp,
+                account_settlement: acc_settlement,
+            })
+                .returning('id')
+                .executeTakeFirstOrThrow();
+
+            await tx
+                .updateTable('signup_verification_status')
+                .set({ trading_preferences_status: 'pending', updated_at: new Date() })
+                .where('id', '=', checkpoint.id)
+                .execute();
+        });
+    
+        res.status(CREATED).json({ message: 'Personal details saved' });
     } else if (step === CheckpointStep.ACCOUNT_DETAIL) {
         const { annual_income, experience, settlement } = req.body;
         await db.transaction().execute(async (tx) => {
@@ -565,24 +606,26 @@ const postCheckpoint = async (
         });
 
         res.status(CREATED).json({ message: 'Account details saved' });
-    } else if (step === CheckpointStep.OCCUPATION) {
+    } 
+    
+    else if (step === CheckpointStep.OCCUPATION) {
         const { occupation, politically_exposed } = req.body;
-        await db.transaction().execute(async (tx) => {
-            const checkpoint = await updateCheckpoint(tx, email, phone, {
-                occupation,
-                is_politically_exposed: politically_exposed,
-            })
-                .returning('id')
-                .executeTakeFirstOrThrow();
+    await db.transaction().execute(async (tx) => {
+        const checkpoint = await updateCheckpoint(tx, email, phone, {
+            occupation,
+            is_politically_exposed: politically_exposed,
+        })
+            .returning('id')
+            .executeTakeFirstOrThrow();
 
-            await tx
-                .updateTable('signup_verification_status')
-                .set({ trading_preferences_status: 'pending', updated_at: new Date() })
-                .where('id', '=', checkpoint.id)
-                .execute();
-        });
+        await tx
+            .updateTable('signup_verification_status')
+            .set({ trading_preferences_status: 'pending', updated_at: new Date() })
+            .where('id', '=', checkpoint.id)
+            .execute();
+    });
 
-        res.status(CREATED).json({ message: 'Occupation saved' });
+    res.status(CREATED).json({ message: 'Occupation saved' });
     } else if (step === CheckpointStep.BANK_VALIDATION_START) {
         const { validation_type } = req.body;
         if (validation_type === ValidationType.UPI) {
@@ -658,6 +701,7 @@ const postCheckpoint = async (
                         account_no: rpcResponse.data.data.details.account_number,
                         ifsc_code: rpcResponse.data.data.details.ifsc,
                         verification: 'verified',
+                        account_type: AccountType.SAVINGS
                     })
                     .onConflict((oc) =>
                         oc.constraint('uq_bank_account').doUpdateSet((eb) => ({
@@ -726,11 +770,13 @@ const postCheckpoint = async (
                     .values({
                         account_no: bank.account_number,
                         ifsc_code: bank.ifsc_code,
+                        account_type: bank.account_type,
                         verification: 'verified',
                     })
                     .onConflict((oc) =>
                         oc.constraint('uq_bank_account').doUpdateSet((eb) => ({
                             account_no: eb.ref('excluded.account_no'),
+                            account_type: eb.ref('excluded.account_type'),
                         })),
                     )
                     .returning('id')
