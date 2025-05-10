@@ -82,6 +82,18 @@ export enum AccountType {
     CURRENT = 'current',
 }
 
+export enum NomineeRelation {
+    FATHER = 'Father',
+    MOTHER = 'Mother',
+    SON = 'Son',
+    DAUGHTER = 'Daughter',
+    SISTER = 'Sister',
+    BROTHER = 'Brother',
+    SPOUSE = 'Spouse',
+    OTHER = 'Other'
+}
+
+
 export type RequestOtpType =
     | {
           type: CredentialsType.EMAIL;
@@ -170,7 +182,7 @@ export type PostCheckpointType =
           step: CheckpointStep.ADD_NOMINEES;
           nominees: {
               name: string;
-              gov_id: Date;
+              gov_id: string;
               relation: string;
               share: number;
           }[];

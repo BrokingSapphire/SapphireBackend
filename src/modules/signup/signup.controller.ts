@@ -319,7 +319,40 @@ const getCheckpoint = async (req: Request<JwtType, GetCheckpointType>, res: Resp
             .executeTakeFirstOrThrow();
 
         res.status(OK).json({ data: { bank }, message: 'Bank details fetched' });
-    } else {
+    } else if (step === CheckpointStep.ADD_NOMINEES) {
+        const nominees = await db
+            .selectFrom('signup_checkpoints')
+            .innerJoin('nominees_to_checkpoint', 'signup_checkpoints.id', 'nominees_to_checkpoint.checkpoint_id')
+            .innerJoin('user_name', 'nominees_to_checkpoint.name_id', 'user_name.id')
+            .select([
+                'user_name.full_name as name',
+                'nominees_to_checkpoint.id_type',
+                'nominees_to_checkpoint.gov_id',
+                'nominees_to_checkpoint.relation',
+                'nominees_to_checkpoint.share'
+            ])
+            .where('email', '=', email)
+            .execute();
+    
+        if (nominees.length === 0) {
+            res.status(NO_CONTENT).json({ message: 'No nominees found' });
+            return;
+        }
+    
+        const formattedNominees = nominees.map(nominee => ({
+            name: nominee.name,
+            gov_id: nominee.gov_id,
+            id_type: nominee.id_type,
+            relation: nominee.relation,
+            share: nominee.share
+        }));
+    
+        res.status(OK).json({
+            data: { nominees: formattedNominees },
+            message: 'Nominees fetched successfully'
+        });
+    }
+     else {
         res.status(NOT_FOUND).json({ message: 'Checkpoint data not found' });
     }
 };
@@ -825,32 +858,52 @@ const postCheckpoint = async (
             message: 'IPV started',
         });
     } else if (step === CheckpointStep.ADD_NOMINEES) {
-        // const { nominees } = req.body;
-        // await db.transaction().execute(async (tx) => {
-        //     const checkpointid = await tx
-        //         .selectFrom('signup_checkpoints')
-        //         .select('id')
-        //         .where('email', '=', email)
-        //         .executeTakeFirstOrThrow();
+        const { nominees } = req.body;
+    
+    // Validate total share percentage equals 100%
+    const totalShare = nominees.reduce((sum, nominee) => sum + nominee.share, 0);
+    if (totalShare !== 100) {
+        throw new UnprocessableEntityError('Total nominee share must equal 100%');
+    }
+    
+    await db.transaction().execute(async (tx) => {
+        const checkpointId = await tx
+            .selectFrom('signup_checkpoints')
+            .select('id')
+            .where('email', '=', email)
+            .executeTakeFirstOrThrow();
 
-        //     await tx
-        //         .deleteFrom('nominees_to_checkpoint')
-        //         .where('checkpoint_id', '=', checkpointid.id)
-        //         .execute();
+        await tx
+            .deleteFrom('nominees_to_checkpoint')
+            .where('checkpoint_id', '=', checkpointId.id)
+            .execute();
 
-        //     for (const nominee of nominees) {
-        //         const nameId = await insertNameGetId(tx, splitName(nominee.name));
-
-        //         await tx
-        //             .insertInto('nominees_to_checkpoint')
-        //             .values({
-        //                 checkpoint_id: checkpointid.id,
-        //                 name_id: nameId,
-        //                 gov_id: nominee.gov_id,
-        //             })
-        //             .execute();
-        //     }
-        // });
+        // Add new nominees
+        for (const nominee of nominees) {
+            const nameId = await insertNameGetId(tx, splitName(nominee.name));
+            
+            // Determine ID type (PAN or Aadhar) 
+            const idType = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(nominee.gov_id) ? 'PAN' : 'AADHAR';
+            
+            await tx
+                .insertInto('nominees_to_checkpoint')
+                .values({
+                    checkpoint_id: checkpointId.id,
+                    name_id: nameId,
+                    id_type: idType,
+                    gov_id: nominee.gov_id,
+                    relation: nominee.relation,
+                    share: nominee.share
+                })
+                .execute();
+        }
+        
+        await tx
+            .updateTable('signup_verification_status')
+            .set({ nominees_status: 'pending', updated_at: new Date() })
+            .where('id', '=', checkpointId.id)
+            .execute();
+    });
         res.status(CREATED).json({ message: 'Nominees added' });
     }
 };
