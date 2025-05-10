@@ -8,7 +8,6 @@ import {
     getCheckpointDetails,
     assignOfficer,
 } from './compliance.controller';
-import { jwtMiddleware } from '@app/utils/jwt';
 import {
     CheckpointIdParamSchema,
     GetVerificationDetailParamSchema,
@@ -18,15 +17,15 @@ import { validate } from '@app/middlewares';
 
 const router = Router();
 
-router.post('/:checkpointId/assign', jwtMiddleware, validate(CheckpointIdParamSchema, 'params'), assignOfficer);
+router.post('/:checkpointId/assign', validate(CheckpointIdParamSchema, 'params'), assignOfficer);
 
 /**
  * Route to get verification status for a specific checkpoint ID
  * GET /:checkpointId/status
  */
-router.get('/:checkpointId/status', jwtMiddleware, validate(CheckpointIdParamSchema, 'params'), getVerificationStatus);
+router.get('/:checkpointId/status', validate(CheckpointIdParamSchema, 'params'), getVerificationStatus);
 
-router.get('/:checkpointId/details', jwtMiddleware, validate(CheckpointIdParamSchema, 'params'), getCheckpointDetails);
+router.get('/:checkpointId/details', validate(CheckpointIdParamSchema, 'params'), getCheckpointDetails);
 
 /**
  * Route to update verification status for a specific verification type
@@ -34,7 +33,6 @@ router.get('/:checkpointId/details', jwtMiddleware, validate(CheckpointIdParamSc
  */
 router.put(
     '/:checkpointId/status',
-    jwtMiddleware,
     validate(CheckpointIdParamSchema, 'params'),
     validate(UpdateVerificationStatusSchema),
     updateVerificationStatus,
@@ -46,7 +44,6 @@ router.put(
  */
 router.get(
     '/:checkpointId/:step/status',
-    jwtMiddleware,
     validate(CheckpointIdParamSchema, 'params'),
     validate(GetVerificationDetailParamSchema, 'params'),
     getVerificationStepStatus,
@@ -58,7 +55,6 @@ router.get(
  */
 router.get(
     '/:checkpointId/:step',
-    jwtMiddleware,
     validate(CheckpointIdParamSchema, 'params'),
     validate(GetVerificationDetailParamSchema, 'params'),
     getVerificationDetail,
@@ -69,11 +65,6 @@ router.get(
  * updates overall status, creates user, and deletes checkpoint
  * POST /finalize-verification/:checkpointId
  */
-router.post(
-    '/:checkpointId/finalize',
-    jwtMiddleware,
-    validate(CheckpointIdParamSchema, 'params'),
-    finalizeVerification,
-);
+router.post('/:checkpointId/finalize', validate(CheckpointIdParamSchema, 'params'), finalizeVerification);
 
 export default router;

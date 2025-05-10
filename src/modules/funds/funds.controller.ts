@@ -1,18 +1,18 @@
 import { Response } from 'express';
 import { Request } from '@app/types.d';
 import { db } from '@app/database';
-import { JwtType } from './funds.types';
 import { CREATED, OK } from '@app/utils/httpstatus';
 import { PaymentService } from '@app/services/ntt-pg.service';
 import { env } from '@app/env';
 import { BalanceTransactionStatus, DepositTransactionType } from '@app/database/db';
 import { InternalServerError } from '@app/apiError';
 import logger from '@app/logger';
+import { SessionJwtType } from '../common.types';
 
 /**
  * Get user funds
  */
-const getUserFunds = async (req: Request<JwtType>, res: Response): Promise<void> => {
+const getUserFunds = async (req: Request<SessionJwtType>, res: Response): Promise<void> => {
     const balance = await db
         .selectFrom('user_balance')
         .select([
@@ -34,7 +34,7 @@ const getUserFunds = async (req: Request<JwtType>, res: Response): Promise<void>
     });
 };
 
-const getBankAccounts = async (req: Request<JwtType>, res: Response): Promise<void> => {
+const getBankAccounts = async (req: Request<SessionJwtType>, res: Response): Promise<void> => {
     const bankAccounts = await db
         .selectFrom('bank_account')
         .innerJoin('bank_to_user', 'bank_to_user.bank_account_id', 'bank_account.id')
@@ -55,7 +55,7 @@ const getBankAccounts = async (req: Request<JwtType>, res: Response): Promise<vo
 /**
  * Add funds to user account
  */
-const depositFunds = async (req: Request<JwtType>, res: Response): Promise<void> => {
+const depositFunds = async (req: Request<SessionJwtType>, res: Response): Promise<void> => {
     const { userId } = req.auth!!;
     const { amount, mode } = req.body;
 
@@ -99,7 +99,7 @@ const depositFunds = async (req: Request<JwtType>, res: Response): Promise<void>
 /**
  * Withdraw funds - standard withdrawal
  */
-const withdrawFunds = async (req: Request<JwtType>, res: Response): Promise<void> => {
+const withdrawFunds = async (req: Request<SessionJwtType>, res: Response): Promise<void> => {
     const { userId } = req.auth!!;
     const { amount, bank_account_id, type } = req.body;
 
@@ -149,7 +149,7 @@ const withdrawFunds = async (req: Request<JwtType>, res: Response): Promise<void
 /**
  * Get user transactions
  */
-const getUserTransactions = async (req: Request<JwtType>, res: Response): Promise<void> => {
+const getUserTransactions = async (req: Request<SessionJwtType>, res: Response): Promise<void> => {
     const { limit, offset, transaction_type, status } = req.query;
 
     const { count } = db.fn;
@@ -217,7 +217,7 @@ const getUserTransactions = async (req: Request<JwtType>, res: Response): Promis
 /**
  * Get transaction by ID
  */
-const getTransactionInfo = async (req: Request<JwtType>, res: Response): Promise<void> => {
+const getTransactionInfo = async (req: Request<SessionJwtType>, res: Response): Promise<void> => {
     const { id } = req.params;
     const transaction = await db
         .selectFrom('balance_transactions')

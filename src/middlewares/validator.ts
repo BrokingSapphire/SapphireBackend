@@ -6,7 +6,9 @@ const validate = (schema: Joi.ObjectSchema, validationSelector: 'body' | 'params
     return (req: Request, _res: Response, next: NextFunction) => {
         const { value, error } = schema.validate(req[validationSelector], { abortEarly: false });
         if (error) throw new BadRequestError(error.message);
-        req[validationSelector] = value;
+        if (validationSelector === 'body') {
+            req.body = value;
+        }
         next();
     };
 };

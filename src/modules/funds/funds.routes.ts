@@ -9,7 +9,6 @@ import {
     getBankAccounts,
 } from './funds.controller';
 import { DepositRequestSchema, WithdrawalRequestSchema } from './funds.validator';
-import { jwtMiddleware } from '@app/utils/jwt';
 
 /**
  * @swagger
@@ -40,7 +39,7 @@ const router = Router();
  *       401:
  *         description: Unauthorized
  */
-router.get('/', jwtMiddleware, getUserFunds);
+router.get('/', getUserFunds);
 
 /**
  * @swagger
@@ -69,7 +68,7 @@ router.get('/', jwtMiddleware, getUserFunds);
  *       401:
  *         description: Unauthorized
  */
-router.post('/desposit', [jwtMiddleware, validate(DepositRequestSchema)], depositFunds);
+router.post('/desposit', validate(DepositRequestSchema), depositFunds);
 
 /**
  * @swagger
@@ -98,7 +97,7 @@ router.post('/desposit', [jwtMiddleware, validate(DepositRequestSchema)], deposi
  *       401:
  *         description: Unauthorized
  */
-router.post('/withdraw', [jwtMiddleware, validate(WithdrawalRequestSchema)], withdrawFunds);
+router.post('/withdraw', validate(WithdrawalRequestSchema), withdrawFunds);
 
 /**
  * @swagger
@@ -112,7 +111,7 @@ router.post('/withdraw', [jwtMiddleware, validate(WithdrawalRequestSchema)], wit
  *       401:
  *         description: Unauthorized
  */
-router.get('/accounts', jwtMiddleware, getBankAccounts);
+router.get('/accounts', getBankAccounts);
 
 /**
  * @swagger
@@ -145,7 +144,7 @@ router.get('/accounts', jwtMiddleware, getBankAccounts);
  *       401:
  *         description: Unauthorized
  */
-router.get('/transactions', jwtMiddleware, getUserTransactions);
+router.get('/transactions', getUserTransactions);
 
 /**
  * @swagger
@@ -168,6 +167,6 @@ router.get('/transactions', jwtMiddleware, getUserTransactions);
  *       404:
  *         description: Transaction not found
  */
-router.get('/transaction/:id', jwtMiddleware, getTransactionInfo);
+router.get('/transaction/:id', getTransactionInfo);
 
 export default router;

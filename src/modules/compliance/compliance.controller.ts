@@ -1,11 +1,12 @@
 import { Request, Response } from '@app/types.d';
 import { db } from '@app/database';
 import { OK } from '@app/utils/httpstatus';
-import { JwtType, UpdateVerificationRequest, VerificationType, verificationTypeToFieldMap } from './compliance.types';
+import { UpdateVerificationRequest, VerificationType, verificationTypeToFieldMap } from './compliance.types';
 import { BadRequestError, ForbiddenError, UnauthorizedError } from '@app/apiError';
 import BankDetailsService, { BankDetails } from '@app/services/bank-details.service';
+import { SessionJwtType } from '../common.types';
 
-const assignOfficer = async (req: Request<JwtType>, res: Response) => {
+const assignOfficer = async (req: Request<SessionJwtType>, res: Response) => {
     const checkpointId = Number(req.params.checkpointId);
 
     const result = await db.transaction().execute(async (tx) => {
@@ -415,7 +416,7 @@ const fetchTradingPreferencesData = async (checkpointId: number) => {
 /**
  * Update verification status for a checkpoint
  */
-const updateVerificationStatus = async (req: Request<JwtType>, res: Response) => {
+const updateVerificationStatus = async (req: Request<SessionJwtType>, res: Response) => {
     const checkpointId = Number(req.params.checkpointId);
 
     const officer = await db
