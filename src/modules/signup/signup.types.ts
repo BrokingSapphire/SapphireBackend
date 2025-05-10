@@ -183,7 +183,7 @@ export type PostCheckpointType =
           nominees: {
               name: string;
               gov_id: string;
-              relation: string;
+              relation: NomineeRelation;
               share: number;
           }[];
       }
