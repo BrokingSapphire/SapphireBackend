@@ -9,12 +9,16 @@ export type WatchlistData = {
     items: {
         isin: string;
         exchange: StockExchange;
-        index: number;
+        index?: number;
     }[];
+};
+
+export type WatchlistIndexUpdate = {
+    index: number;
+    newIndex: number;
 };
 
 export type DeleteWatchlistQuery = {
     isin: string;
     exchange: StockExchange;
-    updateOthers?: string;
 };

@@ -14,10 +14,15 @@ export const WatchlistData = Joi.object({
                 exchange: Joi.string()
                     .valid(...Object.values(Exchange))
                     .required(),
-                index: Joi.number().integer().min(0).required(),
+                index: Joi.number().integer().min(0).optional(),
             }),
         )
         .required(),
+});
+
+export const UpdateWatchlistData = Joi.object({
+    index: Joi.number().integer().min(0).required(),
+    newIndex: Joi.number().integer().min(0).required(),
 });
 
 export const DeleteWatchlistQuery = Joi.object({
@@ -25,5 +30,4 @@ export const DeleteWatchlistQuery = Joi.object({
     exchange: Joi.string()
         .valid(...Object.values(Exchange))
         .required(),
-    updateOthers: Joi.boolean().optional(),
 });
