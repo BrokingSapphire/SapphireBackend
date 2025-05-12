@@ -28,3 +28,18 @@ export type JwtPayloadWithoutWildcard = Omit<jwt.JwtPayload, keyof any>;
 export type NonNullableFields<T> = {
     [P in keyof T]: NonNullable<T[P]>;
 };
+
+export type LoginResponseWithToken = DefaultResponseData & {
+    token: string;
+    isFirstLogin: boolean;
+};
+
+export type LoginRequestType = {
+    clientId: string;
+    password: string;
+};
+
+export type ResetPasswordRequestType = {
+    currentPassword: string;
+    newPassword: string;
+};
