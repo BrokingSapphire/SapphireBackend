@@ -1,16 +1,56 @@
 import { Router } from 'express';
 import { validate } from '@app/middlewares';
-import { getWatchlist, putWatchlist, removeWatchlist, updateWatchlist } from './watchlist.controller';
-import { DeleteWatchlistQuery, GetWatchlistQuery, UpdateWatchlistData, WatchlistData } from './watchlist.validator';
+import {
+    createCategory,
+    getCategory,
+    getWatchlist,
+    listCategories,
+    putWatchlist,
+    removeCategory,
+    removeWatchlist,
+    updateWatchlist,
+} from './watchlist.controller';
+import {
+    DeleteWatchlistQuery,
+    GetWatchlistQuery,
+    UpdateWatchlistData,
+    WatchlistCategoryIdParam,
+    WatchlistCategoryIdParamRequired,
+    WatchlistCategoryName,
+    WatchlistData,
+} from './watchlist.validator';
 
 const router = Router();
 
-router.get('/', validate(GetWatchlistQuery, 'query'), getWatchlist);
+router.post('/category/create', validate(WatchlistCategoryName), createCategory);
 
-router.put('/', validate(WatchlistData), putWatchlist);
+router.get('/category/list', listCategories);
 
-router.post('/', validate(UpdateWatchlistData), updateWatchlist);
+router.get('/category/:categoryId', validate(WatchlistCategoryIdParamRequired, 'params'), getCategory);
 
-router.delete('/', validate(DeleteWatchlistQuery, 'query'), removeWatchlist);
+router.delete('/category/:categoryId', validate(WatchlistCategoryIdParamRequired, 'params'), removeCategory);
+
+router.get(
+    '/:categoryId?',
+    validate(WatchlistCategoryIdParam, 'params'),
+    validate(GetWatchlistQuery, 'query'),
+    getWatchlist,
+);
+
+router.put('/:categoryId?', validate(WatchlistCategoryIdParam, 'params'), validate(WatchlistData), putWatchlist);
+
+router.post(
+    '/:categoryId?',
+    validate(WatchlistCategoryIdParam, 'params'),
+    validate(UpdateWatchlistData),
+    updateWatchlist,
+);
+
+router.delete(
+    '/:categoryId?',
+    validate(WatchlistCategoryIdParam, 'params'),
+    validate(DeleteWatchlistQuery, 'query'),
+    removeWatchlist,
+);
 
 export default router;
