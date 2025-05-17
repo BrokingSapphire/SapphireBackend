@@ -653,7 +653,6 @@ const validateAllowedOrderType = async (
 };
 
 const isValidProductOrderTypeCombination = async (productType: string, orderType: string): Promise<boolean> => {
-    try {
         const validCombinations = (await db
             .selectFrom('product_order_type_combinations')
             .where('product_type', '=', productType)
@@ -663,9 +662,6 @@ const isValidProductOrderTypeCombination = async (productType: string, orderType
         if (validCombinations) {
             return validCombinations.is_allowed === true;
         }
-    } catch (error) {
-        logger.warn('Error querying product_order_type_combinations table, using default values', error);
-    }
 
     // Default allowed combinations if table doesn't exist
     const allowedCombinations: Record<string, string[]> = {
@@ -680,7 +676,6 @@ const isValidProductOrderTypeCombination = async (productType: string, orderType
 };
 
 const getAllowedOrderTypesForProduct = async (productType: string): Promise<string[]> => {
-    try {
         const allowedTypes = await db
             .selectFrom('product_order_type_combinations')
             .where('product_type', '=', productType)
@@ -691,10 +686,6 @@ const getAllowedOrderTypesForProduct = async (productType: string): Promise<stri
         if (allowedTypes && allowedTypes.length > 0) {
             return allowedTypes.map((type) => type.order_type);
         }
-    } catch (error) {
-        logger.warn('Error querying product_order_type_combinations table, using default values', error);
-    }
-
     // Default fallback if table doesn't exist yet
     const defaultAllowedTypes: Record<string, string[]> = {
         intraday: ['market_order', 'limit_order', 'sl', 'sl_m'],
@@ -1121,7 +1112,6 @@ const validateEquityQuantity = async (
     tradeType: string,
     exchange: string,
 ): Promise<QuantityValidationResult> => {
-    try {
         // Fetch maximum quantity limit for equity
         const equityLimit = await db
             .selectFrom('equity_max_quantity_limit')
@@ -1174,10 +1164,6 @@ const validateEquityQuantity = async (
             isValid: true,
             reason: 'Quantity validation successful for equity order',
         };
-    } catch (error) {
-        logger.error('Error validating equity quantity:', error);
-        throw error;
-    }
 };
 
 const quantityValidationCheck = async (
