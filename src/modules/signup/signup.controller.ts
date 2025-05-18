@@ -24,12 +24,11 @@ import axios from 'axios';
 import { insertAddressGetId, insertNameGetId, updateCheckpoint } from '@app/database/transactions';
 import splitName from '@app/utils/split-name';
 import PanService from '@app/services/surepass/pan.service';
-import { CREATED, NO_CONTENT, NOT_ACCEPTABLE, NOT_FOUND, OK, PAYMENT_REQUIRED } from '@app/utils/httpstatus';
+import { CREATED, NO_CONTENT, NOT_ACCEPTABLE, NOT_FOUND, OK } from '@app/utils/httpstatus';
 import { BankVerification, ReversePenyDrop } from '@app/services/surepass/bank-verification';
 import { randomUUID } from 'crypto';
 import { imageUpload, wrappedMulterHandler } from '@app/services/multer-s3.service';
 import logger from '@app/logger';
-import razorPay from '@app/services/razorpay.service';
 
 const requestOtp = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, RequestOtpType>,
@@ -97,17 +96,6 @@ const verifyOtp = async (
         await phoneOtp.verifyOtp(otp);
         await redisClient.del(`email-verified:${email}`);
 
-        const isVerified = await db
-            .selectFrom('signup_checkpoints')
-            .select('payment_id')
-            .where('email', '=', email)
-            .executeTakeFirst();
-
-        if (!isVerified) {
-            await redisClient.set(`need-payment:${email}`, 'true');
-            await redisClient.expire(`need-payment:${email}`, 10 * 60);
-        }
-
         await db.transaction().execute(async (tx) => {
             const existingCheckpoint = await tx
                 .selectFrom('signup_checkpoints')
@@ -116,20 +104,36 @@ const verifyOtp = async (
                 .where('email', '=', email)
                 .executeTakeFirst();
 
-            if (existingCheckpoint && existingCheckpoint.phone !== phone) {
+            if (existingCheckpoint) {
+                if (existingCheckpoint.phone !== phone) {
+                    const phoneId = await tx
+                        .insertInto('phone_number')
+                        .values({ phone })
+                        .returning('id')
+                        .executeTakeFirstOrThrow();
+
+                    await tx
+                        .updateTable('signup_checkpoints')
+                        .set({ phone_id: phoneId.id })
+                        .where('id', '=', existingCheckpoint.id)
+                        .execute();
+
+                    await tx.deleteFrom('phone_number').where('id', '=', existingCheckpoint.phone_id).execute();
+                }
+            } else {
                 const phoneId = await tx
                     .insertInto('phone_number')
                     .values({ phone })
                     .returning('id')
                     .executeTakeFirstOrThrow();
 
-                await tx
-                    .updateTable('signup_checkpoints')
-                    .set({ phone_id: phoneId.id })
-                    .where('id', '=', existingCheckpoint.id)
-                    .execute();
+                const checkpoint = await tx
+                    .insertInto('signup_checkpoints')
+                    .values({ email, phone_id: phoneId.id })
+                    .returning('id')
+                    .executeTakeFirstOrThrow();
 
-                await tx.deleteFrom('phone_number').where('id', '=', existingCheckpoint.phone_id).execute();
+                await tx.insertInto('signup_verification_status').values({ id: checkpoint.id }).execute();
             }
         });
 
@@ -137,73 +141,6 @@ const verifyOtp = async (
 
         res.status(OK).json({ message: 'OTP verified', token });
     }
-};
-
-const verify = async (req: Request<JwtType>, res: Response) => {
-    const { email } = req.auth!!;
-    if (await redisClient.get(`need-payment:${email}`)) {
-        res.status(PAYMENT_REQUIRED).json({ message: 'Needs verification' });
-        return;
-    }
-
-    const isVerified = await db
-        .selectFrom('signup_checkpoints')
-        .select('payment_id')
-        .where('email', '=', email)
-        .executeTakeFirst();
-
-    if (!isVerified) {
-        throw new UnauthorizedError('Invalid session');
-    }
-
-    res.status(OK).json({ message: 'Account verified' });
-};
-
-const initiatePayment = async (req: Request<JwtType>, res: Response) => {
-    const { email } = req.auth!!;
-
-    if (!(await redisClient.get(`need-payment:${email}`))) throw new UnauthorizedError('Unauthorized access');
-
-    const order = await razorPay.createSignupOrder(email);
-
-    res.status(OK).json({
-        data: {
-            orderId: order.id,
-        },
-        message: 'Order created',
-    });
-};
-
-const verifyPayment = async (req: Request<JwtType>, res: Response) => {
-    const { email, phone } = req.auth!!;
-    const { orderId, paymentId, signature } = req.body;
-
-    if (!(await redisClient.get(`need-payment:${email}`))) throw new UnauthorizedError('Unauthorized access');
-
-    // const isVerified = razorPay.verifyOrder(orderId, paymentId, signature);
-    // if (!isVerified) throw new UnprocessableEntityError('Payment not verified'); // FIXME
-
-    await db.transaction().execute(async (tx) => {
-        const phoneId = await tx.insertInto('phone_number').values({ phone }).returning('id').executeTakeFirstOrThrow();
-
-        const razorPayDataId = await tx
-            .insertInto('razorpay_data')
-            .values({ order_id: orderId, payment_id: paymentId, signature })
-            .returning('order_id')
-            .executeTakeFirstOrThrow();
-
-        const checkpoint = await tx
-            .insertInto('signup_checkpoints')
-            .values({ email, phone_id: phoneId.id, payment_id: razorPayDataId.order_id })
-            .returning('id')
-            .executeTakeFirstOrThrow();
-
-        await tx.insertInto('signup_verification_status').values({ id: checkpoint.id }).execute();
-    });
-
-    await redisClient.del(`need-payment:${email}`);
-
-    res.status(OK).json({ message: 'Payment verified' });
 };
 
 const getCheckpoint = async (req: Request<JwtType, GetCheckpointType>, res: Response) => {
@@ -847,11 +784,12 @@ const postCheckpoint = async (
     } else if (step === CheckpointStep.ADD_NOMINEES) {
         const { nominees } = req.body;
 
+        // FIXME
         // Validate total share percentage equals 100%
-        const totalShare = nominees.reduce((sum, nominee) => sum + nominee.share, 0);
-        if (totalShare !== 100) {
-            throw new UnprocessableEntityError('Total nominee share must equal 100%');
-        }
+        // const totalShare = nominees.reduce((sum, nominee) => sum + nominee.share, 0);
+        // if (totalShare !== 100) {
+        //     throw new UnprocessableEntityError('Total nominee share must equal 100%');
+        // }
 
         await db.transaction().execute(async (tx) => {
             const checkpointId = await tx
@@ -860,50 +798,52 @@ const postCheckpoint = async (
                 .where('email', '=', email)
                 .executeTakeFirstOrThrow();
 
-            const deleted = await tx
-                .deleteFrom('nominees_to_checkpoint')
-                .where('checkpoint_id', '=', checkpointId.id)
-                .returning('nominees_id')
-                .execute();
+            if (nominees.length > 0) {
+                const deleted = await tx
+                    .deleteFrom('nominees_to_checkpoint')
+                    .where('checkpoint_id', '=', checkpointId.id)
+                    .returning('nominees_id')
+                    .execute();
 
-            if (deleted.length > 0) {
+                if (deleted.length > 0) {
+                    await tx
+                        .deleteFrom('nominees')
+                        .where(
+                            'id',
+                            'in',
+                            deleted.map((it) => it.nominees_id),
+                        )
+                        .execute();
+                }
+
+                const nameIds = await insertNameGetId(
+                    tx,
+                    nominees.map((it) => splitName(it.name)),
+                );
+
+                const inserted = await tx
+                    .insertInto('nominees')
+                    .values(
+                        nominees.map((it, index) => ({
+                            name: nameIds[index],
+                            govt_id: it.gov_id,
+                            relationship: it.relation,
+                            share: it.share,
+                        })),
+                    )
+                    .returning('id')
+                    .execute();
+
                 await tx
-                    .deleteFrom('nominees')
-                    .where(
-                        'id',
-                        'in',
-                        deleted.map((it) => it.nominees_id),
+                    .insertInto('nominees_to_checkpoint')
+                    .values(
+                        inserted.map((id) => ({
+                            checkpoint_id: checkpointId.id,
+                            nominees_id: id.id,
+                        })),
                     )
                     .execute();
             }
-
-            const nameIds = await insertNameGetId(
-                tx,
-                nominees.map((it) => splitName(it.name)),
-            );
-
-            const inserted = await tx
-                .insertInto('nominees')
-                .values(
-                    nominees.map((it, index) => ({
-                        name: nameIds[index],
-                        govt_id: it.gov_id,
-                        relationship: it.relation,
-                        share: it.share,
-                    })),
-                )
-                .returning('id')
-                .execute();
-
-            await tx
-                .insertInto('nominees_to_checkpoint')
-                .values(
-                    inserted.map((id) => ({
-                        checkpoint_id: checkpointId.id,
-                        nominees_id: id.id,
-                    })),
-                )
-                .execute();
 
             await tx
                 .updateTable('signup_verification_status')
@@ -912,7 +852,7 @@ const postCheckpoint = async (
                 .execute();
         });
 
-        res.status(CREATED).json({ message: 'Nominees added' });
+        res.status(CREATED).json({ message: 'Nominees added.' });
     }
 };
 
@@ -1017,16 +957,4 @@ const getSignature = async (req: Request<JwtType>, res: Response) => {
     }
 };
 
-export {
-    requestOtp,
-    verifyOtp,
-    verify,
-    initiatePayment,
-    verifyPayment,
-    postCheckpoint,
-    getCheckpoint,
-    putIpv,
-    getIpv,
-    putSignature,
-    getSignature,
-};
+export { requestOtp, verifyOtp, postCheckpoint, getCheckpoint, putIpv, getIpv, putSignature, getSignature };

@@ -1,18 +1,15 @@
 import { Router } from 'express';
-import { CheckpointSchema, PaymentVerifySchema, RequestOtpSchema, VerifyOtpSchema } from './signup.validator';
+import { CheckpointSchema, RequestOtpSchema, VerifyOtpSchema } from './signup.validator';
 import { validate } from '@app/middlewares';
 import {
     getCheckpoint,
     getIpv,
     getSignature,
-    initiatePayment,
     postCheckpoint,
     putIpv,
     putSignature,
     requestOtp,
-    verify,
     verifyOtp,
-    verifyPayment,
 } from './signup.controller';
 import { jwtMiddleware } from '@app/utils/jwt';
 
@@ -68,12 +65,6 @@ router.post('/request-otp', validate(RequestOtpSchema), requestOtp);
  */
 router.post('/verify-otp', validate(VerifyOtpSchema), verifyOtp);
 
-router.post('/verify', jwtMiddleware, verify);
-
-router.post('/payment/initiate', jwtMiddleware, initiatePayment);
-
-router.post('/payment/verify', [jwtMiddleware, validate(PaymentVerifySchema)], verifyPayment);
-
 router.get('/checkpoint/:step', jwtMiddleware, getCheckpoint);
 
 /**
@@ -96,7 +87,7 @@ router.get('/checkpoint/:step', jwtMiddleware, getCheckpoint);
  *       401:
  *         description: Unauthorized
  */
-router.post('/checkpoint', [jwtMiddleware, validate(CheckpointSchema)], postCheckpoint);
+router.post('/checkpoint', jwtMiddleware, validate(CheckpointSchema), postCheckpoint);
 
 /**
  * @swagger

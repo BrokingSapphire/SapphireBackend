@@ -138,10 +138,4 @@ const CheckpointSchema = Joi.object({
     }),
 });
 
-const PaymentVerifySchema = Joi.object({
-    orderId: Joi.string().required(),
-    paymentId: Joi.string().required(),
-    signature: Joi.string().required(),
-});
-
-export { RequestOtpSchema, VerifyOtpSchema, CheckpointSchema, PaymentVerifySchema };
+export { RequestOtpSchema, VerifyOtpSchema, CheckpointSchema };
