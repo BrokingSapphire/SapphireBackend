@@ -556,7 +556,7 @@ const finalizeVerification = async (req: Request, res: Response) => {
         await trx
             .insertInto('user')
             .values({
-                id: checkpointId,
+                id: checkpoint.client_id!,
                 email: checkpoint.email,
                 name: checkpoint.name!,
                 dob: checkpoint.dob!,
@@ -586,7 +586,7 @@ const finalizeVerification = async (req: Request, res: Response) => {
             .expression((eb) =>
                 eb
                     .selectFrom('bank_to_checkpoint')
-                    .select([eb.val(checkpointId).as('user_id'), 'bank_account_id', 'is_primary'])
+                    .select([eb.val(checkpoint.client_id).as('user_id'), 'bank_account_id', 'is_primary'])
                     .where('checkpoint_id', '=', checkpointId),
             )
             .execute();
@@ -598,7 +598,7 @@ const finalizeVerification = async (req: Request, res: Response) => {
             .expression((eb) =>
                 eb
                     .selectFrom('nominees_to_checkpoint')
-                    .select([eb.val(checkpointId).as('user_id'), 'nominees_id'])
+                    .select([eb.val(checkpoint.client_id).as('user_id'), 'nominees_id'])
                     .where('checkpoint_id', '=', checkpointId),
             )
             .execute();
@@ -610,7 +610,7 @@ const finalizeVerification = async (req: Request, res: Response) => {
             .expression((eb) =>
                 eb
                     .selectFrom('investment_segments_to_checkpoint')
-                    .select([eb.val(checkpointId).as('user_id'), 'segment'])
+                    .select([eb.val(checkpoint.client_id).as('user_id'), 'segment'])
                     .where('checkpoint_id', '=', checkpointId),
             )
             .execute();
@@ -619,7 +619,7 @@ const finalizeVerification = async (req: Request, res: Response) => {
         await trx
             .insertInto('user_balance')
             .values({
-                user_id: checkpointId,
+                user_id: checkpoint.client_id,
                 available_cash: 0,
                 blocked_cash: 0,
                 available_liq_margin: 0,

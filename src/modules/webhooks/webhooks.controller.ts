@@ -29,7 +29,7 @@ const depositCallback = async (req: Request, res: Response): Promise<void> => {
                 .values({
                     reference_no: response.payInstrument.merchDetails.merchTxnId,
                     transaction_id: String(response.payInstrument.payDetails.atomTxnId),
-                    user_id: Number(response.payInstrument.payDetails.clientCode!!),
+                    user_id: response.payInstrument.payDetails.clientCode!,
                     transaction_type: 'deposit',
                     status: 'completed',
                     amount: response.payInstrument.payDetails.totalAmount,
@@ -46,7 +46,7 @@ const depositCallback = async (req: Request, res: Response): Promise<void> => {
                 .set({
                     available_cash: (eb) => eb('available_cash', '+', amount),
                 })
-                .where('user_id', '=', Number(response.payInstrument.payDetails.clientCode!!))
+                .where('user_id', '=', response.payInstrument.payDetails.clientCode!)
                 .execute();
         });
 

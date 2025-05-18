@@ -59,7 +59,7 @@ const depositFunds = async (req: Request<SessionJwtType>, res: Response): Promis
     const { userId } = req.auth!!;
     const { amount, mode } = req.body;
 
-    const merchantTxnId = generateReferenceNo(userId.toString());
+    const merchantTxnId = generateReferenceNo(userId);
     const paymentService = new PaymentService(`${req.protocol}://${req.host}${env.apiPath}/webhook/deposit/callback`);
 
     const details = await db
@@ -71,7 +71,7 @@ const depositFunds = async (req: Request<SessionJwtType>, res: Response): Promis
         .executeTakeFirstOrThrow();
 
     const customerDetails = {
-        custId: userId.toString(),
+        custId: userId,
         custName: details.full_name,
         custEmail: details.email,
         custPhone: details.phone,
@@ -80,7 +80,7 @@ const depositFunds = async (req: Request<SessionJwtType>, res: Response): Promis
     const paymentResponse = await paymentService.createPaymentRequest(
         amount,
         merchantTxnId,
-        userId.toString(),
+        userId,
         customerDetails,
         mode === 'UPI' ? 'UP' : 'NB',
     );
@@ -122,7 +122,7 @@ const withdrawFunds = async (req: Request<SessionJwtType>, res: Response): Promi
             .transaction()
             .setIsolationLevel('serializable')
             .execute(async (tx) => {
-                const txnId = generateReferenceNo(userId.toString());
+                const txnId = generateReferenceNo(userId);
                 await tx
                     .insertInto('balance_transactions')
                     .values({

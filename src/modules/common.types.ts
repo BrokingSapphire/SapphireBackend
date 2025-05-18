@@ -7,11 +7,11 @@ export enum CredentialsType {
 }
 
 export type SessionJwtType = JwtPayloadWithoutWildcard & {
-    userId: number;
+    userId: string;
 };
 
 export type UserIdParam = {
-    userId: number;
+    userId: string;
 };
 
 export const Exchange: Record<StockExchange, StockExchange> = {
