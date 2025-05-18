@@ -14,14 +14,14 @@ import {
     VerifyOtpType,
     GetCheckpointType,
     UIDParams,
-    AccountType
+    AccountType,
 } from './signup.types';
 import { CredentialsType } from '@app/modules/common.types';
 import DigiLockerService from '@app/services/surepass/digilocker.service';
 import AadhaarXMLParser from '@app/utils/aadhaar-xml.parser';
 import { sign } from '@app/utils/jwt';
 import axios from 'axios';
-import { insertAddresGetId, insertNameGetId, updateCheckpoint } from '@app/database/transactions';
+import { insertAddressGetId, insertNameGetId, updateCheckpoint } from '@app/database/transactions';
 import splitName from '@app/utils/split-name';
 import PanService from '@app/services/surepass/pan.service';
 import { CREATED, NO_CONTENT, NOT_ACCEPTABLE, NOT_FOUND, OK, PAYMENT_REQUIRED } from '@app/utils/httpstatus';
@@ -253,18 +253,14 @@ const getCheckpoint = async (req: Request<JwtType, GetCheckpointType>, res: Resp
             .selectFrom('signup_checkpoints')
             .innerJoin('user_name as father', 'signup_checkpoints.father_name', 'father.id')
             .innerJoin('user_name as mother', 'signup_checkpoints.mother_name', 'mother.id')
-            .select([
-                'father.full_name as father_name',
-                'mother.full_name as mother_name',
-            ])
+            .select(['father.full_name as father_name', 'mother.full_name as mother_name'])
             .where('email', '=', email)
             .where('father_name', 'is not', null)
             .where('mother_name', 'is not', null)
             .executeTakeFirstOrThrow();
 
         res.status(OK).json({ data: { father_name, mother_name }, message: 'User details fetched' });
-    }
-    else if (step === CheckpointStep.PERSONAL_DETAIL) {
+    } else if (step === CheckpointStep.PERSONAL_DETAIL) {
         const { marital_status, annual_income, trading_exp, account_settlement } = await db
             .selectFrom('signup_checkpoints')
             .select(['marital_status', 'annual_income', 'trading_exp', 'account_settlement'])
@@ -274,18 +270,17 @@ const getCheckpoint = async (req: Request<JwtType, GetCheckpointType>, res: Resp
             .where('trading_exp', 'is not', null)
             .where('account_settlement', 'is not', null)
             .executeTakeFirstOrThrow();
-    
-        res.status(OK).json({ 
-            data: { 
-                marital_status, 
-                annual_income, 
-                trading_exp, 
-                acc_settlement: account_settlement 
-            }, 
-            message: 'Personal details fetched' 
+
+        res.status(OK).json({
+            data: {
+                marital_status,
+                annual_income,
+                trading_exp,
+                acc_settlement: account_settlement,
+            },
+            message: 'Personal details fetched',
         });
-    } 
-    else if (step === CheckpointStep.ACCOUNT_DETAIL) {
+    } else if (step === CheckpointStep.ACCOUNT_DETAIL) {
         const { annual_income, trading_exp, account_settlement } = await db
             .selectFrom('signup_checkpoints')
             .select(['annual_income', 'trading_exp', 'account_settlement'])
@@ -314,7 +309,7 @@ const getCheckpoint = async (req: Request<JwtType, GetCheckpointType>, res: Resp
             .selectFrom('signup_checkpoints')
             .innerJoin('bank_to_checkpoint', 'signup_checkpoints.id', 'bank_to_checkpoint.checkpoint_id')
             .innerJoin('bank_account', 'bank_to_checkpoint.bank_account_id', 'bank_account.id')
-            .select(['bank_account.account_no', 'bank_account.ifsc_code','bank_account.account_type'])
+            .select(['bank_account.account_no', 'bank_account.ifsc_code', 'bank_account.account_type'])
             .where('email', '=', email)
             .executeTakeFirstOrThrow();
 
@@ -323,36 +318,30 @@ const getCheckpoint = async (req: Request<JwtType, GetCheckpointType>, res: Resp
         const nominees = await db
             .selectFrom('signup_checkpoints')
             .innerJoin('nominees_to_checkpoint', 'signup_checkpoints.id', 'nominees_to_checkpoint.checkpoint_id')
-            .innerJoin('user_name', 'nominees_to_checkpoint.name_id', 'user_name.id')
-            .select([
-                'user_name.full_name as name',
-                'nominees_to_checkpoint.id_type',
-                'nominees_to_checkpoint.gov_id',
-                'nominees_to_checkpoint.relation',
-                'nominees_to_checkpoint.share'
-            ])
+            .innerJoin('nominees', 'nominees_to_checkpoint.nominees_id', 'nominees.id')
+            .innerJoin('user_name', 'nominees.name', 'user_name.id')
+            .select(['user_name.full_name as name', 'nominees.govt_id', 'nominees.relationship', 'nominees.share'])
             .where('email', '=', email)
             .execute();
-    
+
         if (nominees.length === 0) {
             res.status(NO_CONTENT).json({ message: 'No nominees found' });
             return;
         }
-    
-        const formattedNominees = nominees.map(nominee => ({
+
+        const formattedNominees = nominees.map((nominee) => ({
             name: nominee.name,
-            gov_id: nominee.gov_id,
-            id_type: nominee.id_type,
-            relation: nominee.relation,
-            share: nominee.share
+            govId: nominee.govt_id,
+            idType: nominee.govt_id.length === 12 ? 'AADHAAR' : 'PAN',
+            relation: nominee.relationship,
+            share: nominee.share,
         }));
-    
+
         res.status(OK).json({
             data: { nominees: formattedNominees },
-            message: 'Nominees fetched successfully'
+            message: 'Nominees fetched successfully',
         });
-    }
-     else {
+    } else {
         res.status(NOT_FOUND).json({ message: 'Checkpoint data not found' });
     }
 };
@@ -406,7 +395,7 @@ const postCheckpoint = async (
             const nameId = await insertNameGetId(tx, splitName(panResponse.data.data.full_name));
 
             const address = panResponse.data.data.address;
-            const addressId = await insertAddresGetId(tx, {
+            const addressId = await insertAddressGetId(tx, {
                 address1: address.line_1,
                 address2: address.line_2,
                 streetName: address.street_name,
@@ -510,7 +499,7 @@ const postCheckpoint = async (
 
         await db.transaction().execute(async (tx) => {
             const address = parser.address();
-            const addressId = await insertAddresGetId(tx, address);
+            const addressId = await insertAddressGetId(tx, address);
 
             const nameId = await insertNameGetId(tx, splitName(parser.name()));
 
@@ -626,7 +615,7 @@ const postCheckpoint = async (
                 .where('id', '=', checkpoint.id)
                 .execute();
         });
-    
+
         res.status(CREATED).json({ message: 'Personal details saved' });
     } else if (step === CheckpointStep.ACCOUNT_DETAIL) {
         const { annual_income, experience, settlement } = req.body;
@@ -639,26 +628,24 @@ const postCheckpoint = async (
         });
 
         res.status(CREATED).json({ message: 'Account details saved' });
-    } 
-    
-    else if (step === CheckpointStep.OCCUPATION) {
+    } else if (step === CheckpointStep.OCCUPATION) {
         const { occupation, politically_exposed } = req.body;
-    await db.transaction().execute(async (tx) => {
-        const checkpoint = await updateCheckpoint(tx, email, phone, {
-            occupation,
-            is_politically_exposed: politically_exposed,
-        })
-            .returning('id')
-            .executeTakeFirstOrThrow();
+        await db.transaction().execute(async (tx) => {
+            const checkpoint = await updateCheckpoint(tx, email, phone, {
+                occupation,
+                is_politically_exposed: politically_exposed,
+            })
+                .returning('id')
+                .executeTakeFirstOrThrow();
 
-        await tx
-            .updateTable('signup_verification_status')
-            .set({ trading_preferences_status: 'pending', updated_at: new Date() })
-            .where('id', '=', checkpoint.id)
-            .execute();
-    });
+            await tx
+                .updateTable('signup_verification_status')
+                .set({ trading_preferences_status: 'pending', updated_at: new Date() })
+                .where('id', '=', checkpoint.id)
+                .execute();
+        });
 
-    res.status(CREATED).json({ message: 'Occupation saved' });
+        res.status(CREATED).json({ message: 'Occupation saved' });
     } else if (step === CheckpointStep.BANK_VALIDATION_START) {
         const { validation_type } = req.body;
         if (validation_type === ValidationType.UPI) {
@@ -734,7 +721,7 @@ const postCheckpoint = async (
                         account_no: rpcResponse.data.data.details.account_number,
                         ifsc_code: rpcResponse.data.data.details.ifsc,
                         verification: 'verified',
-                        account_type: AccountType.SAVINGS
+                        account_type: AccountType.SAVINGS,
                     })
                     .onConflict((oc) =>
                         oc.constraint('uq_bank_account').doUpdateSet((eb) => ({
@@ -859,51 +846,72 @@ const postCheckpoint = async (
         });
     } else if (step === CheckpointStep.ADD_NOMINEES) {
         const { nominees } = req.body;
-    
-    // Validate total share percentage equals 100%
-    const totalShare = nominees.reduce((sum, nominee) => sum + nominee.share, 0);
-    if (totalShare !== 100) {
-        throw new UnprocessableEntityError('Total nominee share must equal 100%');
-    }
-    
-    await db.transaction().execute(async (tx) => {
-        const checkpointId = await tx
-            .selectFrom('signup_checkpoints')
-            .select('id')
-            .where('email', '=', email)
-            .executeTakeFirstOrThrow();
 
-        await tx
-            .deleteFrom('nominees_to_checkpoint')
-            .where('checkpoint_id', '=', checkpointId.id)
-            .execute();
+        // Validate total share percentage equals 100%
+        const totalShare = nominees.reduce((sum, nominee) => sum + nominee.share, 0);
+        if (totalShare !== 100) {
+            throw new UnprocessableEntityError('Total nominee share must equal 100%');
+        }
 
-        // Add new nominees
-        for (const nominee of nominees) {
-            const nameId = await insertNameGetId(tx, splitName(nominee.name));
-            
-            // Determine ID type (PAN or Aadhar) 
-            const idType = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(nominee.gov_id) ? 'PAN' : 'AADHAR';
-            
+        await db.transaction().execute(async (tx) => {
+            const checkpointId = await tx
+                .selectFrom('signup_checkpoints')
+                .select('id')
+                .where('email', '=', email)
+                .executeTakeFirstOrThrow();
+
+            const deleted = await tx
+                .deleteFrom('nominees_to_checkpoint')
+                .where('checkpoint_id', '=', checkpointId.id)
+                .returning('nominees_id')
+                .execute();
+
+            if (deleted.length > 0) {
+                await tx
+                    .deleteFrom('nominees')
+                    .where(
+                        'id',
+                        'in',
+                        deleted.map((it) => it.nominees_id),
+                    )
+                    .execute();
+            }
+
+            const nameIds = await insertNameGetId(
+                tx,
+                nominees.map((it) => splitName(it.name)),
+            );
+
+            const inserted = await tx
+                .insertInto('nominees')
+                .values(
+                    nominees.map((it, index) => ({
+                        name: nameIds[index],
+                        govt_id: it.gov_id,
+                        relationship: it.relation,
+                        share: it.share,
+                    })),
+                )
+                .returning('id')
+                .execute();
+
             await tx
                 .insertInto('nominees_to_checkpoint')
-                .values({
-                    checkpoint_id: checkpointId.id,
-                    name_id: nameId,
-                    id_type: idType,
-                    gov_id: nominee.gov_id,
-                    relation: nominee.relation,
-                    share: nominee.share
-                })
+                .values(
+                    inserted.map((id) => ({
+                        checkpoint_id: checkpointId.id,
+                        nominees_id: id.id,
+                    })),
+                )
                 .execute();
-        }
-        
-        await tx
-            .updateTable('signup_verification_status')
-            .set({ nominees_status: 'pending', updated_at: new Date() })
-            .where('id', '=', checkpointId.id)
-            .execute();
-    });
+
+            await tx
+                .updateTable('signup_verification_status')
+                .set({ nominee_status: 'pending', updated_at: new Date() })
+                .where('id', '=', checkpointId.id)
+                .execute();
+        });
+
         res.status(CREATED).json({ message: 'Nominees added' });
     }
 };

@@ -23,7 +23,7 @@ export enum CheckpointStep {
     SIGNATURE = 'signature',
     IPV = 'ipv',
     ADD_NOMINEES = 'add_nominees',
-    PERSONAL_DETAIL = 'personal_detail'
+    PERSONAL_DETAIL = 'personal_detail',
 }
 
 export enum InvestmentSegment {
@@ -68,11 +68,11 @@ export enum ValidationType {
 
 export enum Occupation {
     STUDENT = 'student',
-    GOVT_SERVANT = 'govt.servant',
+    GOVT_SERVANT = 'govt servant',
     RETIRED = 'retired',
     PRIVATE_SECTOR = 'private sector',
     AGRICULTURALIST = 'agriculturalist',
-    SELF_EMPLOYED = 'self-employed',
+    SELF_EMPLOYED = 'self employed',
     HOUSEWIFE = 'housewife',
     OTHER = 'other',
 }
@@ -90,9 +90,8 @@ export enum NomineeRelation {
     SISTER = 'Sister',
     BROTHER = 'Brother',
     SPOUSE = 'Spouse',
-    OTHER = 'Other'
+    OTHER = 'Other',
 }
-
 
 export type RequestOtpType =
     | {
@@ -188,12 +187,12 @@ export type PostCheckpointType =
           }[];
       }
     | {
-        step: CheckpointStep.PERSONAL_DETAIL;
-        marital_status: MaritalStatus;
-        annual_income: AnnualIncome;
-        trading_exp: TradingExperience;
-        acc_settlement: AccountSettlement;
-    };
+          step: CheckpointStep.PERSONAL_DETAIL;
+          marital_status: MaritalStatus;
+          annual_income: AnnualIncome;
+          trading_exp: TradingExperience;
+          acc_settlement: AccountSettlement;
+      };
 
 export type UIDParams = {
     uid: string;

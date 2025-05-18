@@ -70,12 +70,14 @@ const getCategory = async (req: Request<SessionJwtType, WatchlistCategoryParam>,
 
 const removeCategory = async (req: Request<SessionJwtType, WatchlistCategoryParam>, res: Response) => {
     const result = await db.transaction().execute(async (tx) => {
-        await tx.deleteFrom('user_stock_watchlist')
+        await tx
+            .deleteFrom('user_stock_watchlist')
             .where('user_id', '=', req.auth!.userId)
             .where('category_id', '=', req.params.categoryId)
             .execute();
 
-        return await tx.deleteFrom('user_watchlist_category')
+        return await tx
+            .deleteFrom('user_watchlist_category')
             .where('user_id', '=', req.auth!.userId)
             .where('id', '=', req.params.categoryId)
             .execute();
