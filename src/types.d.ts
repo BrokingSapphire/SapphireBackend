@@ -66,3 +66,14 @@ export type ForgotPasswordVerifyOtpResponseType = DefaultResponseData & {
 export type ForgotPasswordResetRequestType = {
     newPassword: string;
 };
+
+export type LoginInitiateResponseType = DefaultResponseData & {
+    requestId: string;
+    isFirstLogin: boolean;
+};
+
+// Request type for OTP verification
+export type LoginOtpVerifyRequestType = {
+    requestId: string;
+    otp: string;
+};

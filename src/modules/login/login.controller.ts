@@ -1,5 +1,16 @@
 import { ParamsDictionary } from 'express-serve-static-core';
-import { Response, DefaultResponseData, Request , LoginResponseWithToken , LoginRequestType, ResetPasswordRequestType , ForgotPasswordInitiateRequestType , ForgotPasswordInitiateResponseType, ForgotPasswordVerifyOtpRequestType, ForgotPasswordVerifyOtpResponseType, ForgotPasswordResetRequestType } from '@app/types.d';
+import { 
+    Response, 
+    DefaultResponseData,
+    Request, 
+    LoginResponseWithToken, 
+    LoginRequestType, 
+    ResetPasswordRequestType,
+    ForgotPasswordInitiateRequestType, ForgotPasswordInitiateResponseType, ForgotPasswordVerifyOtpRequestType, ForgotPasswordVerifyOtpResponseType, 
+    ForgotPasswordResetRequestType, 
+    LoginInitiateResponseType, 
+    LoginOtpVerifyRequestType
+} from '@app/types.d';
 import { EmailOtpVerification, PhoneOtpVerification , OTP_LENGTH} from '../signup/signup.services';
 import { UnauthorizedError } from '@app/apiError';
 import redisClient from '@app/services/redis.service';
@@ -15,7 +26,7 @@ import {
 
 const login = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, LoginRequestType>,
-    res: Response<LoginResponseWithToken> 
+    res: Response<LoginResponseWithToken | LoginInitiateResponseType> 
 ) => {
     const { clientId, password } = req.body;
     const user = await db
@@ -25,6 +36,7 @@ const login = async (
             'user.id',
             'user.client_id',
             'user.email',
+            'user.phone',
             'user.password',
             'user.is_first_login',
             'pan_detail.pan_number'
@@ -47,12 +59,103 @@ const login = async (
     if (!isAuthenticated) {
         throw new UnauthorizedError('Invalid credentials');
     }
-    const token = sign({ clientId: user.client_id, userId: user.id });
 
+    if (isFirstLogin) {
+        const token = sign({ clientId: user.client_id, userId: user.id });
+
+        res.status(OK).json({
+            message: 'Login successful',
+            token,
+            isFirstLogin
+        });
+    }
+    else{
+        // user changed password and OTP required for login
+        const phoneData = await db
+            .selectFrom('phone_number')
+            .select('phone')
+            .where('id', '=', user.phone)
+            .executeTakeFirstOrThrow();
+        // Generate a random request ID
+        const requestId = randomUUID();
+
+        // Generate a single OTP for both email and phone
+        const min = Math.pow(10, OTP_LENGTH - 1);
+        const max = Math.pow(10, OTP_LENGTH) - 1;
+        const singleOtp = Math.floor(min + Math.random() * (max - min)).toString();
+
+        // Store the information in Redis
+        await redisClient.set(`login-otp:${requestId}`, JSON.stringify({
+            userId: user.id,
+            clientId: user.client_id,
+            email: user.email,
+            phone: phoneData.phone,
+            singleOtp
+        }));
+        await redisClient.expire(`login-otp:${requestId}`, 60 * 5);
+
+        // Store OTP for email and phone verification
+        const emailKey = `otp:${user.email}`;
+        const phoneKey = `otp:${phoneData.phone}`;
+        
+        await redisClient.set(emailKey, singleOtp);
+        await redisClient.expire(emailKey, 10 * 60); // 10 mins expiry
+        
+        await redisClient.set(phoneKey, singleOtp);
+        await redisClient.expire(phoneKey, 10 * 60); // 10 mins expiry
+
+        // Send OTP to email and phone
+        const emailOtp = new EmailOtpVerification(user.email);
+        await emailOtp.sendOtp();
+
+        const phoneOtp = new PhoneOtpVerification(user.email, phoneData.phone);
+        await phoneOtp.sendOtp();
+
+        // Return request ID for OTP verification
+        res.status(OK).json({
+            message: 'OTP sent to your registered email and phone number',
+            requestId,
+            isFirstLogin
+        });
+    }
+};
+
+// Verify the OTP for the login
+const verifyLoginOtp = async (
+    req: Request<undefined, ParamsDictionary, DefaultResponseData, LoginOtpVerifyRequestType>,
+    res: Response<LoginResponseWithToken>
+) => {
+    const { requestId, otp } = req.body;
+
+    // Get the login OTP data from Redis
+    const loginOtpDataStr = await redisClient.get(`login-otp:${requestId}`);
+    if (!loginOtpDataStr) {
+        throw new UnauthorizedError('Invalid or expired OTP request');
+    }
+
+    const loginOtpData = JSON.parse(loginOtpDataStr);
+    
+    // Verify OTP
+    if (otp !== loginOtpData.singleOtp) {
+        throw new UnauthorizedError('Invalid OTP');
+    }
+
+    // Clean up Redis entries
+    await redisClient.del(`login-otp:${requestId}`);
+    await redisClient.del(`otp:${loginOtpData.email}`);
+    await redisClient.del(`otp:${loginOtpData.phone}`);
+
+    // Generate JWT token
+    const token = sign({ 
+        clientId: loginOtpData.clientId, 
+        userId: loginOtpData.userId 
+    });
+    
+    // Return success with token
     res.status(OK).json({
         message: 'Login successful',
         token,
-        isFirstLogin
+        isFirstLogin: false
     });
 };
 
@@ -106,7 +209,7 @@ const initiatePasswordReset = async(
     req : Request<undefined, ParamsDictionary, DefaultResponseData, ForgotPasswordInitiateRequestType>,
     res: Response<ForgotPasswordInitiateResponseType>
 ) =>{
-    const { panNumber, recaptchaToken } = req.body;
+    const { panNumber } = req.body;
 
     // finding user by pan number
     const user = await db
@@ -270,6 +373,7 @@ const completePasswordReset = async (
 
 export { 
     login, 
+    verifyLoginOtp,
     resetPassword,
     initiatePasswordReset,
     verifyPasswordResetOtp,

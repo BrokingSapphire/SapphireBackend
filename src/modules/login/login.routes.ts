@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { validate } from '@app/middlewares';
 import { 
     LoginSchema, 
+    LoginOtpVerifySchema,
     ResetPasswordSchema,
     ForgotPasswordInitiateSchema,
     ForgotPasswordVerifyOtpSchema,
@@ -9,6 +10,7 @@ import {
 } from './login.validator';
 import {
     login,
+    verifyLoginOtp,
     resetPassword,
     initiatePasswordReset,
     verifyPasswordResetOtp,
@@ -47,6 +49,43 @@ const router = Router();
  *         description: User not found
  */
 router.post('/login', validate(LoginSchema), login);
+
+/**
+ * @swagger
+ * /login/verify-otp:
+ *   post:
+ *     tags: [Login]
+ *     summary: Verify OTP for login authentication
+ *     description: Verifies the OTP sent during login for non-first-time users
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/LoginOtpVerifySchema'
+ *     responses:
+ *       200:
+ *         description: OTP verification successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Login successful
+ *                 token:
+ *                   type: string
+ *                   example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *                 isFirstLogin:
+ *                   type: boolean
+ *                   example: false
+ *       400:
+ *         description: Invalid request
+ *       401:
+ *         description: Invalid or expired OTP
+ */
+router.post('/verify-otp', validate(LoginOtpVerifySchema),verifyLoginOtp)
 
 /**
  * @swagger

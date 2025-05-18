@@ -5,6 +5,11 @@ export const LoginSchema = Joi.object({
     password: Joi.string().required(),
 });
 
+export const LoginOtpVerifySchema = Joi.object({
+    requestId: Joi.string().required().uuid(),
+    otp: Joi.string().required().length(6).pattern(/^[0-9]{6}$/),
+});
+
 export const ResetPasswordSchema = Joi.object({
     currentPassword: Joi.string().required(),
     newPassword: Joi.string()
