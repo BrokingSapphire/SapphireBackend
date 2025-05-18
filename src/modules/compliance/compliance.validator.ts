@@ -3,7 +3,7 @@ import { VerificationType } from './compliance.types';
 
 const GetVerificationDetailParamSchema = Joi.object({
     step: Joi.string()
-        .valid(...Object.entries(VerificationType))
+        .valid(...Object.values(VerificationType))
         .required(),
 });
 

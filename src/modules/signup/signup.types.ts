@@ -16,14 +16,14 @@ export enum CheckpointStep {
     AADHAAR = 'aadhaar',
     INVESTMENT_SEGMENT = 'investment_segment',
     USER_DETAIL = 'user_detail',
+    PERSONAL_DETAIL = 'personal_detail',
+    OTHER_DETAIL = 'other_detail',
     ACCOUNT_DETAIL = 'account_detail',
-    OCCUPATION = 'occupation',
     BANK_VALIDATION_START = 'bank_validation_start',
     BANK_VALIDATION = 'bank_validation',
     SIGNATURE = 'signature',
     IPV = 'ipv',
     ADD_NOMINEES = 'add_nominees',
-    PERSONAL_DETAIL = 'personal_detail',
 }
 
 export enum InvestmentSegment {
@@ -139,18 +139,18 @@ export type PostCheckpointType =
       }
     | {
           step: CheckpointStep.USER_DETAIL;
-          marital_status: MaritalStatus;
           father_name: string;
           mother_name: string;
       }
     | {
-          step: CheckpointStep.ACCOUNT_DETAIL;
-          settlement: AccountSettlement;
+          step: CheckpointStep.PERSONAL_DETAIL;
+          marital_status: MaritalStatus;
           annual_income: AnnualIncome;
-          experience: TradingExperience;
+          trading_exp: TradingExperience;
+          acc_settlement: AccountSettlement;
       }
     | {
-          step: CheckpointStep.OCCUPATION;
+          step: CheckpointStep.OTHER_DETAIL;
           occupation: Occupation;
           politically_exposed: boolean;
       }
@@ -185,13 +185,6 @@ export type PostCheckpointType =
               relation: NomineeRelation;
               share: number;
           }[];
-      }
-    | {
-          step: CheckpointStep.PERSONAL_DETAIL;
-          marital_status: MaritalStatus;
-          annual_income: AnnualIncome;
-          trading_exp: TradingExperience;
-          acc_settlement: AccountSettlement;
       };
 
 export type UIDParams = {

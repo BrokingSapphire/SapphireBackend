@@ -217,21 +217,8 @@ const getCheckpoint = async (req: Request<JwtType, GetCheckpointType>, res: Resp
             },
             message: 'Personal details fetched',
         });
-    } else if (step === CheckpointStep.ACCOUNT_DETAIL) {
-        const { annual_income, trading_exp, account_settlement } = await db
-            .selectFrom('signup_checkpoints')
-            .select(['annual_income', 'trading_exp', 'account_settlement'])
-            .where('email', '=', email)
-            .where('annual_income', 'is not', null)
-            .where('trading_exp', 'is not', null)
-            .where('account_settlement', 'is not', null)
-            .executeTakeFirstOrThrow();
-
-        res.status(OK).json({
-            data: { annual_income, trading_exp, account_settlement },
-            message: 'Account details fetched',
-        });
-    } else if (step === CheckpointStep.OCCUPATION) {
+    } 
+    else if (step === CheckpointStep.OTHER_DETAIL) {
         const { occupation, is_politically_exposed } = await db
             .selectFrom('signup_checkpoints')
             .select(['occupation', 'is_politically_exposed'])
@@ -240,7 +227,7 @@ const getCheckpoint = async (req: Request<JwtType, GetCheckpointType>, res: Resp
             .where('is_politically_exposed', 'is not', null)
             .executeTakeFirstOrThrow();
 
-        res.status(OK).json({ data: { occupation, is_politically_exposed }, message: 'Occupation fetched' });
+        res.status(OK).json({ data: { occupation, is_politically_exposed }, message: 'Other details fetched' });
     } else if (step === CheckpointStep.BANK_VALIDATION) {
         const bank = await db
             .selectFrom('signup_checkpoints')
@@ -554,18 +541,8 @@ const postCheckpoint = async (
         });
 
         res.status(CREATED).json({ message: 'Personal details saved' });
-    } else if (step === CheckpointStep.ACCOUNT_DETAIL) {
-        const { annual_income, experience, settlement } = req.body;
-        await db.transaction().execute(async (tx) => {
-            await updateCheckpoint(tx, email, phone, {
-                annual_income,
-                trading_exp: experience,
-                account_settlement: settlement,
-            }).execute();
-        });
-
-        res.status(CREATED).json({ message: 'Account details saved' });
-    } else if (step === CheckpointStep.OCCUPATION) {
+    }
+    else if (step === CheckpointStep.OTHER_DETAIL) {
         const { occupation, politically_exposed } = req.body;
         await db.transaction().execute(async (tx) => {
             const checkpoint = await updateCheckpoint(tx, email, phone, {
@@ -582,7 +559,7 @@ const postCheckpoint = async (
                 .execute();
         });
 
-        res.status(CREATED).json({ message: 'Occupation saved' });
+        res.status(CREATED).json({ message: 'Other details saved' });
     } else if (step === CheckpointStep.BANK_VALIDATION_START) {
         const { validation_type } = req.body;
         if (validation_type === ValidationType.UPI) {
