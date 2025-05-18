@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { CheckpointSchema, RequestOtpSchema, VerifyOtpSchema } from './signup.validator';
 import { validate } from '@app/middlewares';
 import {
+    finalizeSignup,
     getCheckpoint,
     getIpv,
     getSignature,
@@ -127,5 +128,7 @@ router.get('/ipv', jwtMiddleware, getIpv);
 router.put('/signature/:uid', jwtMiddleware, putSignature);
 
 router.get('/signature', jwtMiddleware, getSignature);
+
+router.post('/finalize', jwtMiddleware, finalizeSignup);
 
 export default router;

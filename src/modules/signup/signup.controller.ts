@@ -2,7 +2,13 @@ import { ParamsDictionary } from 'express-serve-static-core';
 import { Response, DefaultResponseData, Request } from '@app/types.d';
 import redisClient from '@app/services/redis.service';
 import { EmailOtpVerification, PhoneOtpVerification } from './signup.services';
-import { BadRequestError, NotFoundError, UnauthorizedError, UnprocessableEntityError } from '@app/apiError';
+import {
+    BadRequestError,
+    ForbiddenError,
+    NotFoundError,
+    UnauthorizedError,
+    UnprocessableEntityError,
+} from '@app/apiError';
 import { db } from '@app/database';
 import {
     CheckpointStep,
@@ -29,6 +35,7 @@ import { BankVerification, ReversePenyDrop } from '@app/services/surepass/bank-v
 import { randomUUID } from 'crypto';
 import { imageUpload, wrappedMulterHandler } from '@app/services/multer-s3.service';
 import logger from '@app/logger';
+import IdGenerator from '@app/services/id-generator';
 
 const requestOtp = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, RequestOtpType>,
@@ -77,7 +84,7 @@ const requestOtp = async (
 };
 
 const verifyOtp = async (
-    req: Request<undefined, ParamsDictionary, DefaultResponseData, VerifyOtpType>,
+    req: Request<undefined, ParamsDictionary, ResponseWithToken, VerifyOtpType>,
     res: Response<ResponseWithToken>,
 ) => {
     const { type, email, otp } = req.body;
@@ -96,11 +103,16 @@ const verifyOtp = async (
         await phoneOtp.verifyOtp(otp);
         await redisClient.del(`email-verified:${email}`);
 
-        await db.transaction().execute(async (tx) => {
+        const { client_id } = await db.transaction().execute(async (tx) => {
             const existingCheckpoint = await tx
                 .selectFrom('signup_checkpoints')
                 .leftJoin('phone_number', 'signup_checkpoints.phone_id', 'phone_number.id')
-                .select(['signup_checkpoints.id', 'signup_checkpoints.phone_id', 'phone_number.phone'])
+                .select([
+                    'signup_checkpoints.id',
+                    'signup_checkpoints.phone_id',
+                    'phone_number.phone',
+                    'signup_checkpoints.client_id',
+                ])
                 .where('email', '=', email)
                 .executeTakeFirst();
 
@@ -120,6 +132,8 @@ const verifyOtp = async (
 
                     await tx.deleteFrom('phone_number').where('id', '=', existingCheckpoint.phone_id).execute();
                 }
+
+                return existingCheckpoint;
             } else {
                 const phoneId = await tx
                     .insertInto('phone_number')
@@ -134,17 +148,19 @@ const verifyOtp = async (
                     .executeTakeFirstOrThrow();
 
                 await tx.insertInto('signup_verification_status').values({ id: checkpoint.id }).execute();
+
+                return { client_id: null };
             }
         });
 
         const token = sign({ email, phone });
 
-        res.status(OK).json({ message: 'OTP verified', token });
+        res.status(OK).json({ message: 'OTP verified', token, data: { clientId: client_id } });
     }
 };
 
 const getCheckpoint = async (req: Request<JwtType, GetCheckpointType>, res: Response) => {
-    const { email } = req.auth!!;
+    const { email } = req.auth!;
 
     const { step } = req.params;
     if (step === CheckpointStep.PAN) {
@@ -274,7 +290,7 @@ const postCheckpoint = async (
     req: Request<JwtType, ParamsDictionary, DefaultResponseData, PostCheckpointType>,
     res: Response,
 ) => {
-    const { email, phone } = req.auth!!;
+    const { email, phone } = req.auth!;
 
     const { step } = req.body;
     if (step === CheckpointStep.PAN) {
@@ -869,7 +885,7 @@ const putIpv = async (req: Request<JwtType, UIDParams>, res: Response) => {
 };
 
 const getIpv = async (req: Request<JwtType>, res: Response) => {
-    const { email } = req.auth!!;
+    const { email } = req.auth!;
 
     const { ipv: url } = await db
         .selectFrom('signup_checkpoints')
@@ -919,7 +935,7 @@ const putSignature = async (req: Request<JwtType, UIDParams>, res: Response) => 
 };
 
 const getSignature = async (req: Request<JwtType>, res: Response) => {
-    const { email } = req.auth!!;
+    const { email } = req.auth!;
 
     const { signature: url } = await db
         .selectFrom('signup_checkpoints')
@@ -934,4 +950,49 @@ const getSignature = async (req: Request<JwtType>, res: Response) => {
     }
 };
 
-export { requestOtp, verifyOtp, postCheckpoint, getCheckpoint, putIpv, getIpv, putSignature, getSignature };
+const finalizeSignup = async (req: Request<JwtType>, res: Response) => {
+    const { email } = req.auth!;
+
+    const hasClientId = await db
+        .selectFrom('signup_checkpoints')
+        .select('client_id')
+        .where('email', '=', email)
+        .executeTakeFirstOrThrow();
+
+    if (hasClientId.client_id) {
+        throw new ForbiddenError('Client ID already exists');
+    }
+
+    // TODO: Add more verification for fields
+
+    const id = await new IdGenerator('user_id').nextValue();
+
+    await db.transaction().execute(async (tx) => {
+        await tx
+            .updateTable('signup_checkpoints')
+            .set({
+                client_id: id,
+            })
+            .where('email', '=', email)
+            .execute();
+    });
+
+    res.status(CREATED).json({
+        message: 'Sign up successfully.',
+        data: {
+            clientId: id,
+        },
+    });
+};
+
+export {
+    requestOtp,
+    verifyOtp,
+    postCheckpoint,
+    getCheckpoint,
+    putIpv,
+    getIpv,
+    putSignature,
+    getSignature,
+    finalizeSignup,
+};
