@@ -5,6 +5,7 @@ import {
     CheckpointStep,
     InvestmentSegment,
     MaritalStatus,
+    NomineeRelation,
     TradingExperience,
     ValidationType,
 } from './signup.types';
@@ -12,6 +13,7 @@ import { CredentialsType } from '@app/modules/common.types';
 import { OTP_LENGTH } from './signup.services';
 import { PHONE_REGEX } from '@app/services/sms.service';
 import { PAN_REGEX } from '@app/services/surepass/pan.service';
+import { AADHAAR_REGEX } from '@app/utils/aadhaar-xml.parser';
 
 const RequestOtpSchema = Joi.object({
     type: Joi.string()
@@ -122,9 +124,15 @@ const CheckpointSchema = Joi.object({
         then: Joi.array().items(
             Joi.object({
                 name: Joi.string().required(),
-                gov_id: Joi.date().required(),
-                relation: Joi.string().required(),
-                share: Joi.number().required(),
+                gov_id: Joi.string()
+                    .min(10)
+                    .max(12)
+                    .regex(new RegExp(PAN_REGEX.source + '|' + AADHAAR_REGEX.source))
+                    .required(),
+                relation: Joi.string()
+                    .valid(...Object.values(NomineeRelation))
+                    .required(),
+                share: Joi.number().min(0).max(100).required(),
             }),
         ),
     }),

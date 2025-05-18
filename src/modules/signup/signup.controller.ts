@@ -485,11 +485,11 @@ const postCheckpoint = async (
         await redisClient.del(`digilocker:${email}`);
 
         const documents = await digilocker.listDocuments(clientId);
-        const aadhar = documents.data.data.documents.find((d: any) => d.doc_type === 'ADHAR');
+        const aadhaar = documents.data.data.documents.find((d: any) => d.doc_type === 'ADHAR');
 
-        if (!aadhar) throw new UnprocessableEntityError("User doesn't have aadhaar linked to his digilocker.");
+        if (!aadhaar) throw new UnprocessableEntityError("User doesn't have aadhaar linked to his digilocker.");
 
-        const downloadLink = await digilocker.downloadDocument(clientId, aadhar.file_id);
+        const downloadLink = await digilocker.downloadDocument(clientId, aadhaar.file_id);
         if (downloadLink.data.data.mime_type !== 'application/xml')
             throw new UnprocessableEntityError("Don't know how to process aadhaar file.");
 
