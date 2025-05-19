@@ -2,6 +2,8 @@ import { Address } from '@app/database/transactions';
 import { XMLParser } from 'fast-xml-parser';
 import logger from '@app/logger';
 
+export const AADHAAR_REGEX: RegExp = /^[0-9]{4}[ -]?[0-9]{4}[ -]?[0-9]{4}$/;
+
 class AadhaarXMLParser {
     private readonly data: string;
     private loadedData: any;

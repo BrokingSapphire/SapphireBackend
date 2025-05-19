@@ -1,19 +1,13 @@
 import { Express } from 'express';
 import swaggerUi from 'swagger-ui-express';
 import j2s from 'joi-to-swagger';
-import {
-    RequestOtpSchema,
-    VerifyOtpSchema,
-    CheckpointSchema,
-    PaymentVerifySchema,
-} from '@app/modules/signup/signup.validator';
+import { RequestOtpSchema, VerifyOtpSchema, CheckpointSchema } from '@app/modules/signup/signup.validator';
 import { CheckpointStep, ValidationType } from '@app/modules/signup/signup.types';
 import { env } from '@app/env';
 
 const { swagger: requestOtpSwagger } = j2s(RequestOtpSchema);
 const { swagger: verifyOtpSwagger } = j2s(VerifyOtpSchema);
 const { swagger: checkpointSwagger } = j2s(CheckpointSchema);
-const { swagger: paymentVerifySwagger } = j2s(PaymentVerifySchema);
 
 const checkpointSchemaDestructed = {
     [CheckpointStep.PAN]: {
@@ -160,7 +154,6 @@ const swaggerDocument = {
             RequestOtp: requestOtpSwagger,
             VerifyOtp: verifyOtpSwagger,
             Checkpoint: checkpointSwagger,
-            PaymentVerify: paymentVerifySwagger,
             ...Object.fromEntries(
                 Object.entries(checkpointSchemaDestructed).map(([key, value]) => [`Checkpoint-${key}`, value]),
             ),
@@ -248,85 +241,11 @@ const swaggerDocument = {
                         },
                     },
                     '401': { $ref: '#/components/schemas/Error' },
-                    '402': {
-                        description: 'Payment required',
-                        content: {
-                            'application/json': {
-                                schema: {
-                                    type: 'object',
-                                    properties: {
-                                        message: { type: 'string' },
-                                    },
-                                },
-                            },
-                        },
-                    },
                     '422': { $ref: '#/components/schemas/Error' },
                 },
             },
         },
-        '/auth/signup/payment/initiate': {
-            post: {
-                tags: ['Auth'],
-                security: [{ BearerAuth: [] }],
-                summary: 'Initiate payment',
-                responses: {
-                    '200': {
-                        description: 'Payment initiated successfully',
-                        content: {
-                            'application/json': {
-                                schema: {
-                                    type: 'object',
-                                    properties: {
-                                        message: { type: 'string' },
-                                        data: {
-                                            type: 'object',
-                                            properties: {
-                                                orderId: { type: 'string' },
-                                            },
-                                        },
-                                    },
-                                },
-                            },
-                        },
-                    },
-                    '401': { $ref: '#/components/schemas/Error' },
-                    '422': { $ref: '#/components/schemas/Error' },
-                },
-            },
-        },
-        '/auth/signup/payment/verify': {
-            post: {
-                tags: ['Auth'],
-                security: [{ BearerAuth: [] }],
-                summary: 'Verify payment',
-                requestBody: {
-                    required: true,
-                    content: {
-                        'application/json': {
-                            schema: { $ref: '#/components/schemas/PaymentVerify' },
-                        },
-                    },
-                },
-                responses: {
-                    '200': {
-                        description: 'Payment verified successfully',
-                        content: {
-                            'application/json': {
-                                schema: {
-                                    type: 'object',
-                                    properties: {
-                                        message: { type: 'string' },
-                                    },
-                                },
-                            },
-                        },
-                    },
-                    '401': { $ref: '#/components/schemas/Error' },
-                    '422': { $ref: '#/components/schemas/Error' },
-                },
-            },
-        },
+
         '/auth/signup/checkpoint': {
             post: {
                 tags: ['Auth'],

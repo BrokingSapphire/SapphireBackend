@@ -8,6 +8,7 @@ import redisClient from '@app/services/redis.service';
 import complianceRouter from './compliance';
 import watchlistRouter from './watchlist';
 import { jwtMiddleware } from '@app/utils/jwt';
+import { sql } from 'kysely';
 
 const router = Router();
 
@@ -18,7 +19,7 @@ router.use('/watchlist', jwtMiddleware, watchlistRouter);
 router.use('/webhook', webhookRouter);
 
 router.get('/healthcheck', async (_req, res) => {
-    await db.selectFrom('user').where('id', '=', 1).execute();
+    await sql`SELECT 1;`.execute(db);
     await redisClient.ping();
     res.status(OK).json({ status: 'ok' });
 });

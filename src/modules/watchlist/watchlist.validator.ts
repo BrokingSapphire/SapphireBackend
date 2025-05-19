@@ -6,6 +6,18 @@ export const GetWatchlistQuery = Joi.object({
     offset: Joi.number().integer().min(0).optional(),
 });
 
+export const WatchlistCategoryIdParam = Joi.object({
+    categoryId: Joi.number().integer().min(0).optional(),
+});
+
+export const WatchlistCategoryIdParamRequired = Joi.object({
+    categoryId: Joi.number().integer().min(0).required(),
+});
+
+export const WatchlistCategoryName = Joi.object({
+    category: Joi.string().required(),
+});
+
 export const WatchlistData = Joi.object({
     items: Joi.array()
         .items(

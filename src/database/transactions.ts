@@ -3,7 +3,7 @@ import { DB } from './db';
 import { UpdateObjectExpression } from 'kysely/dist/cjs/parser/update-set-parser';
 import countries from '@app/services/i18n-countries';
 
-interface Address {
+export interface Address {
     address1: string;
     address2: string | null;
     streetName: string | null;
@@ -13,34 +13,63 @@ interface Address {
     postalCode: string;
 }
 
-interface Name {
+export interface Name {
     firstName: string;
     middleName: string | null;
     lastName: string | null;
 }
 
-const insertNameGetId = async <T extends Kysely<DB>>(tx: T, name: Name): Promise<number> => {
-    const nameId = await tx
-        .insertInto('user_name')
-        .values({
-            first_name: name.firstName,
-            middle_name: name.middleName,
-            last_name: name.lastName,
-        })
-        .onConflict((oc) =>
-            oc.constraint('uq_user_name').doUpdateSet((eb) => ({
-                first_name: eb.ref('excluded.first_name'),
-                middle_name: eb.ref('excluded.middle_name'),
-                last_name: eb.ref('excluded.last_name'),
-            })),
-        )
-        .returning('id')
-        .executeTakeFirstOrThrow();
+export async function insertNameGetId<T extends Kysely<DB>>(tx: T, name: Name): Promise<number>;
 
-    return nameId.id;
-};
+export async function insertNameGetId<T extends Kysely<DB>>(tx: T, name: Name[]): Promise<number[]>;
 
-const insertAddresGetId = async <T extends Kysely<DB>>(tx: T, address: Address): Promise<number> => {
+export async function insertNameGetId<T extends Kysely<DB>>(tx: T, name: Name | Name[]): Promise<number | number[]> {
+    if (Array.isArray(name)) {
+        if (name.length === 0) return [];
+
+        const ids = await tx
+            .insertInto('user_name')
+            .values(
+                name.map((it) => ({
+                    first_name: it.firstName,
+                    middle_name: it.middleName,
+                    last_name: it.lastName,
+                })),
+            )
+            .onConflict((oc) =>
+                oc.constraint('uq_user_name').doUpdateSet((eb) => ({
+                    first_name: eb.ref('excluded.first_name'),
+                    middle_name: eb.ref('excluded.middle_name'),
+                    last_name: eb.ref('excluded.last_name'),
+                })),
+            )
+            .returning('id')
+            .execute();
+
+        return ids.map((item) => item.id);
+    } else {
+        const nameId = await tx
+            .insertInto('user_name')
+            .values({
+                first_name: name.firstName,
+                middle_name: name.middleName,
+                last_name: name.lastName,
+            })
+            .onConflict((oc) =>
+                oc.constraint('uq_user_name').doUpdateSet((eb) => ({
+                    first_name: eb.ref('excluded.first_name'),
+                    middle_name: eb.ref('excluded.middle_name'),
+                    last_name: eb.ref('excluded.last_name'),
+                })),
+            )
+            .returning('id')
+            .executeTakeFirstOrThrow();
+
+        return nameId.id;
+    }
+}
+
+export async function insertAddressGetId<T extends Kysely<DB>>(tx: T, address: Address): Promise<number> {
     const iso = countries.alpha2ToNumeric(countries.getAlpha2Code(address.country, 'en')!!)!!;
     await tx
         .insertInto('country')
@@ -113,14 +142,14 @@ const insertAddresGetId = async <T extends Kysely<DB>>(tx: T, address: Address):
         .executeTakeFirstOrThrow();
 
     return addressId.id;
-};
+}
 
-const updateCheckpoint = <T extends Kysely<DB>>(
+export function updateCheckpoint<T extends Kysely<DB>>(
     tx: T,
     email: string,
     phone: string,
     update: UpdateObjectExpression<DB, 'signup_checkpoints', 'signup_checkpoints'>,
-): UpdateQueryBuilder<DB, 'signup_checkpoints', 'signup_checkpoints', UpdateResult> => {
+): UpdateQueryBuilder<DB, 'signup_checkpoints', 'signup_checkpoints', UpdateResult> {
     return tx
         .updateTable('signup_checkpoints')
         .set(update)
@@ -128,6 +157,4 @@ const updateCheckpoint = <T extends Kysely<DB>>(
         .where(({ eb, selectFrom }) =>
             eb('phone_id', '=', selectFrom('phone_number').select('phone_number.id').where('phone', '=', phone)),
         );
-};
-
-export { Address, Name, insertAddresGetId, insertNameGetId, updateCheckpoint };
+}

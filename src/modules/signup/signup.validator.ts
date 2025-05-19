@@ -5,13 +5,16 @@ import {
     CheckpointStep,
     InvestmentSegment,
     MaritalStatus,
+    NomineeRelation,
     TradingExperience,
     ValidationType,
+    Occupation,
 } from './signup.types';
 import { CredentialsType } from '@app/modules/common.types';
 import { OTP_LENGTH } from './signup.services';
 import { PHONE_REGEX } from '@app/services/sms.service';
 import { PAN_REGEX } from '@app/services/surepass/pan.service';
+import { AADHAAR_REGEX } from '@app/utils/aadhaar-xml.parser';
 
 const RequestOtpSchema = Joi.object({
     type: Joi.string()
@@ -54,12 +57,6 @@ const CheckpointSchema = Joi.object({
             .items(Joi.string().valid(...Object.values(InvestmentSegment)))
             .required(),
     }),
-    marital_status: Joi.alternatives().conditional('step', {
-        is: CheckpointStep.USER_DETAIL,
-        then: Joi.string()
-            .valid(...Object.values(MaritalStatus))
-            .required(),
-    }),
     father_name: Joi.alternatives().conditional('step', {
         is: CheckpointStep.USER_DETAIL,
         then: Joi.string().required(),
@@ -68,30 +65,38 @@ const CheckpointSchema = Joi.object({
         is: CheckpointStep.USER_DETAIL,
         then: Joi.string().required(),
     }),
+    marital_status: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.PERSONAL_DETAIL,
+        then: Joi.string()
+            .valid(...Object.values(MaritalStatus))
+            .required(),
+    }),
     annual_income: Joi.alternatives().conditional('step', {
-        is: CheckpointStep.ACCOUNT_DETAIL,
+        is: CheckpointStep.PERSONAL_DETAIL,
         then: Joi.string()
             .valid(...Object.values(AnnualIncome))
             .required(),
     }),
-    experience: Joi.alternatives().conditional('step', {
-        is: CheckpointStep.ACCOUNT_DETAIL,
+    trading_exp: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.PERSONAL_DETAIL,
         then: Joi.string()
             .valid(...Object.values(TradingExperience))
             .required(),
     }),
-    settlement: Joi.alternatives().conditional('step', {
-        is: CheckpointStep.ACCOUNT_DETAIL,
+    acc_settlement: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.PERSONAL_DETAIL,
         then: Joi.string()
             .valid(...Object.values(AccountSettlement))
             .required(),
     }),
     occupation: Joi.alternatives().conditional('step', {
-        is: CheckpointStep.OCCUPATION,
-        then: Joi.string().required(),
+        is: CheckpointStep.OTHER_DETAIL,
+        then: Joi.string()
+            .valid(...Object.values(Occupation))
+            .required(),
     }),
     politically_exposed: Joi.alternatives().conditional('step', {
-        is: CheckpointStep.OCCUPATION,
+        is: CheckpointStep.OTHER_DETAIL,
         then: Joi.boolean().required(),
     }),
     validation_type: Joi.alternatives()
@@ -114,6 +119,7 @@ const CheckpointSchema = Joi.object({
             then: Joi.object({
                 account_number: Joi.string().required(),
                 ifsc_code: Joi.string().required(),
+                account_type: Joi.string().required(),
             }).required(),
         }),
     }),
@@ -122,18 +128,18 @@ const CheckpointSchema = Joi.object({
         then: Joi.array().items(
             Joi.object({
                 name: Joi.string().required(),
-                gov_id: Joi.date().required(),
-                relation: Joi.string().required(),
-                share: Joi.number().required(),
+                gov_id: Joi.string()
+                    .min(10)
+                    .max(12)
+                    .regex(new RegExp(PAN_REGEX.source + '|' + AADHAAR_REGEX.source))
+                    .required(),
+                relation: Joi.string()
+                    .valid(...Object.values(NomineeRelation))
+                    .required(),
+                share: Joi.number().min(0).max(100).required(),
             }),
         ),
     }),
 });
 
-const PaymentVerifySchema = Joi.object({
-    orderId: Joi.string().required(),
-    paymentId: Joi.string().required(),
-    signature: Joi.string().required(),
-});
-
-export { RequestOtpSchema, VerifyOtpSchema, CheckpointSchema, PaymentVerifySchema };
+export { RequestOtpSchema, VerifyOtpSchema, CheckpointSchema };

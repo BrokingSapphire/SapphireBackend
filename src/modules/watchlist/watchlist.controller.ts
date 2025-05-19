@@ -1,14 +1,101 @@
 import { ParamsDictionary } from 'express-serve-static-core';
 import { DefaultResponseData, Request, Response } from '@app/types.d';
 import { SessionJwtType } from '../common.types';
-import { DeleteWatchlistQuery, GetWatchlistQuery, WatchlistData, WatchlistIndexUpdate } from './watchlist.types';
+import {
+    DeleteWatchlistQuery,
+    GetWatchlistQuery,
+    WatchlistCategory,
+    WatchlistCategoryParam,
+    WatchlistData,
+    WatchlistIndexUpdate,
+} from './watchlist.types';
 import { db } from '@app/database';
-import { OK } from '@app/utils/httpstatus';
+import { NOT_FOUND, OK } from '@app/utils/httpstatus';
 import { ExpressionBuilder } from 'kysely';
 import { DB } from '@app/database/db';
 
+const createCategory = async (
+    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, WatchlistCategory>,
+    res: Response,
+) => {
+    const { id } = await db.transaction().execute(async (tx) => {
+        return await tx
+            .insertInto('user_watchlist_category')
+            .values({
+                user_id: req.auth!!.userId,
+                category: req.body.category,
+            })
+            .returning('id')
+            .executeTakeFirstOrThrow();
+    });
+
+    res.status(OK).json({
+        message: 'Category created successfully.',
+        data: {
+            id,
+        },
+    });
+};
+
+const listCategories = async (req: Request<SessionJwtType>, res: Response) => {
+    const result = await db
+        .selectFrom('user_watchlist_category')
+        .select(['id', 'category'])
+        .where('user_id', '=', req.auth!!.userId)
+        .execute();
+
+    res.status(OK).json({
+        message: 'Categories fetched successfully.',
+        data: {
+            result,
+        },
+    });
+};
+
+const getCategory = async (req: Request<SessionJwtType, WatchlistCategoryParam>, res: Response) => {
+    const { category } = await db
+        .selectFrom('user_watchlist_category')
+        .select('category')
+        .where('user_id', '=', req.auth!!.userId)
+        .where('id', '=', req.params.categoryId)
+        .executeTakeFirstOrThrow();
+
+    res.status(OK).json({
+        message: 'Category fetched successfully.',
+        data: {
+            name: category,
+        },
+    });
+};
+
+const removeCategory = async (req: Request<SessionJwtType, WatchlistCategoryParam>, res: Response) => {
+    const result = await db.transaction().execute(async (tx) => {
+        await tx
+            .deleteFrom('user_stock_watchlist')
+            .where('user_id', '=', req.auth!.userId)
+            .where('category_id', '=', req.params.categoryId)
+            .execute();
+
+        return await tx
+            .deleteFrom('user_watchlist_category')
+            .where('user_id', '=', req.auth!.userId)
+            .where('id', '=', req.params.categoryId)
+            .execute();
+    });
+
+    if (result) {
+        res.status(OK).json({
+            message: 'Category deleted successfully.',
+        });
+    } else {
+        res.status(NOT_FOUND).json({
+            message: 'Category not found.',
+        });
+    }
+};
+
 const getWatchlist = async (
-    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, any, GetWatchlistQuery>,
+    req: Request<SessionJwtType, Partial<WatchlistCategoryParam>, DefaultResponseData, any, GetWatchlistQuery>,
     res: Response,
 ) => {
     const { userId } = req.auth!;
@@ -18,6 +105,8 @@ const getWatchlist = async (
         .selectFrom('user_stock_watchlist')
         .select(['isin', 'exchange', 'position_index'])
         .where('user_id', '=', userId)
+        .$if(req.params.categoryId === undefined, (qb) => qb.where('category_id', 'is', null))
+        .$if(req.params.categoryId !== undefined, (qb) => qb.where('category_id', '=', req.params.categoryId!))
         .orderBy('position_index')
         .offset(offset)
         .limit(limit)
@@ -30,10 +119,11 @@ const getWatchlist = async (
 };
 
 const putWatchlist = async (
-    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, WatchlistData>,
+    req: Request<SessionJwtType, Partial<WatchlistCategoryParam>, DefaultResponseData, WatchlistData>,
     res: Response,
 ) => {
     const { userId } = req.auth!;
+    const { categoryId } = req.params;
     const { items } = req.body;
 
     await db.transaction().execute(async (tx) => {
@@ -41,6 +131,8 @@ const putWatchlist = async (
             .selectFrom('user_stock_watchlist')
             .select('position_index as count')
             .where('user_id', '=', userId)
+            .$if(categoryId === undefined, (qb) => qb.where('category_id', 'is', null))
+            .$if(categoryId !== undefined, (qb) => qb.where('category_id', '=', req.params.categoryId!))
             .orderBy('position_index', 'desc')
             .limit(1)
             .executeTakeFirst()) || { count: -1 };
@@ -84,6 +176,8 @@ const putWatchlist = async (
                 }))
                 .where('user_id', '=', userId)
                 .where('position_index', '>', indexed[0].index)
+                .$if(categoryId === undefined, (qb) => qb.where('category_id', 'is', null))
+                .$if(categoryId !== undefined, (qb) => qb.where('category_id', '=', categoryId!))
                 .execute();
         }
 
@@ -93,12 +187,14 @@ const putWatchlist = async (
                 ...indexed.map((item) => ({
                     user_id: userId,
                     isin: item.isin,
+                    category_id: categoryId,
                     exchange: item.exchange,
                     position_index: item.index,
                 })),
                 ...nonIndexed.map((item, index) => ({
                     user_id: userId,
                     isin: item.isin,
+                    category_id: categoryId,
                     exchange: item.exchange,
                     position_index: count + offset + index + 1,
                 })),
@@ -113,7 +209,7 @@ const putWatchlist = async (
 };
 
 const updateWatchlist = async (
-    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, WatchlistIndexUpdate>,
+    req: Request<SessionJwtType, Partial<WatchlistCategoryParam>, DefaultResponseData, WatchlistIndexUpdate>,
     res: Response,
 ) => {
     const { userId } = req.auth!;
@@ -147,6 +243,8 @@ const updateWatchlist = async (
             }))
             .where('user_id', '=', userId)
             .where('position_index', '>=', index)
+            .$if(req.params.categoryId === undefined, (qb) => qb.where('category_id', 'is', null))
+            .$if(req.params.categoryId !== undefined, (qb) => qb.where('category_id', '=', req.params.categoryId!))
             .returning('position_index')
             .executeTakeFirst();
     });
@@ -157,11 +255,12 @@ const updateWatchlist = async (
 };
 
 const removeWatchlist = async (
-    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, any, DeleteWatchlistQuery>,
+    req: Request<SessionJwtType, Partial<WatchlistCategoryParam>, DefaultResponseData, any, DeleteWatchlistQuery>,
     res: Response,
 ) => {
     const { userId } = req.auth!;
     const { isin, exchange } = req.query;
+    const { categoryId } = req.params;
 
     await db.transaction().execute(async (tx) => {
         const position = await tx
@@ -169,6 +268,8 @@ const removeWatchlist = async (
             .where('user_id', '=', userId)
             .where('isin', '=', isin)
             .where('exchange', '=', exchange)
+            .$if(categoryId === undefined, (qb) => qb.where('category_id', 'is', null))
+            .$if(categoryId !== undefined, (qb) => qb.where('category_id', '=', categoryId!))
             .returning('position_index')
             .executeTakeFirst();
 
@@ -180,6 +281,8 @@ const removeWatchlist = async (
                 }))
                 .where('user_id', '=', userId)
                 .where('position_index', '>', position.position_index)
+                .$if(categoryId === undefined, (qb) => qb.where('category_id', 'is', null))
+                .$if(categoryId !== undefined, (qb) => qb.where('category_id', '=', categoryId!))
                 .execute();
         }
     });
@@ -189,4 +292,13 @@ const removeWatchlist = async (
     });
 };
 
-export { getWatchlist, putWatchlist, updateWatchlist, removeWatchlist };
+export {
+    createCategory,
+    listCategories,
+    getCategory,
+    removeCategory,
+    getWatchlist,
+    putWatchlist,
+    updateWatchlist,
+    removeWatchlist,
+};
