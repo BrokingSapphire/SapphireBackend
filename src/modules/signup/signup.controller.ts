@@ -233,8 +233,7 @@ const getCheckpoint = async (req: Request<JwtType, GetCheckpointType>, res: Resp
             },
             message: 'Personal details fetched',
         });
-    } 
-    else if (step === CheckpointStep.OTHER_DETAIL) {
+    } else if (step === CheckpointStep.OTHER_DETAIL) {
         const { occupation, is_politically_exposed } = await db
             .selectFrom('signup_checkpoints')
             .select(['occupation', 'is_politically_exposed'])
@@ -557,8 +556,7 @@ const postCheckpoint = async (
         });
 
         res.status(CREATED).json({ message: 'Personal details saved' });
-    }
-    else if (step === CheckpointStep.OTHER_DETAIL) {
+    } else if (step === CheckpointStep.OTHER_DETAIL) {
         const { occupation, politically_exposed } = req.body;
         await db.transaction().execute(async (tx) => {
             const checkpoint = await updateCheckpoint(tx, email, phone, {

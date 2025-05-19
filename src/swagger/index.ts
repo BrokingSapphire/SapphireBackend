@@ -2,7 +2,7 @@ import { Express } from 'express';
 import swaggerUi from 'swagger-ui-express';
 import j2s from 'joi-to-swagger';
 import { RequestOtpSchema, VerifyOtpSchema, CheckpointSchema } from '@app/modules/signup/signup.validator';
-import { CheckpointStep, ValidationType } from '@app/modules/signup/signup.types';
+import { AccountType, CheckpointStep, ValidationType } from '@app/modules/signup/signup.types';
 import { env } from '@app/env';
 
 const { swagger: requestOtpSwagger } = j2s(RequestOtpSchema);
@@ -26,6 +26,13 @@ const checkpointSchemaDestructed = {
         },
         required: ['step', 'redirect'],
     },
+    [CheckpointStep.AADHAAR]: {
+        type: 'object',
+        properties: {
+            step: { type: 'string', enum: [CheckpointStep.AADHAAR] },
+        },
+        required: ['step'],
+    },
     [CheckpointStep.INVESTMENT_SEGMENT]: {
         type: 'object',
         properties: {
@@ -42,26 +49,26 @@ const checkpointSchemaDestructed = {
         type: 'object',
         properties: {
             step: { type: 'string', enum: [CheckpointStep.USER_DETAIL] },
-            marital_status: { type: 'string' },
             father_name: { type: 'string' },
             mother_name: { type: 'string' },
         },
-        required: ['step', 'marital_status', 'father_name', 'mother_name'],
+        required: ['step', 'father_name', 'mother_name'],
     },
-    [CheckpointStep.ACCOUNT_DETAIL]: {
+    [CheckpointStep.PERSONAL_DETAIL]: {
         type: 'object',
         properties: {
-            step: { type: 'string', enum: [CheckpointStep.ACCOUNT_DETAIL] },
+            step: { type: 'string', enum: [CheckpointStep.PERSONAL_DETAIL] },
+            marital_status: { type: 'string' },
             annual_income: { type: 'string' },
             trading_exp: { type: 'string' },
-            settlement: { type: 'string' },
+            acc_settlement: { type: 'string' },
         },
-        required: ['step', 'annual_income', 'trading_exp', 'settlement'],
+        required: ['step', 'marital_status', 'annual_income', 'trading_exp', 'acc_settlement'],
     },
-    [CheckpointStep.OCCUPATION]: {
+    [CheckpointStep.OTHER_DETAIL]: {
         type: 'object',
         properties: {
-            step: { type: 'string', enum: [CheckpointStep.OCCUPATION] },
+            step: { type: 'string', enum: [CheckpointStep.OTHER_DETAIL] },
             occupation: { type: 'string' },
             politically_exposed: { type: 'boolean' },
         },
@@ -85,11 +92,26 @@ const checkpointSchemaDestructed = {
                 properties: {
                     account_number: { type: 'string' },
                     ifsc_code: { type: 'string' },
+                    account_type: { type: 'string', enum: Object.values(AccountType) },
                 },
-                required: ['account_number', 'ifsc_code'],
+                required: ['account_number', 'ifsc_code', 'account_type'],
             },
         },
         required: ['step', 'validation_type'],
+    },
+    [CheckpointStep.SIGNATURE]: {
+        type: 'object',
+        properties: {
+            step: { type: 'string', enum: [CheckpointStep.SIGNATURE] },
+        },
+        required: ['step'],
+    },
+    [CheckpointStep.IPV]: {
+        type: 'object',
+        properties: {
+            step: { type: 'string', enum: [CheckpointStep.IPV] },
+        },
+        required: ['step'],
     },
     [CheckpointStep.ADD_NOMINEES]: {
         type: 'object',
@@ -313,9 +335,10 @@ const swaggerDocument = {
                                 CheckpointStep.AADHAAR,
                                 CheckpointStep.INVESTMENT_SEGMENT,
                                 CheckpointStep.USER_DETAIL,
-                                CheckpointStep.ACCOUNT_DETAIL,
-                                CheckpointStep.OCCUPATION,
+                                CheckpointStep.PERSONAL_DETAIL,
+                                CheckpointStep.OTHER_DETAIL,
                                 CheckpointStep.BANK_VALIDATION,
+                                CheckpointStep.ADD_NOMINEES,
                             ],
                         },
                     },
@@ -341,7 +364,7 @@ const swaggerDocument = {
                                                 marital_status: { type: 'string' },
                                                 annual_income: { type: 'string' },
                                                 trading_exp: { type: 'string' },
-                                                account_settlement: { type: 'string' },
+                                                acc_settlement: { type: 'string' },
                                                 occupation: { type: 'string' },
                                                 is_politically_exposed: { type: 'boolean' },
                                                 bank: {
@@ -349,6 +372,20 @@ const swaggerDocument = {
                                                     properties: {
                                                         account_number: { type: 'string' },
                                                         ifsc_code: { type: 'string' },
+                                                        account_type: { type: 'string' },
+                                                    },
+                                                },
+                                                nominees: {
+                                                    type: 'array',
+                                                    items: {
+                                                        type: 'object',
+                                                        properties: {
+                                                            name: { type: 'string' },
+                                                            govId: { type: 'string' },
+                                                            idType: { type: 'string', enum: ['AADHAAR', 'PAN'] },
+                                                            relation: { type: 'string' },
+                                                            share: { type: 'number' },
+                                                        },
                                                     },
                                                 },
                                             },
