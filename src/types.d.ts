@@ -47,7 +47,7 @@ export type ResetPasswordRequestType = {
 export type ForgotPasswordInitiateRequestType = {
     panNumber: string;
     recaptchaToken: string;
-}
+};
 
 export type ForgotPasswordInitiateResponseType = DefaultResponseData & {
     requestId: string;

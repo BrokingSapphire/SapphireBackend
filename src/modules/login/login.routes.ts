@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import { validate } from '@app/middlewares';
-import { 
-    LoginSchema, 
+import {
+    LoginSchema,
     LoginOtpVerifySchema,
     ResetPasswordSchema,
     ForgotPasswordInitiateSchema,
     ForgotPasswordVerifyOtpSchema,
-    ForgotPasswordResetSchema
+    ForgotPasswordResetSchema,
 } from './login.validator';
 import {
     login,
@@ -14,7 +14,7 @@ import {
     resetPassword,
     initiatePasswordReset,
     verifyPasswordResetOtp,
-    completePasswordReset
+    completePasswordReset,
 } from './login.controller';
 import { jwtMiddleware } from '@app/utils/jwt';
 
@@ -48,7 +48,7 @@ const router = Router();
  *       404:
  *         description: User not found
  */
-router.post('/login', validate(LoginSchema), login);
+router.post('/', validate(LoginSchema), login);
 
 /**
  * @swagger
@@ -85,7 +85,7 @@ router.post('/login', validate(LoginSchema), login);
  *       401:
  *         description: Invalid or expired OTP
  */
-router.post('/verify-otp', validate(LoginOtpVerifySchema),verifyLoginOtp)
+router.post('/verify-otp', validate(LoginOtpVerifySchema), verifyLoginOtp);
 
 /**
  * @swagger
@@ -177,6 +177,6 @@ router.post('/forgot-password/verify-otp', validate(ForgotPasswordVerifyOtpSchem
  *       401:
  *         description: Unauthorized or OTP verification incomplete
  */
-router.post('/forgot-password/reset', validate(ForgotPasswordResetSchema), completePasswordReset);
+router.post('/forgot-password/reset', [jwtMiddleware, validate(ForgotPasswordResetSchema)], completePasswordReset);
 
 export default router;

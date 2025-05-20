@@ -4,4 +4,3 @@ export type LoginJwtType = JwtPayloadWithoutWildcard & {
     clientId: string;
     userId: string;
 };
-
