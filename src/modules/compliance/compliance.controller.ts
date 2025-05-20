@@ -524,6 +524,37 @@ const getCheckpointDetails = async (req: Request, res: Response) => {
 };
 
 /**
+ * Skip all verification steps and mark the user as verified
+ * POST /:checkpointId/skip-verification
+ */
+const skipVerification = async (req: Request<SessionJwtType>, res: Response) => {
+    const checkpointId = Number(req.params.checkpointId);
+
+    await db.transaction().execute(async (trx) => {
+        const verificationSteps = Object.keys(verificationTypeToFieldMap) as VerificationType[];
+
+        // Update all verification steps to 'verified'
+        const updateValues: Record<string, string> = {};
+        verificationSteps.forEach((step) => {
+            updateValues[verificationTypeToFieldMap[step]] = 'verified';
+        });
+
+        updateValues.overall_status = 'verified';
+        updateValues.updated_at = new Date().toISOString();
+
+        await trx.updateTable('signup_verification_status').set(updateValues).where('id', '=', checkpointId).execute();
+    });
+
+    // Return success response
+    res.status(OK).json({
+        message: 'All verification steps have been skipped and the user is now verified.',
+        data: {
+            status: 'verified',
+        },
+    });
+};
+
+/**
  * Controller to finalize verification and create user account
  * POST /finalize-verification/:checkpointId
  */
@@ -656,5 +687,6 @@ export {
     getVerificationStepStatus,
     getVerificationStatus,
     getCheckpointDetails,
+    skipVerification,
     finalizeVerification,
 };
