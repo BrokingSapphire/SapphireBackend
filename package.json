@@ -22,6 +22,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.774.0",
     "axios": "^1.8.1",
+    "bcrypt": "^6.0.0",
     "body-parser": "^1.20.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -59,6 +60,7 @@
     "@eslint/js": "^9.21.0",
     "@jest/globals": "^29.7.0",
     "@types/axios": "^0.14.4",
+    "@types/bcrypt": "^5.0.2",
     "@types/body-parser": "^1.19.5",
     "@types/cookie-parser": "^1.4.8",
     "@types/cors": "^2.8.17",

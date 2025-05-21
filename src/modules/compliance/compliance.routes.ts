@@ -7,7 +7,6 @@ import {
     getVerificationStepStatus,
     getCheckpointDetails,
     assignOfficer,
-    skipVerification,
 } from './compliance.controller';
 import {
     CheckpointIdParamSchema,
@@ -67,11 +66,5 @@ router.get(
  * POST /finalize-verification/:checkpointId
  */
 router.post('/:checkpointId/finalize', validate(CheckpointIdParamSchema, 'params'), finalizeVerification);
-
-/**
- * Route to skip all verification steps for a checkpoint
- * POST /:checkpointId/skip-verification
- */
-router.post('/:checkpointId/skip-verification', validate(CheckpointIdParamSchema, 'params'), skipVerification);
 
 export default router;

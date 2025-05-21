@@ -5,6 +5,7 @@ import { UpdateVerificationRequest, VerificationType, verificationTypeToFieldMap
 import { BadRequestError, ForbiddenError, UnauthorizedError } from '@app/apiError';
 import BankDetailsService, { BankDetails } from '@app/services/bank-details.service';
 import { SessionJwtType } from '../common.types';
+import bcrypt from 'bcrypt';
 
 const assignOfficer = async (req: Request<SessionJwtType>, res: Response) => {
     const checkpointId = Number(req.params.checkpointId);
@@ -524,57 +525,26 @@ const getCheckpointDetails = async (req: Request, res: Response) => {
 };
 
 /**
- * Skip all verification steps and mark the user as verified
- * POST /:checkpointId/skip-verification
- */
-const skipVerification = async (req: Request<SessionJwtType>, res: Response) => {
-    const checkpointId = Number(req.params.checkpointId);
-
-    await db.transaction().execute(async (trx) => {
-        const verificationSteps = Object.keys(verificationTypeToFieldMap) as VerificationType[];
-
-        // Update all verification steps to 'verified'
-        const updateValues: Record<string, string> = {};
-        verificationSteps.forEach((step) => {
-            updateValues[verificationTypeToFieldMap[step]] = 'verified';
-        });
-
-        updateValues.overall_status = 'verified';
-        updateValues.updated_at = new Date().toISOString();
-
-        await trx.updateTable('signup_verification_status').set(updateValues).where('id', '=', checkpointId).execute();
-    });
-
-    // Return success response
-    res.status(OK).json({
-        message: 'All verification steps have been skipped and the user is now verified.',
-        data: {
-            status: 'verified',
-        },
-    });
-};
-
-/**
  * Controller to finalize verification and create user account
  * POST /finalize-verification/:checkpointId
  */
 const finalizeVerification = async (req: Request, res: Response) => {
     const checkpointId = Number(req.params.checkpointId);
 
-    // STEP 1: Check if all verification statuses are verified
-    const verificationStatus = await db
-        .selectFrom('signup_verification_status')
-        .select('overall_status')
-        .where('id', '=', checkpointId)
-        .executeTakeFirstOrThrow();
+    // // STEP 1: Check if all verification statuses are verified
+    // const verificationStatus = await db
+    //     .selectFrom('signup_verification_status')
+    //     .select('overall_status')
+    //     .where('id', '=', checkpointId)
+    //     .executeTakeFirstOrThrow();
 
-    if (verificationStatus.overall_status === 'pending') {
-        throw new BadRequestError('All verification steps must be completed before finalizing.');
-    } else if (verificationStatus.overall_status === 'rejected') {
-        throw new BadRequestError('Verification has been rejected. Please contact support.');
-    }
+    // if (verificationStatus.overall_status === 'pending') {
+    //     throw new BadRequestError('All verification steps must be completed before finalizing.');
+    // } else if (verificationStatus.overall_status === 'rejected') {
+    //     throw new BadRequestError('Verification has been rejected. Please contact support.');
+    // }
 
-    await db.transaction().execute(async (trx) => {
+    const userId = await db.transaction().execute(async (trx) => {
         // Check if user already exists to avoid duplicates
         // Insert into user table
 
@@ -583,6 +553,53 @@ const finalizeVerification = async (req: Request, res: Response) => {
             .selectAll()
             .where('id', '=', checkpointId)
             .executeTakeFirstOrThrow();
+
+        // Get PAN number to use as password
+        const panDetail = await trx
+            .selectFrom('pan_detail')
+            .select('pan_number')
+            .where('id', '=', checkpoint.pan_id)
+            .executeTakeFirstOrThrow();
+
+        const hashAlgo = await trx
+            .selectFrom('hashing_algorithm')
+            .select('id')
+            .where('name', '=', 'bcrypt')
+            .executeTakeFirst();
+
+        let hashAlgoId;
+        if (!hashAlgo) {
+            const insertedHashAlgo = await trx
+                .insertInto('hashing_algorithm')
+                .values({
+                    name: 'bcrypt',
+                })
+                .returning('id')
+                .executeTakeFirst();
+
+            if (!insertedHashAlgo) {
+                throw new Error('Failed to insert hashing algorithm');
+            }
+            hashAlgoId = insertedHashAlgo.id;
+        } else {
+            hashAlgoId = hashAlgo.id;
+        }
+
+        const plainTextPassword = panDetail.pan_number;
+        const saltRounds = 10;
+        const salt = await bcrypt.genSalt(saltRounds);
+        const hashedPassword = await bcrypt.hash(plainTextPassword, salt);
+
+        await trx
+            .insertInto('user_password_details')
+            .values({
+                user_id: checkpoint.client_id,
+                password_hash: hashedPassword,
+                password_salt: salt,
+                hash_algo_id: hashAlgoId,
+                is_first_login: true,
+            })
+            .execute();
 
         await trx
             .insertInto('user')
@@ -670,12 +687,14 @@ const finalizeVerification = async (req: Request, res: Response) => {
 
         // Then remove the main checkpoint record
         await trx.deleteFrom('signup_checkpoints').where('id', '=', checkpointId).execute();
+
+        return checkpoint.client_id;
     });
 
     res.status(OK).json({
         message: 'User account created successfully.',
         data: {
-            userId: checkpointId,
+            client: userId,
         },
     });
 };
@@ -687,6 +706,5 @@ export {
     getVerificationStepStatus,
     getVerificationStatus,
     getCheckpointDetails,
-    skipVerification,
     finalizeVerification,
 };
