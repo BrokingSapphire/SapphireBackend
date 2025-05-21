@@ -7,6 +7,7 @@ import {
     getVerificationStepStatus,
     getCheckpointDetails,
     assignOfficer,
+    autoFinalVerification,
 } from './compliance.controller';
 import {
     CheckpointIdParamSchema,
@@ -66,5 +67,7 @@ router.get(
  * POST /finalize-verification/:checkpointId
  */
 router.post('/:checkpointId/finalize', validate(CheckpointIdParamSchema, 'params'), finalizeVerification);
+
+router.post('/:checkpointId/auto-finalize', validate(CheckpointIdParamSchema, 'params'), autoFinalVerification);
 
 export default router;

@@ -531,18 +531,18 @@ const getCheckpointDetails = async (req: Request, res: Response) => {
 const finalizeVerification = async (req: Request, res: Response) => {
     const checkpointId = Number(req.params.checkpointId);
 
-    // // STEP 1: Check if all verification statuses are verified
-    // const verificationStatus = await db
-    //     .selectFrom('signup_verification_status')
-    //     .select('overall_status')
-    //     .where('id', '=', checkpointId)
-    //     .executeTakeFirstOrThrow();
+    // STEP 1: Check if all verification statuses are verified
+    const verificationStatus = await db
+        .selectFrom('signup_verification_status')
+        .select('overall_status')
+        .where('id', '=', checkpointId)
+        .executeTakeFirstOrThrow();
 
-    // if (verificationStatus.overall_status === 'pending') {
-    //     throw new BadRequestError('All verification steps must be completed before finalizing.');
-    // } else if (verificationStatus.overall_status === 'rejected') {
-    //     throw new BadRequestError('Verification has been rejected. Please contact support.');
-    // }
+    if (verificationStatus.overall_status === 'pending') {
+        throw new BadRequestError('All verification steps must be completed before finalizing.');
+    } else if (verificationStatus.overall_status === 'rejected') {
+        throw new BadRequestError('Verification has been rejected. Please contact support.');
+    }
 
     const userId = await db.transaction().execute(async (trx) => {
         // Check if user already exists to avoid duplicates
@@ -699,6 +699,181 @@ const finalizeVerification = async (req: Request, res: Response) => {
     });
 };
 
+const autoFinalVerification = async (req: Request, res: Response) => {
+    const checkpointId = Number(req.params.checkpointId);
+
+    // STEP 1: Update verification status --> 'verified'
+    await db
+        .updateTable('signup_verification_status')
+        .set({
+            pan_status: 'verified',
+            aadhaar_status: 'verified',
+            bank_status: 'verified',
+            address_status: 'verified',
+            signature_status: 'verified',
+            ipv_status: 'verified',
+            trading_preferences_status: 'verified',
+            nominee_status: 'verified',
+            other_documents_status: 'verified',
+            esign_status: 'verified',
+            overall_status: 'verified',
+            updated_at: new Date(),
+        })
+        .where('id', '=', checkpointId)
+        .execute();
+    // STEP 2: Create the user account using transaction
+    const userId = await db.transaction().execute(async (trx) => {
+        // Get checkpoint data
+        const checkpoint = await trx
+            .selectFrom('signup_checkpoints')
+            .selectAll()
+            .where('id', '=', checkpointId)
+            .executeTakeFirstOrThrow();
+
+        // Get PAN number to use as password
+        const panDetail = await trx
+            .selectFrom('pan_detail')
+            .select('pan_number')
+            .where('id', '=', checkpoint.pan_id)
+            .executeTakeFirstOrThrow();
+
+        const hashAlgo = await trx
+            .selectFrom('hashing_algorithm')
+            .select('id')
+            .where('name', '=', 'bcrypt')
+            .executeTakeFirst();
+
+        let hashAlgoId;
+        if (!hashAlgo) {
+            const insertedHashAlgo = await trx
+                .insertInto('hashing_algorithm')
+                .values({
+                    name: 'bcrypt',
+                })
+                .returning('id')
+                .executeTakeFirst();
+
+            if (!insertedHashAlgo) {
+                throw new Error('Failed to insert hashing algorithm');
+            }
+            hashAlgoId = insertedHashAlgo.id;
+        } else {
+            hashAlgoId = hashAlgo.id;
+        }
+
+        const plainTextPassword = panDetail.pan_number;
+        const saltRounds = 10;
+        const salt = await bcrypt.genSalt(saltRounds);
+        const hashedPassword = await bcrypt.hash(plainTextPassword, salt);
+
+        await trx
+            .insertInto('user_password_details')
+            .values({
+                user_id: checkpoint.client_id,
+                password_hash: hashedPassword,
+                password_salt: salt,
+                hash_algo_id: hashAlgoId,
+                is_first_login: true,
+            })
+            .execute();
+
+        await trx
+            .insertInto('user')
+            .values({
+                id: checkpoint.client_id!,
+                email: checkpoint.email,
+                name: checkpoint.name!,
+                dob: checkpoint.dob!,
+                phone: checkpoint.phone_id,
+                pan_id: checkpoint.pan_id!,
+                aadhaar_id: checkpoint.aadhaar_id!,
+                address_id: checkpoint.address_id!,
+                father_name: checkpoint.father_name!,
+                mother_name: checkpoint.mother_name!,
+                marital_status: checkpoint.marital_status!,
+                annual_income: checkpoint.annual_income!,
+                occupation: checkpoint.occupation!,
+                trading_exp: checkpoint.trading_exp!,
+                account_settlement: checkpoint.account_settlement!,
+                is_politically_exposed: checkpoint.is_politically_exposed ?? false,
+                signature: checkpoint.signature!,
+                ipv: checkpoint.ipv!,
+                created_at: new Date(),
+                updated_at: new Date(),
+            })
+            .execute();
+
+        // Copy bank accounts
+        await trx
+            .insertInto('bank_to_user')
+            .columns(['user_id', 'bank_account_id', 'is_primary'])
+            .expression((eb) =>
+                eb
+                    .selectFrom('bank_to_checkpoint')
+                    .select([eb.val(checkpoint.client_id).as('user_id'), 'bank_account_id', 'is_primary'])
+                    .where('checkpoint_id', '=', checkpointId),
+            )
+            .execute();
+
+        // Copy nominees
+        await trx
+            .insertInto('nominees_to_user')
+            .columns(['user_id', 'nominees_id'])
+            .expression((eb) =>
+                eb
+                    .selectFrom('nominees_to_checkpoint')
+                    .select([eb.val(checkpoint.client_id).as('user_id'), 'nominees_id'])
+                    .where('checkpoint_id', '=', checkpointId),
+            )
+            .execute();
+
+        // Copy investment segments
+        await trx
+            .insertInto('investment_segments_to_user')
+            .columns(['user_id', 'segment'])
+            .expression((eb) =>
+                eb
+                    .selectFrom('investment_segments_to_checkpoint')
+                    .select([eb.val(checkpoint.client_id).as('user_id'), 'segment'])
+                    .where('checkpoint_id', '=', checkpointId),
+            )
+            .execute();
+
+        // Create initial balance
+        await trx
+            .insertInto('user_balance')
+            .values({
+                user_id: checkpoint.client_id,
+                available_cash: 0,
+                blocked_cash: 0,
+                available_liq_margin: 0,
+                available_non_liq_margin: 0,
+                blocked_margin: 0,
+                created_at: new Date(),
+                updated_at: new Date(),
+            })
+            .execute();
+
+        // First remove child records
+        await trx.deleteFrom('bank_to_checkpoint').where('checkpoint_id', '=', checkpointId).execute();
+        await trx.deleteFrom('nominees_to_checkpoint').where('checkpoint_id', '=', checkpointId).execute();
+        await trx.deleteFrom('investment_segments_to_checkpoint').where('checkpoint_id', '=', checkpointId).execute();
+
+        // Then remove the main checkpoint record
+        await trx.deleteFrom('signup_checkpoints').where('id', '=', checkpointId).execute();
+
+        return checkpoint.client_id;
+    });
+
+    // Return success response
+    res.status(OK).json({
+        message: 'User account created successfully.',
+        data: {
+            client: userId,
+        },
+    });
+};
+
 export {
     assignOfficer,
     getVerificationDetail,
@@ -707,4 +882,5 @@ export {
     getVerificationStatus,
     getCheckpointDetails,
     finalizeVerification,
+    autoFinalVerification,
 };
