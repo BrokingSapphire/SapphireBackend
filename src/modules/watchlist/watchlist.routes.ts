@@ -22,9 +22,9 @@ import {
 
 const router = Router();
 
-router.post('/category/create', validate(WatchlistCategoryName), createCategory);
+router.put('/category/create', validate(WatchlistCategoryName), createCategory);
 
-router.get('/category/list', listCategories);
+router.post('/category/list', listCategories);
 
 router.get('/category/:categoryId', validate(WatchlistCategoryIdParamRequired, 'params'), getCategory);
 
