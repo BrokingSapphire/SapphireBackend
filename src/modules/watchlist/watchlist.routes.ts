@@ -102,7 +102,7 @@ router.post(
     moveEntry,
 );
 router.delete(
-    '/:watchlistId/entries/:categoryId/item',
+    '/:watchlistId/entries/:categoryId',
     validate(WatchlistCategoryParamSchema, 'params'),
     validate(WatchlistItemIdentifierSchema, 'query'),
     removeEntry,

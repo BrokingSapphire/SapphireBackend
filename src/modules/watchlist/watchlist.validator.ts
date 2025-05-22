@@ -47,7 +47,7 @@ export const WatchlistEntryUpdatePositionSchema = WatchlistItemIdentifierSchema.
 });
 
 export const MoveEntryPayloadSchema = WatchlistItemIdentifierSchema.keys({
-    targetCategoryId: Joi.string().optional(),
+    targetCategoryId: Joi.number().required(),
     index: Joi.number().integer().min(0).optional(),
 });
 
