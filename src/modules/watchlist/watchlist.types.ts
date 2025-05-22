@@ -12,7 +12,7 @@ export type WatchlistCategoryParam = {
 export type WatchlistWithCategoryParam = WatchlistParam & WatchlistCategoryParam;
 
 // Watchlist Operations
-export type WatchlistCreate = {
+export type NamePayload = {
     name: string;
 };
 
@@ -45,9 +45,7 @@ export type WatchlistItemPayload = {
     exchange: StockExchange;
 };
 
-export type WatchlistEntryUpdatePosition = WatchlistItemPayload & {
-    newIndex: number;
-};
+export type WatchlistEntryUpdatePosition = WatchlistItemPayload & UpdatePositionPayload;
 
 export type MoveEntryPayload = WatchlistItemPayload & {
     targetCategoryId: number;

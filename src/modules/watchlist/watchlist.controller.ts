@@ -5,7 +5,7 @@ import { db } from '@app/database';
 import { DB } from '@app/database/db.d';
 import { SessionJwtType } from '@app/modules/common.types';
 import {
-    WatchlistCreate,
+    NamePayload,
     WatchlistCategoryCreate,
     WatchlistEntryCreate,
     WatchlistEntryUpdatePosition,
@@ -21,7 +21,7 @@ import { ExpressionBuilder } from 'kysely';
 
 // Watchlist Operations
 const createWatchlist = async (
-    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, WatchlistCreate>,
+    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, NamePayload>,
     res: Response,
 ) => {
     const { userId } = req.auth!;
@@ -94,7 +94,7 @@ const getAllWatchlists = async (req: Request<SessionJwtType>, res: Response) => 
 };
 
 const updateWatchlistName = async (
-    req: Request<SessionJwtType, WatchlistParam, DefaultResponseData, WatchlistCreate>,
+    req: Request<SessionJwtType, WatchlistParam, DefaultResponseData, NamePayload>,
     res: Response,
 ) => {
     const { userId } = req.auth!;
@@ -324,12 +324,12 @@ const deleteWatchlist = async (req: Request<SessionJwtType, WatchlistParam>, res
 
 // Category Operations
 const createCategoryInWatchlist = async (
-    req: Request<SessionJwtType, WatchlistParam, DefaultResponseData, WatchlistCategoryCreate>,
+    req: Request<SessionJwtType, WatchlistParam, DefaultResponseData, NamePayload>,
     res: Response,
 ) => {
     const { userId } = req.auth!;
     const { watchlistId } = req.params;
-    const { categoryName } = req.body;
+    const { name } = req.body;
 
     await db
         .selectFrom('user_watchlist')
@@ -342,7 +342,7 @@ const createCategoryInWatchlist = async (
         const ct = await tx
             .insertInto('watchlist_category')
             .values({
-                category: categoryName,
+                category: name,
             })
             .onConflict((oc) =>
                 oc.constraint('UQ_Watchlist_Category').doUpdateSet((eb) => ({
@@ -372,7 +372,7 @@ const createCategoryInWatchlist = async (
             message: 'Watchlist category created successfully.',
             data: {
                 id: result.id,
-                name: categoryName,
+                name,
                 positionIndex: result.position_index,
             },
         });
@@ -817,7 +817,7 @@ const updateEntryPosition = async (
 ) => {
     const { userId } = req.auth!;
     const { watchlistId, categoryId } = req.params;
-    const { isin, exchange, newIndex } = req.body;
+    const { isin, exchange, newPosition } = req.body;
 
     await db.transaction().execute(async (tx) => {
         await tx
@@ -831,7 +831,7 @@ const updateEntryPosition = async (
                     )
                     .innerJoin('user_watchlist', 'user_watchlist.id', 'watchlist_category_map.user_watchlist_id')
                     .select((eb) =>
-                        eb.fn<number>('least', [eb.val(newIndex), eb(eb.fn.countAll<number>(), '-', 1)]).as('at'),
+                        eb.fn<number>('least', [eb.val(newPosition), eb(eb.fn.countAll<number>(), '-', 1)]).as('at'),
                     )
                     .where('user_watchlist_entry.category_map_id', '=', categoryId)
                     .where('user_watchlist.id', '=', watchlistId)
@@ -902,9 +902,12 @@ const updateEntryPosition = async (
                     .when(
                         eb.between(
                             'user_watchlist_entry.position_index',
-                            eb.fn<number>('least', [eb.val(newIndex), eb.selectFrom('index').select('position_index')]),
+                            eb.fn<number>('least', [
+                                eb.val(newPosition),
+                                eb.selectFrom('index').select('position_index'),
+                            ]),
                             eb.fn<number>('greatest', [
-                                eb.val(newIndex),
+                                eb.val(newPosition),
                                 eb.selectFrom('index').select('position_index'),
                             ]),
                         ),
@@ -912,9 +915,9 @@ const updateEntryPosition = async (
                     .then(
                         eb
                             .case()
-                            .when(eb.selectFrom('index').select('position_index'), '<', newIndex)
+                            .when(eb.selectFrom('index').select('position_index'), '<', newPosition)
                             .then(eb('user_watchlist_entry.position_index', '-', 1))
-                            .when(eb.selectFrom('index').select('position_index'), '<', newIndex)
+                            .when(eb.selectFrom('index').select('position_index'), '<', newPosition)
                             .then(eb('user_watchlist_entry.position_index', '+', 1))
                             .else(eb.ref('user_watchlist_entry.position_index'))
                             .endCase(),
@@ -929,8 +932,11 @@ const updateEntryPosition = async (
                 eb.or([
                     eb.between(
                         'user_watchlist_entry.position_index',
-                        eb.fn<number>('least', [eb.val(newIndex), eb.selectFrom('index').select('position_index')]),
-                        eb.fn<number>('greatest', [eb.val(newIndex), eb.selectFrom('index').select('position_index')]),
+                        eb.fn<number>('least', [eb.val(newPosition), eb.selectFrom('index').select('position_index')]),
+                        eb.fn<number>('greatest', [
+                            eb.val(newPosition),
+                            eb.selectFrom('index').select('position_index'),
+                        ]),
                     ),
                     eb(
                         'user_watchlist_entry.position_index',

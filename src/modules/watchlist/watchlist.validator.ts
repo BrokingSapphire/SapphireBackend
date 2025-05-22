@@ -20,10 +20,6 @@ export const UpdatePositionPayloadSchema = Joi.object({
     newPosition: Joi.number().integer().min(0).required(),
 });
 
-export const WatchlistCategoryCreateSchema = Joi.object({
-    categoryName: Joi.string().max(100).required(),
-});
-
 export const WatchlistItemPayloadSchema = Joi.object({
     items: Joi.array()
         .items(

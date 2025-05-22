@@ -21,7 +21,6 @@ import {
     WatchlistIdParamSchema,
     NamePayloadSchema,
     UpdatePositionPayloadSchema,
-    WatchlistCategoryCreateSchema,
     WatchlistCategoryParamSchema,
     DeleteCategoryOptionsSchema,
     GetEntriesQuerySchema,
@@ -54,7 +53,7 @@ router.delete('/:watchlistId', validate(WatchlistIdParamSchema, 'params'), delet
 router.post(
     '/:watchlistId/categories',
     validate(WatchlistIdParamSchema, 'params'),
-    validate(WatchlistCategoryCreateSchema),
+    validate(NamePayloadSchema),
     createCategoryInWatchlist,
 );
 router.get('/:watchlistId/categories', validate(WatchlistIdParamSchema, 'params'), getAllCategoriesOfWatchlist);
