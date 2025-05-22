@@ -673,9 +673,52 @@ const finalizeVerification = async (req: Request, res: Response) => {
                 available_liq_margin: 0,
                 available_non_liq_margin: 0,
                 blocked_margin: 0,
-                created_at: new Date(),
-                updated_at: new Date(),
             })
+            .execute();
+
+        const watchlist = await trx
+            .insertInto('user_watchlist')
+            .values({
+                user_id: checkpoint.client_id,
+                position_index: 0,
+            })
+            .returning('id')
+            .executeTakeFirstOrThrow();
+
+        const categories = await trx
+            .insertInto('watchlist_category')
+            .values([
+                {
+                    category: 'Large Cap',
+                },
+                {
+                    category: 'Mid Cap',
+                },
+                {
+                    category: 'Small Cap',
+                },
+            ])
+            .onConflict((oc) =>
+                oc.constraint('UQ_Watchlist_Category').doUpdateSet((eb) => ({
+                    category: eb.ref('excluded.category'),
+                })),
+            )
+            .returning('id')
+            .execute();
+
+        await trx
+            .insertInto('watchlist_category_map')
+            .values([
+                ...categories.map((cat, index) => ({
+                    user_watchlist_id: watchlist.id,
+                    category_id: cat.id,
+                    position_index: index,
+                })),
+                {
+                    user_watchlist_id: watchlist.id,
+                    position_index: categories.length,
+                },
+            ])
             .execute();
 
         // First remove child records
@@ -849,9 +892,52 @@ const autoFinalVerification = async (req: Request, res: Response) => {
                 available_liq_margin: 0,
                 available_non_liq_margin: 0,
                 blocked_margin: 0,
-                created_at: new Date(),
-                updated_at: new Date(),
             })
+            .execute();
+
+        const watchlist = await trx
+            .insertInto('user_watchlist')
+            .values({
+                user_id: checkpoint.client_id,
+                position_index: 0,
+            })
+            .returning('id')
+            .executeTakeFirstOrThrow();
+
+        const categories = await trx
+            .insertInto('watchlist_category')
+            .values([
+                {
+                    category: 'Large Cap',
+                },
+                {
+                    category: 'Mid Cap',
+                },
+                {
+                    category: 'Small Cap',
+                },
+            ])
+            .onConflict((oc) =>
+                oc.constraint('UQ_Watchlist_Category').doUpdateSet((eb) => ({
+                    category: eb.ref('excluded.category'),
+                })),
+            )
+            .returning('id')
+            .execute();
+
+        await trx
+            .insertInto('watchlist_category_map')
+            .values([
+                ...categories.map((cat, index) => ({
+                    user_watchlist_id: watchlist.id,
+                    category_id: cat.id,
+                    position_index: index,
+                })),
+                {
+                    user_watchlist_id: watchlist.id,
+                    position_index: categories.length,
+                },
+            ])
             .execute();
 
         // First remove child records

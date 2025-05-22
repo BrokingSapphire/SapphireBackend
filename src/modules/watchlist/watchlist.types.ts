@@ -1,32 +1,60 @@
 import { StockExchange } from '@app/database/db';
 
+// General Params
+export type WatchlistParam = {
+    watchlistId: number;
+};
+
 export type WatchlistCategoryParam = {
     categoryId: number;
 };
 
-export type WatchlistCategory = {
-    category: string;
+export type WatchlistWithCategoryParam = WatchlistParam & WatchlistCategoryParam;
+
+// Watchlist Operations
+export type WatchlistCreate = {
+    name: string;
 };
 
-export type GetWatchlistQuery = {
-    limit?: number;
-    offset?: number;
+export type UpdatePositionPayload = {
+    newPosition: number;
 };
 
-export type WatchlistData = {
-    items: {
-        isin: string;
-        exchange: StockExchange;
-        index?: number;
-    }[];
+// Category Operations
+export type WatchlistCategoryCreate = {
+    categoryName: string;
 };
 
-export type WatchlistIndexUpdate = {
-    index: number;
+export type DeleteCategoryOptions = {
+    moveElementsToUncategorized?: boolean;
+};
+
+// Entry Operations
+export type WatchlistItem = {
+    isin: string;
+    exchange: StockExchange;
+    index?: number;
+};
+
+export type WatchlistEntryCreate = {
+    items: WatchlistItem[];
+};
+
+export type WatchlistItemPayload = {
+    isin: string;
+    exchange: StockExchange;
+};
+
+export type WatchlistEntryUpdatePosition = WatchlistItemPayload & {
     newIndex: number;
 };
 
-export type DeleteWatchlistQuery = {
-    isin: string;
-    exchange: StockExchange;
+export type MoveEntryPayload = WatchlistItemPayload & {
+    targetCategoryId: number;
+    index?: number;
+};
+
+export type GetEntriesQuery = {
+    offset?: number;
+    limit?: number;
 };

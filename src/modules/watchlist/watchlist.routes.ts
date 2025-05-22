@@ -1,56 +1,112 @@
 import { Router } from 'express';
 import { validate } from '@app/middlewares';
 import {
-    createCategory,
-    getCategory,
-    getWatchlist,
-    listCategories,
-    putWatchlist,
-    removeCategory,
-    removeWatchlist,
-    updateWatchlist,
+    createWatchlist,
+    getAllWatchlists,
+    updateWatchlistName,
+    updateWatchlistPosition,
+    deleteWatchlist,
+    createCategoryInWatchlist,
+    getAllCategoriesOfWatchlist,
+    updateCategoryName,
+    updateCategoryPosition,
+    deleteCategory,
+    addWatchlistEntries,
+    getWatchlistEntries,
+    updateEntryPosition,
+    moveEntry,
+    removeEntry,
 } from './watchlist.controller';
 import {
-    DeleteWatchlistQuery,
-    GetWatchlistQuery,
-    UpdateWatchlistData,
-    WatchlistCategoryIdParam,
-    WatchlistCategoryIdParamRequired,
-    WatchlistCategoryName,
-    WatchlistData,
+    WatchlistIdParamSchema,
+    NamePayloadSchema,
+    UpdatePositionPayloadSchema,
+    WatchlistCategoryCreateSchema,
+    WatchlistCategoryParamSchema,
+    DeleteCategoryOptionsSchema,
+    GetEntriesQuerySchema,
+    WatchlistItemPayloadSchema,
+    WatchlistEntryUpdatePositionSchema,
+    MoveEntryPayloadSchema,
+    WatchlistItemIdentifierSchema,
 } from './watchlist.validator';
 
 const router = Router();
 
-router.put('/category/create', validate(WatchlistCategoryName), createCategory);
-
-router.post('/category/list', listCategories);
-
-router.get('/category/:categoryId', validate(WatchlistCategoryIdParamRequired, 'params'), getCategory);
-
-router.delete('/category/:categoryId', validate(WatchlistCategoryIdParamRequired, 'params'), removeCategory);
-
-router.get(
-    '/:categoryId?',
-    validate(WatchlistCategoryIdParam, 'params'),
-    validate(GetWatchlistQuery, 'query'),
-    getWatchlist,
+// Watchlist operations
+router.post('/', validate(NamePayloadSchema), createWatchlist);
+router.get('/', getAllWatchlists);
+router.put(
+    '/:watchlistId/name',
+    validate(WatchlistIdParamSchema, 'params'),
+    validate(NamePayloadSchema),
+    updateWatchlistName,
 );
+router.put(
+    '/:watchlistId/position',
+    validate(WatchlistIdParamSchema, 'params'),
+    validate(UpdatePositionPayloadSchema),
+    updateWatchlistPosition,
+);
+router.delete('/:watchlistId', validate(WatchlistIdParamSchema, 'params'), deleteWatchlist);
 
-router.put('/:categoryId?', validate(WatchlistCategoryIdParam, 'params'), validate(WatchlistData), putWatchlist);
-
+// Category operations
 router.post(
-    '/:categoryId?',
-    validate(WatchlistCategoryIdParam, 'params'),
-    validate(UpdateWatchlistData),
-    updateWatchlist,
+    '/:watchlistId/categories',
+    validate(WatchlistIdParamSchema, 'params'),
+    validate(WatchlistCategoryCreateSchema),
+    createCategoryInWatchlist,
+);
+router.get('/:watchlistId/categories', validate(WatchlistIdParamSchema, 'params'), getAllCategoriesOfWatchlist);
+router.put(
+    '/:watchlistId/categories/:categoryId/name',
+    validate(WatchlistCategoryParamSchema, 'params'),
+    validate(NamePayloadSchema),
+    updateCategoryName,
+);
+router.put(
+    '/:watchlistId/categories/:categoryId/position',
+    validate(WatchlistCategoryParamSchema, 'params'),
+    validate(UpdatePositionPayloadSchema),
+    updateCategoryPosition,
+);
+router.delete(
+    '/:watchlistId/categories/:categoryId',
+    validate(WatchlistCategoryParamSchema, 'params'),
+    validate(DeleteCategoryOptionsSchema, 'query'),
+    deleteCategory,
 );
 
+// Entry operations
+router.get(
+    '/:watchlistId/entries/:categoryId',
+    validate(WatchlistCategoryParamSchema, 'params'),
+    validate(GetEntriesQuerySchema, 'query'),
+    getWatchlistEntries,
+);
+router.post(
+    '/:watchlistId/entries/:categoryId',
+    validate(WatchlistCategoryParamSchema, 'params'),
+    validate(WatchlistItemPayloadSchema),
+    addWatchlistEntries,
+);
+router.put(
+    '/:watchlistId/entries/:categoryId/position',
+    validate(WatchlistCategoryParamSchema, 'params'),
+    validate(WatchlistEntryUpdatePositionSchema),
+    updateEntryPosition,
+);
+router.post(
+    '/:watchlistId/entries/:categoryId/move',
+    validate(WatchlistCategoryParamSchema, 'params'),
+    validate(MoveEntryPayloadSchema),
+    moveEntry,
+);
 router.delete(
-    '/:categoryId?',
-    validate(WatchlistCategoryIdParam, 'params'),
-    validate(DeleteWatchlistQuery, 'query'),
-    removeWatchlist,
+    '/:watchlistId/entries/:categoryId/item',
+    validate(WatchlistCategoryParamSchema, 'params'),
+    validate(WatchlistItemIdentifierSchema, 'query'),
+    removeEntry,
 );
 
 export default router;

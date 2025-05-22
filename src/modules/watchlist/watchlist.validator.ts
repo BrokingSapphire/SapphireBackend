@@ -1,45 +1,66 @@
 import Joi from 'joi';
 import { Exchange } from '../common.types';
 
-export const GetWatchlistQuery = Joi.object({
-    limit: Joi.number().integer().min(1).optional(),
-    offset: Joi.number().integer().min(0).optional(),
+// --- PARAM SCHEMAS ---
+export const WatchlistIdParamSchema = Joi.object({
+    watchlistId: Joi.string().required(),
 });
 
-export const WatchlistCategoryIdParam = Joi.object({
-    categoryId: Joi.number().integer().min(0).optional(),
+export const WatchlistCategoryParamSchema = Joi.object({
+    watchlistId: Joi.string().required(),
+    categoryId: Joi.string().required(),
 });
 
-export const WatchlistCategoryIdParamRequired = Joi.object({
-    categoryId: Joi.number().integer().min(0).required(),
+// --- PAYLOAD SCHEMAS (BODY) ---
+export const NamePayloadSchema = Joi.object({
+    name: Joi.string().max(100).required(),
 });
 
-export const WatchlistCategoryName = Joi.object({
-    category: Joi.string().required(),
+export const UpdatePositionPayloadSchema = Joi.object({
+    newPosition: Joi.number().integer().min(0).required(),
 });
 
-export const WatchlistData = Joi.object({
+export const WatchlistCategoryCreateSchema = Joi.object({
+    categoryName: Joi.string().max(100).required(),
+});
+
+export const WatchlistItemPayloadSchema = Joi.object({
     items: Joi.array()
         .items(
             Joi.object({
                 isin: Joi.string().length(12).required(),
                 exchange: Joi.string()
-                    .valid(...Object.values(Exchange))
+                    .valid(...Object.keys(Exchange))
                     .required(),
                 index: Joi.number().integer().min(0).optional(),
             }),
         )
+        .min(1)
         .required(),
 });
 
-export const UpdateWatchlistData = Joi.object({
-    index: Joi.number().integer().min(0).required(),
-    newIndex: Joi.number().integer().min(0).required(),
-});
-
-export const DeleteWatchlistQuery = Joi.object({
+export const WatchlistItemIdentifierSchema = Joi.object({
     isin: Joi.string().length(12).required(),
     exchange: Joi.string()
-        .valid(...Object.values(Exchange))
+        .valid(...Object.keys(Exchange))
         .required(),
+});
+
+export const WatchlistEntryUpdatePositionSchema = WatchlistItemIdentifierSchema.keys({
+    newPosition: Joi.number().integer().min(0).required(),
+});
+
+export const MoveEntryPayloadSchema = WatchlistItemIdentifierSchema.keys({
+    targetCategoryId: Joi.string().optional(),
+    index: Joi.number().integer().min(0).optional(),
+});
+
+// --- QUERY SCHEMAS ---
+export const GetEntriesQuerySchema = Joi.object({
+    offset: Joi.number().integer().min(0).optional(),
+    limit: Joi.number().integer().min(1).optional(),
+});
+
+export const DeleteCategoryOptionsSchema = Joi.object({
+    moveElementsToUncategorized: Joi.boolean().optional(),
 });
