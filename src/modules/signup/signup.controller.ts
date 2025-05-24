@@ -851,7 +851,7 @@ const ipvImageUpload = wrappedMulterHandler(imageUpload.single('image'));
 const putIpv = async (req: Request<JwtType, UIDParams>, res: Response) => {
     const { uid } = req.params;
 
-    const { email, phone } = req.auth!!;
+    const { email, phone } = req.auth!;
     const value = await redisClient.get(`signup_ipv:${uid}`);
     if (!value || value !== email) throw new UnauthorizedError('IPV not authorized or expired.');
 
@@ -864,7 +864,7 @@ const putIpv = async (req: Request<JwtType, UIDParams>, res: Response) => {
 
     await db.transaction().execute(async (tx) => {
         const checkpoint = await updateCheckpoint(tx, email, phone, {
-            ipv: uploadResult.file.path,
+            ipv: uploadResult.file.location,
         })
             .returning('id')
             .executeTakeFirstOrThrow();
@@ -914,7 +914,7 @@ const putSignature = async (req: Request<JwtType, UIDParams>, res: Response) => 
 
     await db.transaction().execute(async (tx) => {
         const checkpoint = await updateCheckpoint(tx, email, phone, {
-            signature: uploadResult.file.path,
+            signature: uploadResult.file.location,
         })
             .returning('id')
             .executeTakeFirstOrThrow();

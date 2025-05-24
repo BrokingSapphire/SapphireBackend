@@ -53,7 +53,7 @@ const imageUpload = multer({
 });
 
 type MulterReturnType<ReqBody> = {
-    file: Express.Multer.File;
+    file: Express.MulterS3.File;
     body: ReqBody;
 };
 
@@ -90,7 +90,7 @@ const wrappedMulterHandler = <
                     return;
                 }
 
-                resolve({ file: req.file!, body: req.body });
+                resolve({ file: req.file! as Express.MulterS3.File, body: req.body });
             });
         });
     };
