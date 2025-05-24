@@ -864,7 +864,7 @@ const putIpv = async (req: Request<JwtType, UIDParams>, res: Response) => {
 
     await db.transaction().execute(async (tx) => {
         const checkpoint = await updateCheckpoint(tx, email, phone, {
-            ipv: uploadResult.file.location,
+            ipv: uploadResult.file.path,
         })
             .returning('id')
             .executeTakeFirstOrThrow();
@@ -914,7 +914,7 @@ const putSignature = async (req: Request<JwtType, UIDParams>, res: Response) => 
 
     await db.transaction().execute(async (tx) => {
         const checkpoint = await updateCheckpoint(tx, email, phone, {
-            signature: uploadResult.file.location,
+            signature: uploadResult.file.path,
         })
             .returning('id')
             .executeTakeFirstOrThrow();

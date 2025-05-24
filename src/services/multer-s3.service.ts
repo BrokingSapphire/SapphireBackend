@@ -1,10 +1,14 @@
 import { BadRequestError } from '@app/apiError';
 import { env } from '@app/env';
 import { S3Client } from '@aws-sdk/client-s3';
-import { Request, RequestHandler, Response } from 'express';
+import { RequestHandler } from 'express';
+import { Request, Response } from '@app/types';
 import multer from 'multer';
 import multerS3 from 'multer-s3';
 import path from 'path';
+import jwt from 'jsonwebtoken';
+import * as core from 'express-serve-static-core';
+import { DefaultResponseData } from '@app/types';
 
 const s3 = new S3Client({ region: env.aws.region });
 
@@ -48,17 +52,45 @@ const imageUpload = multer({
     fileFilter: imageFilter,
 });
 
-type MulterHandler = (req: Request, res: Response) => Promise<any>;
+type MulterReturnType<ReqBody> = {
+    file: Express.Multer.File;
+    body: ReqBody;
+};
 
-const wrappedMulterHandler = (handler: RequestHandler): MulterHandler => {
-    return async (req: Request, res: Response): Promise<any> => {
-        return new Promise((resolve, reject): void => {
-            handler(req, res, (error) => {
+type MulterHandler<
+    A = jwt.JwtPayload | undefined,
+    P = core.ParamsDictionary,
+    ResBody = DefaultResponseData,
+    ReqBody = any,
+    ReqQuery = core.Query,
+    Locals extends Record<string, any> = Record<string, any>,
+> = (
+    req: Request<A, P, ResBody, ReqBody, ReqQuery, Locals>,
+    res: Response<ResBody, Locals>,
+) => Promise<MulterReturnType<ReqBody>>;
+
+const wrappedMulterHandler = <
+    A = jwt.JwtPayload | undefined,
+    P = core.ParamsDictionary,
+    ResBody = DefaultResponseData,
+    ReqBody = any,
+    ReqQuery = core.Query,
+    Locals extends Record<string, any> = Record<string, any>,
+>(
+    handler: RequestHandler<P, ResBody, ReqBody, ReqQuery, Locals>,
+): MulterHandler<A, P, ResBody, ReqBody, ReqQuery, Locals> => {
+    return async (
+        req: Request<A, P, ResBody, ReqBody, ReqQuery, Locals>,
+        res: Response<ResBody, Locals>,
+    ): Promise<MulterReturnType<ReqBody>> => {
+        return new Promise(async (resolve, reject) => {
+            await handler(req, res, (error) => {
                 if (error) {
                     reject(error);
+                    return;
                 }
 
-                resolve({ file: req.file, body: req.body });
+                resolve({ file: req.file!, body: req.body });
             });
         });
     };
