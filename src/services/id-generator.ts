@@ -11,7 +11,8 @@ export default class IdGenerator {
     constructor(private readonly sequence: IdSequences) {}
 
     async nextValue(): Promise<string> {
-        const id = await sql<number>`SELECT NEXTVAL('${this.sequence}_seq');`.execute(db);
+        const seq = `${this.sequence}_seq`;
+        const id = await sql<number>`SELECT NEXTVAL('${sql.raw(seq)}');`.execute(db);
 
         return this.modifyId(id.rows[0]);
     }
