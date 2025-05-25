@@ -31,25 +31,17 @@ export type ResetPasswordRequestType = {
     newPassword: string;
 };
 
-export type ForgotPasswordInitiateRequestType = {
+export type ForgotPasswordRequestType = {
     panNumber: string;
-    recaptchaToken: string;
 };
 
-export type ForgotPasswordInitiateResponseType = DefaultResponseData<{
+export type ForgotOTPVerifyRequestType = {
     requestId: string;
-}>;
+    otp: string;
+};
 
-export type ForgotPasswordVerifyOtpRequestType = {
+export type NewPasswordRequestType = {
     requestId: string;
-    emailOtp: string;
-    phoneOtp: string;
-};
-
-export type ForgotPasswordVerifyOtpResponseType = DefaultResponseData & {
-    token: string;
-};
-
-export type ForgotPasswordResetRequestType = {
     newPassword: string;
+    confirmPassword: string;
 };
