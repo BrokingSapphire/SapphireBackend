@@ -15,14 +15,13 @@ import {
     PostCheckpointType,
     JwtType,
     RequestOtpType,
-    ResponseWithToken,
     ValidationType,
     VerifyOtpType,
     GetCheckpointType,
     UIDParams,
     AccountType,
 } from './signup.types';
-import { CredentialsType } from '@app/modules/common.types';
+import { CredentialsType, ResponseWithToken } from '@app/modules/common.types';
 import DigiLockerService from '@app/services/surepass/digilocker.service';
 import AadhaarXMLParser from '@app/utils/aadhaar-xml.parser';
 import { sign } from '@app/utils/jwt';
@@ -153,7 +152,7 @@ const verifyOtp = async (
             }
         });
 
-        const token = sign({ email, phone });
+        const token = sign<JwtType>({ email, phone });
 
         res.status(OK).json({ message: 'OTP verified', token, data: { clientId: client_id } });
     }

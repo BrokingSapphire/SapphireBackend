@@ -1,16 +1,30 @@
 import Joi from 'joi';
+import { OTP_LENGTH } from '@app/modules/signup/signup.services';
 
-export const LoginSchema = Joi.object({
-    clientId: Joi.string().required(),
+const EmailOrClientIdSchema = Joi.object({
+    clientId: Joi.string().when('email', {
+        is: Joi.exist(),
+        then: Joi.optional(),
+        otherwise: Joi.required(),
+    }),
+    email: Joi.string()
+        .email()
+        .when('clientId', {
+            is: Joi.exist(),
+            then: Joi.optional(),
+            otherwise: Joi.required(),
+        }),
+});
+
+export const LoginRequestSchema = EmailOrClientIdSchema.keys({
     password: Joi.string().required(),
 });
 
-export const LoginOtpVerifySchema = Joi.object({
-    requestId: Joi.string().required().uuid(),
+export const LoginOtpVerifySchema = EmailOrClientIdSchema.keys({
     otp: Joi.string()
-        .required()
-        .length(6)
-        .pattern(/^[0-9]{6}$/),
+        .length(OTP_LENGTH)
+        .pattern(/^[0-9]{6}$/)
+        .required(),
 });
 
 export const ResetPasswordSchema = Joi.object({
