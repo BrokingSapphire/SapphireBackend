@@ -15,7 +15,7 @@ const router = Router();
 
 router.use('/auth/signup', signupRouter);
 router.use('/auth/login', loginRouter);
-router.use('/compliance', jwtMiddleware, complianceRouter);
+router.use('/compliance', complianceRouter);
 router.use('/funds', jwtMiddleware, fundsRouter);
 router.use('/watchlist', jwtMiddleware, watchlistRouter);
 router.use('/webhook', webhookRouter);

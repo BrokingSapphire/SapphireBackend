@@ -743,27 +743,28 @@ const finalizeVerification = async (req: Request, res: Response) => {
 const autoFinalVerification = async (req: Request, res: Response) => {
     const checkpointId = Number(req.params.checkpointId);
 
-    // STEP 1: Update verification status --> 'verified'
-    await db
-        .updateTable('signup_verification_status')
-        .set({
-            pan_status: 'verified',
-            aadhaar_status: 'verified',
-            bank_status: 'verified',
-            address_status: 'verified',
-            signature_status: 'verified',
-            ipv_status: 'verified',
-            trading_preferences_status: 'verified',
-            nominee_status: 'verified',
-            other_documents_status: 'verified',
-            esign_status: 'verified',
-            overall_status: 'verified',
-            updated_at: new Date(),
-        })
-        .where('id', '=', checkpointId)
-        .execute();
-    // STEP 2: Create the user account using transaction
     const userId = await db.transaction().execute(async (trx) => {
+        // STEP 1: Update verification status --> 'verified'
+        await db
+            .updateTable('signup_verification_status')
+            .set({
+                pan_status: 'verified',
+                aadhaar_status: 'verified',
+                bank_status: 'verified',
+                address_status: 'verified',
+                signature_status: 'verified',
+                ipv_status: 'verified',
+                trading_preferences_status: 'verified',
+                nominee_status: 'verified',
+                other_documents_status: 'verified',
+                esign_status: 'verified',
+                overall_status: 'verified',
+                updated_at: new Date(),
+            })
+            .where('id', '=', checkpointId)
+            .execute();
+
+        // STEP 2: Create the user account using transaction
         // Get checkpoint data
         const checkpoint = await trx
             .selectFrom('signup_checkpoints')
