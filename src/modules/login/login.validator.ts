@@ -2,11 +2,7 @@ import Joi from 'joi';
 import { OTP_LENGTH } from '@app/modules/signup/signup.services';
 
 const EmailOrClientIdSchema = Joi.object({
-    clientId: Joi.string().when('email', {
-        is: Joi.exist(),
-        then: Joi.optional(),
-        otherwise: Joi.required(),
-    }),
+    clientId: Joi.string().optional(),
     email: Joi.string().email().when('clientId', {
         is: Joi.exist(),
         then: Joi.optional(),
