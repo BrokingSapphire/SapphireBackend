@@ -1,5 +1,5 @@
 import Joi from 'joi';
-import { OTP_LENGTH } from '@app/modules/signup/signup.services';
+import { DEFAULT_OTP_LENGTH } from '@app/services/otp.service';
 
 const EmailOrClientIdSchema = Joi.object({
     clientId: Joi.string().optional(),
@@ -16,7 +16,7 @@ export const LoginRequestSchema = EmailOrClientIdSchema.keys({
 
 export const LoginOtpVerifySchema = EmailOrClientIdSchema.keys({
     otp: Joi.string()
-        .length(OTP_LENGTH)
+        .length(DEFAULT_OTP_LENGTH)
         .pattern(/^[0-9]{6}$/)
         .required(),
 });

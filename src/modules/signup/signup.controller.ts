@@ -1,7 +1,7 @@
 import { ParamsDictionary } from 'express-serve-static-core';
 import { Response, DefaultResponseData, Request } from '@app/types.d';
 import redisClient from '@app/services/redis.service';
-import { EmailOtpVerification, PhoneOtpVerification } from './signup.services';
+import { EmailOtpVerification, PhoneOtpVerification } from '@app/services/otp.service';
 import {
     BadRequestError,
     ForbiddenError,
@@ -47,7 +47,7 @@ const requestOtp = async (
             throw new BadRequestError('Email already exists');
         }
 
-        const emailOtp = new EmailOtpVerification(email);
+        const emailOtp = new EmailOtpVerification(email, 'signup');
         await emailOtp.sendOtp();
     } else if (type === CredentialsType.PHONE) {
         const { phone } = req.body;
@@ -75,7 +75,7 @@ const requestOtp = async (
             throw new UnauthorizedError('Email not verified');
         }
 
-        const phoneOtp = new PhoneOtpVerification(email, phone);
+        const phoneOtp = new PhoneOtpVerification(email, 'signup', phone);
         await phoneOtp.sendOtp();
     }
 
@@ -88,7 +88,7 @@ const verifyOtp = async (
 ) => {
     const { type, email, otp } = req.body;
     if (type === CredentialsType.EMAIL) {
-        const emailOtp = new EmailOtpVerification(email);
+        const emailOtp = new EmailOtpVerification(email, 'signup');
         await emailOtp.verifyOtp(otp);
         await redisClient.set(`email-verified:${email}`, 'true');
         await redisClient.expire(`email-verified:${email}`, 10 * 60);
@@ -98,7 +98,7 @@ const verifyOtp = async (
         const { phone } = req.body;
         if (!(await redisClient.get(`email-verified:${email}`))) throw new UnauthorizedError('Email not verified.');
 
-        const phoneOtp = new PhoneOtpVerification(email, phone);
+        const phoneOtp = new PhoneOtpVerification(email, 'signup', phone);
         await phoneOtp.verifyOtp(otp);
         await redisClient.del(`email-verified:${email}`);
 

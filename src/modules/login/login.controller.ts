@@ -1,7 +1,7 @@
 import { ParamsDictionary } from 'express-serve-static-core';
 import { Response, DefaultResponseData, Request } from '@app/types.d';
 import redisClient from '@app/services/redis.service';
-import { EmailOtpVerification } from '../signup/signup.services';
+import { EmailOtpVerification } from '@app/services/otp.service';
 import { randomUUID } from 'crypto';
 import { UnauthorizedError } from '@app/apiError';
 import { db } from '@app/database';
@@ -53,7 +53,7 @@ const login = async (
         throw new UnauthorizedError('Invalid credentials');
     }
 
-    const emailOtp = new EmailOtpVerification(user.email);
+    const emailOtp = new EmailOtpVerification(user.email, 'signup');
     await emailOtp.sendOtp();
 
     res.status(OK).json({
@@ -82,7 +82,7 @@ const verifyLoginOtp = async (
         })
         .executeTakeFirstOrThrow();
 
-    const emailOtp = new EmailOtpVerification(user.email);
+    const emailOtp = new EmailOtpVerification(user.email, 'signup');
     await emailOtp.verifyOtp(otp);
 
     const token = sign<SessionJwtType>({
@@ -178,7 +178,7 @@ const forgotPasswordInitiate = async (
     await redisClient.set(redisKey, JSON.stringify(session));
     await redisClient.expire(redisKey, 15 * 60);
 
-    const emailOtp = new EmailOtpVerification(user.email);
+    const emailOtp = new EmailOtpVerification(user.email, 'signup');
     await emailOtp.sendOtp();
 
     res.status(OK).json({
@@ -206,7 +206,7 @@ const forgotOTPverify = async (
         throw new UnauthorizedError('Session already verified or used');
     }
 
-    const emailOtp = new EmailOtpVerification(session.email);
+    const emailOtp = new EmailOtpVerification(session.email, 'signup');
     await emailOtp.verifyOtp(otp);
 
     session.isVerified = true;

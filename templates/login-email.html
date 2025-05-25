@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no" />
+    <title>Your Login OTP - Sapphire Terminal</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+        :root {
+            --primary: #064d51;
+            --primary-light: rgba(6, 77, 81, 0.1);
+            --accent: #ffd62d;
+            --accent-light: rgba(255, 214, 45, 0.2);
+            --background: #eafbf0;
+            --white: #ffffff;
+            --text-dark: #1a2b2c;
+            --text-medium: #415657;
+            --text-light: #6e7878;
+            --border-light: #e5e7eb;
+            --success: #16a34a;
+            --success-light: rgba(22, 163, 74, 0.1);
+            --warning: #f59e0b;
+            --warning-light: rgba(245, 158, 11, 0.1);
+            --info: #0ea5e9;
+            --info-light: rgba(14, 165, 233, 0.1);
+            --danger: #dc2626;
+            --danger-light: rgba(220, 38, 38, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family:
+                'Inter',
+                -apple-system,
+                BlinkMacSystemFont,
+                'Segoe UI',
+                Roboto,
+                Helvetica,
+                Arial,
+                sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background);
+            color: var(--text-dark);
+            line-height: 1.6;
+            font-size: 16px;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .email-wrapper {
+            background-color: var(--white);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+        }
+
+        .email-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family:
+                'Inter',
+                -apple-system,
+                BlinkMacSystemFont,
+                'Segoe UI',
+                Roboto,
+                Helvetica,
+                Arial,
+                sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background);
+            color: var(--text-dark);
+            line-height: 1.6;
+            font-size: 24px;
+            -webkit-font-smoothing: antialiased;
+            background-color: var(--primary);
+            padding: 30px 40px;
+            text-align: center;
+            position: relative;
+        }
+
+        .logo {
+            max-width: 150px;
+            height: auto;
+        }
+
+        .header-accent {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 10% 20%, rgba(255, 214, 45, 0.3) 0%, transparent 30%);
+        }
+
+        .email-body {
+            padding: 40px;
+        }
+
+        .email-footer {
+            background-color: var(--primary-light);
+            padding: 30px;
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-medium);
+        }
+
+        .social-links {
+            margin: 25px 0;
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+        }
+
+        .social-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            background-color: var(--primary);
+            border-radius: 50%;
+            color: var(--white);
+            transition: all 0.2s ease;
+        }
+
+        .disclaimer {
+            font-size: 11px;
+            color: var(--text-light);
+            margin-top: 25px;
+            padding-top: 25px;
+            border-top: 1px solid var(--border-light);
+        }
+
+        h1,
+        h2,
+        h3,
+        h4,
+        h5,
+        h6 {
+            color: var(--primary);
+            margin-bottom: 16px;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+
+        h1 {
+            font-size: 28px;
+            letter-spacing: -0.5px;
+        }
+
+        h2 {
+            font-size: 24px;
+            letter-spacing: -0.3px;
+        }
+
+        h3 {
+            font-size: 20px;
+        }
+
+        p {
+            margin-bottom: 16px;
+            color: var(--text-medium);
+        }
+
+        .icon-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .icon-circle {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background-color: var(--primary-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+        }
+
+        .icon {
+            font-size: 40px;
+            color: var(--primary);
+        }
+
+        .otp-container {
+            background-color: var(--primary-light);
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            margin: 32px 0;
+        }
+
+        .otp-code {
+            font-family: 'Courier New', monospace;
+            font-size: 36px;
+            letter-spacing: 8px;
+            font-weight: 700;
+            color: var(--primary);
+            margin: 16px 0;
+        }
+
+        .timer-box {
+            background-color: var(--warning-light);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: var(--warning);
+            font-weight: 600;
+        }
+
+        .timer-icon {
+            margin-right: 8px;
+        }
+
+        .login-details {
+            background-color: var(--white);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+            border: 1px solid var(--border-light);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+        }
+
+        .login-details-title {
+            text-align: center;
+            margin-bottom: 16px;
+            color: var(--primary);
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .detail-row {
+            display: flex;
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .detail-row:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        .detail-label {
+            flex: 1;
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+
+        .detail-value {
+            flex: 2;
+            text-align: right;
+        }
+
+        .security-tips {
+            background-color: var(--info-light);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+        }
+
+        .security-tips-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+        }
+
+        .security-icon {
+            margin-right: 8px;
+            color: var(--primary);
+        }
+
+        .security-tip-item {
+            display: flex;
+            margin-bottom: 12px;
+        }
+
+        .security-tip-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .tip-icon {
+            flex-shrink: 0;
+            width: 20px;
+            height: 20px;
+            margin-right: 12px;
+            margin-top: 4px;
+            color: var(--primary);
+        }
+
+        .tip-content {
+            flex-grow: 1;
+            font-size: 14px;
+        }
+
+        .help-section {
+            background-color: var(--accent-light);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 32px;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .help-icon {
+            flex-shrink: 0;
+            margin-right: 12px;
+            font-size: 24px;
+            color: var(--accent);
+        }
+
+        .help-content {
+            font-size: 14px;
+            color: var(--text-medium);
+        }
+
+        .suspicious-alert {
+            background-color: var(--danger-light);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 32px;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .suspicious-icon {
+            flex-shrink: 0;
+            margin-right: 12px;
+            font-size: 24px;
+            color: var(--danger);
+        }
+
+        .suspicious-content {
+            font-size: 14px;
+            color: var(--danger);
+        }
+
+        /* Mobile Optimization */
+        @media (max-width: 550px) {
+            .email-body {
+                padding: 30px 24px;
+            }
+
+            .otp-code {
+                font-size: 28px;
+                letter-spacing: 6px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="email-wrapper">
+        <!-- Header with Logo -->
+        <div class="email-header">
+            <div class="header-accent"></div>
+            <img
+                src="https://www.sapphirebroking.com/logo-white.svg"
+                alt="Sapphire Broking"
+                class="logo"
+                style="padding-right: 10px"
+            />
+            <span style="color: white; font-size: 1.2rem; margin-right: 10px">Sapphire</span>
+        </div>
+
+        <!-- Email Body -->
+        <div class="email-body">
+            <div class="icon-header">
+                <div class="icon-circle">
+                    <div class="icon">🔒</div>
+                </div>
+                <h1>Login Verification Code</h1>
+                <p>Secure access to your Sapphire Terminal account</p>
+            </div>
+
+            <p>Dear <strong>[User Name]</strong>,</p>
+
+            <p>
+                We've received a login request for your Sapphire Terminal account. To ensure the security of
+                your account and proceed with the login, please use the One-Time Password (OTP) below:
+            </p>
+
+            <div class="otp-container">
+                <p>Your verification code:</p>
+                <div class="otp-code">{{ otp }}</div>
+                <div class="timer-box">
+                    <span class="timer-icon">⏱️</span> This code will expire in 10 minutes
+                </div>
+            </div>
+
+            <div class="login-details">
+                <h3 class="login-details-title">Login Attempt Details</h3>
+
+                <div class="detail-row">
+                    <div class="detail-label">Date & Time</div>
+                    <div class="detail-value">{{ date }} at {{ time }}</div>
+                </div>
+
+                <div class="detail-row">
+                    <div class="detail-label">Device</div>
+                    <div class="detail-value">[Device Type]</div>
+                </div>
+
+                <div class="detail-row">
+                    <div class="detail-label">Location</div>
+                    <div class="detail-value">[Location]</div>
+                </div>
+
+                <div class="detail-row">
+                    <div class="detail-label">IP Address</div>
+                    <div class="detail-value">{{ ip }}</div>
+                </div>
+            </div>
+
+            <div class="security-tips">
+                <div class="security-tips-title"><span class="security-icon">🛡️</span> Security Reminders</div>
+
+                <div class="security-tip-item">
+                    <div class="tip-icon">✓</div>
+                    <div class="tip-content">
+                        Never share your OTP with anyone, including Sapphire Terminal support staff.
+                    </div>
+                </div>
+
+                <div class="security-tip-item">
+                    <div class="tip-icon">✓</div>
+                    <div class="tip-content">
+                        Ensure you're on the official Sapphire Terminal website before entering your OTP.
+                    </div>
+                </div>
+
+                <div class="security-tip-item">
+                    <div class="tip-icon">✓</div>
+                    <div class="tip-content">
+                        Always log out after completing your session, especially on shared devices.
+                    </div>
+                </div>
+
+                <div class="security-tip-item">
+                    <div class="tip-icon">✓</div>
+                    <div class="tip-content">
+                        Regularly update your password and enable two-factor authentication (2FA) for enhanced
+                        security.
+                    </div>
+                </div>
+            </div>
+
+            <div class="suspicious-alert">
+                <div class="suspicious-icon">⚠️</div>
+                <div class="suspicious-content">
+                    <p style="margin-bottom: 8px"><strong>Didn't Try to Log In?</strong></p>
+                    <p style="margin-bottom: 0">
+                        If you didn't initiate this login request, please secure your account immediately by
+                        changing your password and contact our security team at
+                        <strong>support@sapphirebroking.com</strong> or call <strong>+91 98903 36989</strong>.
+                    </p>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <div class="help-icon">❓</div>
+                <div class="help-content">
+                    <p style="margin-bottom: 8px"><strong>Need Assistance?</strong></p>
+                    <p style="margin-bottom: 0">
+                        If you're experiencing any issues with the login process, our support team is available
+                        24/7 at <strong>support@sapphirebroking.com</strong> or call
+                        <strong>+91 98903 36989</strong>.
+                    </p>
+                </div>
+            </div>
+
+            <p style="text-align: center; margin-top: 32px; font-style: italic">
+                This is an automated message. Please do not reply to this email.
+            </p>
+        </div>
+
+        <!-- Footer -->
+        <div class="email-footer">
+            <p>
+                <strong>Sapphire Broking</strong><br />
+                84-A, New Sneh Nagar<br />
+                Pande Layout, Khamla<br />
+                Nagpur, Maharashtra 440025<br />
+                Customer Support: +91 98903 36989
+            </p>
+
+            <p>© 2025 Sapphire Broking. All Rights Reserved.</p>
+
+            <div class="disclaimer">
+                <p>
+                    DISCLAIMER: Investments in securities market are subject to market risks. Read all the
+                    related documents carefully before investing. Registration granted by SEBI, membership of
+                    NSE, BSE, MCX, and NCDEX, and registration of the DP with SEBI does not guarantee quality of
+                    services. Details of compliance officer: Name: Compliance Officer, Email:
+                    compliance@sapphirebroking.com, Phone: +91 98903 36989
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

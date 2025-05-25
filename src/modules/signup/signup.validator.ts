@@ -11,7 +11,7 @@ import {
     Occupation,
 } from './signup.types';
 import { CredentialsType } from '@app/modules/common.types';
-import { OTP_LENGTH } from './signup.services';
+import { DEFAULT_OTP_LENGTH } from '@app/services/otp.service';
 import { PHONE_REGEX } from '@app/services/sms.service';
 import { PAN_REGEX } from '@app/services/surepass/pan.service';
 import { AADHAAR_REGEX } from '@app/utils/aadhaar-xml.parser';
@@ -36,7 +36,7 @@ const VerifyOtpSchema = Joi.object({
         is: CredentialsType.PHONE,
         then: Joi.string().regex(PHONE_REGEX).required(),
     }),
-    otp: Joi.string().length(OTP_LENGTH).required(),
+    otp: Joi.string().length(DEFAULT_OTP_LENGTH).required(),
 });
 
 const CheckpointSchema = Joi.object({

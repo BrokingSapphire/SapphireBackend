@@ -3,16 +3,29 @@ import logger from '@app/logger';
 import { UnauthorizedError } from '@app/apiError';
 import { env } from '@app/env';
 import transporter from '@app/services/email.service';
-import smsService from '@app/services/sms.service';
+import Mail from 'nodemailer/lib/mailer';
+import * as fs from 'node:fs';
 
-export const OTP_LENGTH = 6;
+export const DEFAULT_OTP_LENGTH = 6;
+export const DEFAULT_OTP_EXPIRY = 10 * 60; // 10 minutes in seconds
+
+interface OtpSettings {
+    otpExpiry: number; // Expiry time in seconds
+    otpLength: number;
+    ip?: string;
+}
 
 abstract class OtpVerification {
-    protected id: string; // Unique identifier (email or phone)
-    protected otpExpiry: number = 10 * 60; // 10 minutes in seconds
+    protected readonly id: string; // Unique identifier (email or phone)
+    protected readonly settings: OtpSettings;
 
-    protected constructor(id: string) {
+    protected constructor(id: string, settings: Partial<OtpSettings> = {}) {
         this.id = id;
+        this.settings = {
+            ...settings,
+            otpExpiry: settings.otpExpiry || DEFAULT_OTP_EXPIRY,
+            otpLength: settings.otpLength || DEFAULT_OTP_LENGTH,
+        };
     }
 
     /**
@@ -79,7 +92,7 @@ abstract class OtpVerification {
 
         try {
             await redisClient.set(key, otp);
-            await redisClient.expire(key, this.otpExpiry);
+            await redisClient.expire(key, this.settings.otpExpiry);
             return otp;
         } catch (error) {
             logger.error('Error storing OTP in Redis:', error);
@@ -92,52 +105,50 @@ abstract class OtpVerification {
      */
     private generateOtp(): string {
         // Generate OTP with specified length
-        const min = Math.pow(10, OTP_LENGTH - 1);
-        const max = Math.pow(10, OTP_LENGTH) - 1;
+        const min = Math.pow(10, this.settings.otpLength - 1);
+        const max = Math.pow(10, this.settings.otpLength) - 1;
         return Math.floor(min + Math.random() * (max - min)).toString();
     }
 }
 
+type EmailTemplate = 'login' | 'signup';
+
 class EmailOtpVerification extends OtpVerification {
-    constructor(email: string) {
-        super(email);
+    private readonly template: EmailTemplate;
+
+    constructor(email: string, template: EmailTemplate, settings?: Partial<OtpSettings>) {
+        super(email, settings);
+        this.template = template;
     }
 
     /**
      * Send OTP to the user's email
      */
     public async sendOtp(): Promise<void> {
-        try {
-            const otp = await this.storeOtp();
+        const content = fs.readFileSync(`templates/${this.template}-email.html`, 'utf-8');
 
-            const mailOptions = {
-                from: env.email.from,
-                to: this.id,
-                subject: 'Your Verification Code - Sapphire Broking',
-                text: `Welcome to Sapphire Broking!
-                
-Your verification code is: ${otp}
-This code will expire in 10 minutes. Do not share this code with anyone.
-If you did not request this code, please ignore this email.
-Regards,
-The Sapphire Broking Team`,
-            };
+        const otp = await this.storeOtp();
 
-            await transporter.sendMail(mailOptions);
-            logger.debug(`Sent OTP ${otp} to ${this.id}`);
-        } catch (error) {
-            logger.error(`Failed to send OTP to email ${this.id}:`, error);
-            throw new Error('Failed to send OTP via email');
-        }
+        const mailOptions: Mail.Options = {
+            from: env.email.from,
+            to: this.id,
+            subject: 'Your Verification Code - Sapphire Broking',
+            html: formatHtml(content, otp, this.id, undefined, this.settings.ip),
+        };
+
+        await transporter.sendMail(mailOptions);
+        logger.debug(`Sent OTP ${otp} to ${this.id}`);
     }
 }
 
 class PhoneOtpVerification extends OtpVerification {
     private readonly email: string;
+    private readonly template: EmailTemplate;
 
-    constructor(email: string, phoneNumber: string) {
+    constructor(email: string, template: EmailTemplate, phoneNumber: string, settings?: Partial<OtpSettings>) {
         super(phoneNumber);
         this.email = email;
+        this.template = template;
     }
 
     /**
@@ -155,30 +166,46 @@ class PhoneOtpVerification extends OtpVerification {
         //     logger.error(`Failed to send OTP to phone ${this.id}:`, error);
         //     throw new Error('Failed to send OTP via SMS');
         // }
-        try {
-            const otp = await this.storeOtp();
+        const content = fs.readFileSync(`templates/${this.template}-email.html`, 'utf-8');
 
-            const mailOptions = {
-                from: env.email.from,
-                // to: this.id,
-                to: this.email,
-                subject: 'Your Phone Verification Code - Sapphire Broking',
-                text: `Welcome to Sapphire Broking!
-                
-Your verification code for mobile number is: ${otp}
-This code will expire in 10 minutes. Do not share this code with anyone.
-If you did not request this code, please ignore this email.
-Regards,
-The Sapphire Broking Team`,
-            };
+        const otp = await this.storeOtp();
 
-            await transporter.sendMail(mailOptions);
-            logger.debug(`Sent OTP ${otp} to ${this.id}`);
-        } catch (error) {
-            logger.error(`Failed to send OTP to email ${this.id}:`, error);
-            throw new Error('Failed to send OTP via email');
-        }
+        const mailOptions: Mail.Options = {
+            from: env.email.from,
+            // to: this.id,
+            to: this.email,
+            subject: 'Your Phone Verification Code - Sapphire Broking',
+            html: formatHtml(content, otp, this.email, this.id, this.settings.ip),
+        };
+
+        await transporter.sendMail(mailOptions);
+        logger.debug(`Sent OTP ${otp} to ${this.id}`);
     }
+}
+
+function formatHtml(content: string, otp: string, email: string, phone?: string, ip?: string): string {
+    return content
+        .replace('{{ otp }}', otp)
+        .replace(
+            '{{ date }}',
+            new Date().toLocaleDateString('en-IN', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                weekday: 'long',
+            }),
+        )
+        .replace(
+            '{{ time }}',
+            new Date().toLocaleTimeString('en-IN', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true,
+            }),
+        )
+        .replace('{{ ip }}', ip || 'N/A')
+        .replace('{{ email }}', email)
+        .replace('{{ phone }}', phone || '');
 }
 
 export { EmailOtpVerification, PhoneOtpVerification };
