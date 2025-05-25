@@ -758,7 +758,6 @@ const autoFinalVerification = async (req: Request, res: Response) => {
                 nominee_status: 'verified',
                 other_documents_status: 'verified',
                 esign_status: 'verified',
-                overall_status: 'verified',
                 updated_at: new Date(),
             })
             .where('id', '=', checkpointId)
