@@ -5,7 +5,7 @@ import { UpdateVerificationRequest, VerificationType, verificationTypeToFieldMap
 import { BadRequestError, ForbiddenError, UnauthorizedError } from '@app/apiError';
 import BankDetailsService, { BankDetails } from '@app/services/bank-details.service';
 import { SessionJwtType } from '../common.types';
-import bcrypt from 'bcrypt';
+import { hashPassword } from '@app/utils/passwords';
 
 const assignOfficer = async (req: Request<SessionJwtType>, res: Response) => {
     const checkpointId = Number(req.params.checkpointId);
@@ -586,16 +586,14 @@ const finalizeVerification = async (req: Request, res: Response) => {
         }
 
         const plainTextPassword = panDetail.pan_number;
-        const saltRounds = 10;
-        const salt = await bcrypt.genSalt(saltRounds);
-        const hashedPassword = await bcrypt.hash(plainTextPassword, salt);
+        const password = await hashPassword(plainTextPassword, 'bcrypt');
 
         await trx
             .insertInto('user_password_details')
             .values({
                 user_id: checkpoint.client_id,
-                password_hash: hashedPassword,
-                password_salt: salt,
+                password_hash: password.hashedPassword,
+                password_salt: password.salt,
                 hash_algo_id: hashAlgoId,
                 is_first_login: true,
             })
@@ -805,16 +803,14 @@ const autoFinalVerification = async (req: Request, res: Response) => {
         }
 
         const plainTextPassword = panDetail.pan_number;
-        const saltRounds = 10;
-        const salt = await bcrypt.genSalt(saltRounds);
-        const hashedPassword = await bcrypt.hash(plainTextPassword, salt);
+        const password = await hashPassword(plainTextPassword, 'bcrypt');
 
         await trx
             .insertInto('user_password_details')
             .values({
                 user_id: checkpoint.client_id,
-                password_hash: hashedPassword,
-                password_salt: salt,
+                password_hash: password.hashedPassword,
+                password_salt: password.salt,
                 hash_algo_id: hashAlgoId,
                 is_first_login: true,
             })

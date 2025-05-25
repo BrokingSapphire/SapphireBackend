@@ -9,10 +9,9 @@ interface PasswordDetails {
 
 type HashAlgo = 'bcrypt';
 
-export async function verifyPassword(
-    password: string,
-    passwordDetails: PasswordDetails,
-): Promise<boolean> {
+const SALT_ROUNDS = 10;
+
+export async function verifyPassword(password: string, passwordDetails: PasswordDetails): Promise<boolean> {
     switch (passwordDetails.hashAlgo) {
         case 'bcrypt':
             return await bcrypt.compare(password, passwordDetails.hashedPassword);
@@ -21,17 +20,13 @@ export async function verifyPassword(
     }
 }
 
-export async function hashPassword(
-    password: string,
-    hashAlgo?: HashAlgo,
-    salt?: string,
-): Promise<PasswordDetails> {
+export async function hashPassword(password: string, hashAlgo?: HashAlgo, salt?: string): Promise<PasswordDetails> {
     hashAlgo = hashAlgo || 'bcrypt';
 
     let hashedPassword: string;
     switch (hashAlgo) {
         case 'bcrypt':
-            salt = salt || await bcrypt.genSalt(10);
+            salt = salt || (await bcrypt.genSalt(SALT_ROUNDS));
             hashedPassword = await bcrypt.hash(password, salt);
             break;
         default:

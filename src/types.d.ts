@@ -30,5 +30,5 @@ export type NonNullableFields<T> = {
 };
 
 type Pretty<T> = {
-    [K  in keyof T]: T[K];
+    [K in keyof T]: T[K];
 } & {};

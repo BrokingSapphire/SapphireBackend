@@ -7,13 +7,11 @@ const EmailOrClientIdSchema = Joi.object({
         then: Joi.optional(),
         otherwise: Joi.required(),
     }),
-    email: Joi.string()
-        .email()
-        .when('clientId', {
-            is: Joi.exist(),
-            then: Joi.optional(),
-            otherwise: Joi.required(),
-        }),
+    email: Joi.string().email().when('clientId', {
+        is: Joi.exist(),
+        then: Joi.optional(),
+        otherwise: Joi.required(),
+    }),
 });
 
 export const LoginRequestSchema = EmailOrClientIdSchema.keys({

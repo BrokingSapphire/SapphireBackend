@@ -6,19 +6,25 @@ export type LoginResponseWithToken = DefaultResponseData<{
     token: string;
 };
 
-export type EmailOrClientId = {
-    clientId: string;
-} | {
-    email: string;
-};
+export type EmailOrClientId =
+    | {
+          clientId: string;
+      }
+    | {
+          email: string;
+      };
 
-export type LoginRequestType = Pretty<EmailOrClientId & {
-    password: string;
-}>;
+export type LoginRequestType = Pretty<
+    EmailOrClientId & {
+        password: string;
+    }
+>;
 
-export type LoginOtpVerifyRequestType = Pretty<EmailOrClientId & {
-    otp: string;
-}>;
+export type LoginOtpVerifyRequestType = Pretty<
+    EmailOrClientId & {
+        otp: string;
+    }
+>;
 
 export type ResetPasswordRequestType = {
     currentPassword: string;

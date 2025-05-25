@@ -11,7 +11,10 @@ const ALGORITHM: Algorithm = 'HS256';
  * @param options - JWT sign options
  * @returns Signed JWT token string
  */
-const sign = <T extends JwtPayloadWithoutWildcard = JwtPayload>(payload: T, options: Omit<jwt.SignOptions, 'algorithm' | 'expiresIn'> = {}): string => {
+const sign = <T extends JwtPayloadWithoutWildcard = JwtPayload>(
+    payload: T,
+    options: Omit<jwt.SignOptions, 'algorithm' | 'expiresIn'> = {},
+): string => {
     const signOptions = {
         algorithm: ALGORITHM,
         expiresIn: env.jwt.expiresIn,
