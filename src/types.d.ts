@@ -28,3 +28,7 @@ export type JwtPayloadWithoutWildcard = Omit<jwt.JwtPayload, keyof any>;
 export type NonNullableFields<T> = {
     [P in keyof T]: NonNullable<T[P]>;
 };
+
+type Pretty<T> = {
+    [K  in keyof T]: T[K];
+} & {};

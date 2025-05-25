@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import signupRouter from './signup';
+import loginRouter from './login';
 import fundsRouter from './funds';
 import webhookRouter from './webhooks';
 import { db } from '@app/database';
@@ -13,6 +14,7 @@ import { sql } from 'kysely';
 const router = Router();
 
 router.use('/auth/signup', signupRouter);
+router.use('/auth/login', loginRouter);
 router.use('/compliance', jwtMiddleware, complianceRouter);
 router.use('/funds', jwtMiddleware, fundsRouter);
 router.use('/watchlist', jwtMiddleware, watchlistRouter);

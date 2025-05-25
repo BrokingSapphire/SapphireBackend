@@ -6,10 +6,6 @@ export type JwtType = JwtPayloadWithoutWildcard & {
     phone: string;
 };
 
-export type ResponseWithToken = DefaultResponseData & {
-    token?: string;
-};
-
 export enum CheckpointStep {
     PAN = 'pan',
     AADHAAR_URI = 'aadhaar_uri',

@@ -1,5 +1,5 @@
 import { StockExchange } from '@app/database/db';
-import { JwtPayloadWithoutWildcard } from '@app/types';
+import { DefaultResponseData, JwtPayloadWithoutWildcard } from '@app/types';
 
 export enum CredentialsType {
     EMAIL = 'email',
@@ -12,6 +12,10 @@ export type SessionJwtType = JwtPayloadWithoutWildcard & {
 
 export type UserIdParam = {
     userId: string;
+};
+
+export type ResponseWithToken<DATA = any> = DefaultResponseData<DATA> & {
+    token?: string;
 };
 
 export const Exchange: Record<StockExchange, StockExchange> = {

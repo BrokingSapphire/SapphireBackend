@@ -1,6 +1,7 @@
 import jwt, { Algorithm, JwtPayload, SignOptions } from 'jsonwebtoken';
 import { expressjwt } from 'express-jwt';
 import { env } from '@app/env';
+import { JwtPayloadWithoutWildcard } from '@app/types';
 
 const ALGORITHM: Algorithm = 'HS256';
 
@@ -10,7 +11,7 @@ const ALGORITHM: Algorithm = 'HS256';
  * @param options - JWT sign options
  * @returns Signed JWT token string
  */
-const sign = (payload: JwtPayload, options: jwt.SignOptions = {}): string => {
+const sign = <T extends JwtPayloadWithoutWildcard = JwtPayload>(payload: T, options: Omit<jwt.SignOptions, 'algorithm' | 'expiresIn'> = {}): string => {
     const signOptions = {
         algorithm: ALGORITHM,
         expiresIn: env.jwt.expiresIn,
