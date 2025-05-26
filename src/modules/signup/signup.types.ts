@@ -20,6 +20,7 @@ export enum CheckpointStep {
     SIGNATURE = 'signature',
     IPV = 'ipv',
     ADD_NOMINEES = 'add_nominees',
+    INCOME_PROOF = 'income_proof',
 }
 
 export enum InvestmentSegment {
@@ -172,6 +173,9 @@ export type PostCheckpointType =
       }
     | {
           step: CheckpointStep.IPV;
+      }
+    | {
+          step: CheckpointStep.INCOME_PROOF;
       }
     | {
           step: CheckpointStep.ADD_NOMINEES;

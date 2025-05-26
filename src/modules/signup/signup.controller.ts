@@ -32,7 +32,7 @@ import PanService from '@app/services/surepass/pan.service';
 import { CREATED, NO_CONTENT, NOT_ACCEPTABLE, NOT_FOUND, OK } from '@app/utils/httpstatus';
 import { BankVerification, ReversePenyDrop } from '@app/services/surepass/bank-verification';
 import { randomUUID } from 'crypto';
-import { imageUpload, wrappedMulterHandler } from '@app/services/multer-s3.service';
+import { imageUpload, pdfUpload, wrappedMulterHandler } from '@app/services/multer-s3.service';
 import logger from '@app/logger';
 import IdGenerator from '@app/services/id-generator';
 
@@ -519,7 +519,19 @@ const postCheckpoint = async (
                 .execute();
         });
 
-        res.status(CREATED).json({ message: 'Investment segment saved' });
+        const requiresIncomeProof = segments.some(
+            (segment: string) => segment === 'Currency' || segment === 'Commodity' || segment === 'F&O',
+        );
+
+        res.status(CREATED).json({
+            message: 'Investment segment saved',
+            data: {
+                requiresIncomeProof,
+                segmentsRequiringProof: segments.filter(
+                    (segment: string) => segment === 'Currency' || segment === 'Commodity' || segment === 'F&O',
+                ),
+            },
+        });
     } else if (step === CheckpointStep.USER_DETAIL) {
         const { father_name, mother_name } = req.body;
 
@@ -771,6 +783,15 @@ const postCheckpoint = async (
             },
             message: 'IPV started',
         });
+    } else if (step === CheckpointStep.INCOME_PROOF) {
+        const uid = randomUUID();
+        await redisClient.set(`signup_income_proof:${uid}`, email);
+        await redisClient.expire(`signup_income_proof:${uid}`, 10 * 60);
+
+        res.status(OK).json({
+            data: { uid },
+            message: 'Income proof upload started',
+        });
     } else if (step === CheckpointStep.ADD_NOMINEES) {
         const { nominees } = req.body;
 
@@ -947,6 +968,64 @@ const getSignature = async (req: Request<JwtType>, res: Response) => {
     }
 };
 
+const pdfUploadHandler = wrappedMulterHandler(pdfUpload.single('pdf'));
+const putIncomeProof = async (req: Request<JwtType, UIDParams>, res: Response) => {
+    const { uid } = req.params;
+    const { email, phone } = req.auth!;
+
+    const value = await redisClient.get(`signup_income_proof:${uid}`);
+    if (!value || value !== email) {
+        throw new UnauthorizedError('Income proof upload not authorized or expired.');
+    }
+    let uploadResult;
+    try {
+        uploadResult = await pdfUploadHandler(req, res);
+    } catch (e: any) {
+        throw new UnprocessableEntityError(e.message);
+    }
+
+    await db.transaction().execute(async (tx) => {
+        const checkpoint = await updateCheckpoint(tx, email, phone, {
+            income_proof: uploadResult.file.location,
+        })
+            .returning('id')
+            .executeTakeFirstOrThrow();
+
+        await tx
+            .updateTable('signup_verification_status')
+            .set({
+                income_proof_status: 'pending',
+                updated_at: new Date(),
+            })
+            .where('id', '=', checkpoint.id)
+            .execute();
+    });
+
+    await redisClient.del(`signup_income_proof:${uid}`);
+    res.status(CREATED).json({
+        message: 'Income proof uploaded successfully',
+    });
+};
+
+const getIncomeProof = async (req: Request<JwtType>, res: Response) => {
+    const { email } = req.auth!;
+
+    const { income_proof: url } = await db
+        .selectFrom('signup_checkpoints')
+        .select('income_proof')
+        .where('email', '=', email)
+        .executeTakeFirstOrThrow();
+
+    if (url === null) {
+        res.status(NO_CONTENT).json({ message: 'Income proof not uploaded' });
+    } else {
+        res.status(OK).json({
+            data: { url },
+            message: 'Income proof uploaded.',
+        });
+    }
+};
+
 const finalizeSignup = async (req: Request<JwtType>, res: Response) => {
     const { email } = req.auth!;
 
@@ -991,5 +1070,7 @@ export {
     getIpv,
     putSignature,
     getSignature,
+    putIncomeProof,
+    getIncomeProof,
     finalizeSignup,
 };

@@ -4,9 +4,11 @@ import { validate } from '@app/middlewares';
 import {
     finalizeSignup,
     getCheckpoint,
+    getIncomeProof,
     getIpv,
     getSignature,
     postCheckpoint,
+    putIncomeProof,
     putIpv,
     putSignature,
     requestOtp,
@@ -128,6 +130,10 @@ router.get('/ipv', jwtMiddleware, getIpv);
 router.put('/signature/:uid', jwtMiddleware, putSignature);
 
 router.get('/signature', jwtMiddleware, getSignature);
+
+router.put('/income-proof/:uid', jwtMiddleware, putIncomeProof);
+
+router.get('/income-proof', jwtMiddleware, getIncomeProof);
 
 router.post('/finalize', jwtMiddleware, finalizeSignup);
 

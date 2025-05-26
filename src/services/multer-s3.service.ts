@@ -41,6 +41,19 @@ const imageFilter = (_req: Request, file: Express.Multer.File, cb: multer.FileFi
     }
 };
 
+const pdfFilter = (_req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback): void => {
+    const fileExt = path.extname(file.originalname.toLowerCase());
+
+    const isAllowedExt = fileExt === '.pdf';
+    const isAllowedMimeType = file.mimetype === 'application/pdf';
+
+    if (isAllowedExt && isAllowedMimeType) {
+        return cb(null, true);
+    } else {
+        cb(new BadRequestError('Only PDF files are allowed!'));
+    }
+};
+
 const imageUpload = multer({
     storage: multerS3({
         s3,
@@ -50,6 +63,20 @@ const imageUpload = multer({
         key: keyFunction,
     }),
     fileFilter: imageFilter,
+});
+
+const pdfUpload = multer({
+    storage: multerS3({
+        s3,
+        bucket: env.aws.s3_bucket,
+        acl: 'public-read',
+        metadata: metadataFunction,
+        key: keyFunction,
+    }),
+    fileFilter: pdfFilter,
+    limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB limit for PDFs
+    },
 });
 
 type MulterReturnType<ReqBody> = {
@@ -96,4 +123,4 @@ const wrappedMulterHandler = <
     };
 };
 
-export { imageUpload, wrappedMulterHandler };
+export { imageUpload, pdfUpload, wrappedMulterHandler };

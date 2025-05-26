@@ -113,6 +113,13 @@ const checkpointSchemaDestructed = {
         },
         required: ['step'],
     },
+    [CheckpointStep.INCOME_PROOF]: {
+        type: 'object',
+        properties: {
+            step: { type: 'string', enum: [CheckpointStep.INCOME_PROOF] },
+        },
+        required: ['step'],
+    },
     [CheckpointStep.ADD_NOMINEES]: {
         type: 'object',
         properties: {
@@ -338,6 +345,7 @@ const swaggerDocument = {
                                 CheckpointStep.PERSONAL_DETAIL,
                                 CheckpointStep.OTHER_DETAIL,
                                 CheckpointStep.BANK_VALIDATION,
+                                CheckpointStep.INCOME_PROOF,
                                 CheckpointStep.ADD_NOMINEES,
                             ],
                         },
@@ -573,6 +581,87 @@ const swaggerDocument = {
                     },
                     '204': {
                         description: 'Signature not uploaded yet',
+                    },
+                    '401': { $ref: '#/components/responses/Unauthorized' },
+                },
+            },
+        },
+        '/auth/signup/income-proof/{uid}': {
+            put: {
+                tags: ['Auth'],
+                security: [{ BearerAuth: [] }],
+                summary: 'Upload Income Proof PDF',
+                parameters: [
+                    {
+                        in: 'path',
+                        name: 'uid',
+                        required: true,
+                        schema: { type: 'string', format: 'uuid' },
+                    },
+                ],
+                requestBody: {
+                    required: true,
+                    content: {
+                        'multipart/form-data': {
+                            schema: {
+                                type: 'object',
+                                properties: {
+                                    pdf: {
+                                        type: 'string',
+                                        format: 'binary',
+                                    },
+                                },
+                                required: ['pdf'],
+                            },
+                        },
+                    },
+                },
+                responses: {
+                    '201': {
+                        description: 'Income proof uploaded successfully',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        message: { type: 'string' },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    '401': { $ref: '#/components/responses/Unauthorized' },
+                    '422': { $ref: '#/components/responses/UnprocessableEntity' },
+                },
+            },
+        },
+        '/auth/signup/income-proof': {
+            get: {
+                tags: ['Auth'],
+                security: [{ BearerAuth: [] }],
+                summary: 'Get Income Proof PDF URL',
+                responses: {
+                    '200': {
+                        description: 'Income proof URL retrieved successfully',
+                        content: {
+                            'application/json': {
+                                schema: {
+                                    type: 'object',
+                                    properties: {
+                                        data: {
+                                            type: 'object',
+                                            properties: {
+                                                url: { type: 'string' },
+                                            },
+                                        },
+                                        message: { type: 'string' },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    '204': {
+                        description: 'Income proof not uploaded yet',
                     },
                     '401': { $ref: '#/components/responses/Unauthorized' },
                 },
