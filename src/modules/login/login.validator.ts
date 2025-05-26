@@ -14,6 +14,8 @@ export const LoginRequestSchema = EmailOrClientIdSchema.keys({
     password: Joi.string().required(),
 });
 
+export const ResendLoginOtpSchema = EmailOrClientIdSchema;
+
 export const LoginOtpVerifySchema = EmailOrClientIdSchema.keys({
     otp: Joi.string()
         .length(DEFAULT_OTP_LENGTH)
@@ -46,6 +48,10 @@ export const ForgotOTPVerifySchema = Joi.object({
         .required()
         .length(6)
         .pattern(/^[0-9]{6}$/),
+});
+
+export const ResendForgotPasswordOtpSchema = Joi.object({
+    requestId: Joi.string().required(),
 });
 
 export const ForgotPasswordResetSchema = Joi.object({

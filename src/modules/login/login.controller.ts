@@ -14,6 +14,8 @@ import {
     ForgotPasswordRequestType,
     ForgotOTPVerifyRequestType,
     NewPasswordRequestType,
+    EmailOrClientId,
+    ResendForgotPasswordOtpRequestType,
 } from './login.types';
 import { ResponseWithToken, SessionJwtType } from '@app/modules/common.types';
 import { hashPassword, verifyPassword } from '@app/utils/passwords';
@@ -95,6 +97,33 @@ const verifyLoginOtp = async (
         data: {
             isFirstLogin: user.is_first_login,
         },
+    });
+};
+
+// resend-login OTP
+
+const resendLoginOtp = async (
+    req: Request<undefined, ParamsDictionary, DefaultResponseData, EmailOrClientId>,
+    res: Response,
+) => {
+    const user = await db
+        .selectFrom('user')
+        .select(['user.id', 'user.email'])
+        .$call((qb) => {
+            if ('clientId' in req.body) {
+                qb.where('user.id', '=', req.body.clientId);
+            } else if ('email' in req.body) {
+                qb.where('user.email', '=', req.body.email);
+            }
+            return qb;
+        })
+        .executeTakeFirstOrThrow();
+
+    const emailOtp = new EmailOtpVerification(user.email);
+    await emailOtp.sendOtp();
+
+    res.status(OK).json({
+        message: 'OTP resent successfully.',
     });
 };
 
@@ -216,6 +245,36 @@ const forgotOTPverify = async (
     res.status(OK).json({ message: 'OTP verified. Proceed to reset password.' });
 };
 
+// resend-forgot-OTP
+const resendForgotPasswordOtp = async (
+    req: Request<undefined, ParamsDictionary, DefaultResponseData, ResendForgotPasswordOtpRequestType>,
+    res: Response,
+) => {
+    const { requestId } = req.body;
+    const redisKey = `forgot_password:${requestId}`;
+    const sessionStr = await redisClient.get(redisKey);
+
+    if (!sessionStr) {
+        throw new UnauthorizedError('Session expired or invalid');
+    }
+
+    const session = JSON.parse(sessionStr);
+
+    if (session.isUsed) {
+        throw new UnauthorizedError('Session already used');
+    }
+
+    const emailOtp = new EmailOtpVerification(session.email);
+    await emailOtp.sendOtp();
+
+    await redisClient.expire(redisKey, 10 * 60);
+
+    res.status(OK).json({
+        message: 'OTP resent successfully',
+        data: { maskedEmail: session.email.replace(/(.{2})(.*)(@.*)/, '$1***$3') },
+    });
+};
+
 // password reset
 
 const forgotPasswordReset = async (
@@ -261,4 +320,13 @@ const forgotPasswordReset = async (
     res.status(OK).json({ message: 'Password reset successful' });
 };
 
-export { login, verifyLoginOtp, resetPassword, forgotPasswordInitiate, forgotOTPverify, forgotPasswordReset };
+export {
+    login,
+    verifyLoginOtp,
+    resendLoginOtp,
+    resetPassword,
+    forgotPasswordInitiate,
+    resendForgotPasswordOtp,
+    forgotOTPverify,
+    forgotPasswordReset,
+};

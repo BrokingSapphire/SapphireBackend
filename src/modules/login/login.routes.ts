@@ -7,6 +7,8 @@ import {
     ForgotPasswordInitiateSchema,
     ForgotOTPVerifySchema,
     ForgotPasswordResetSchema,
+    ResendLoginOtpSchema,
+    ResendForgotPasswordOtpSchema,
 } from './login.validator';
 import {
     login,
@@ -15,6 +17,8 @@ import {
     forgotPasswordInitiate,
     forgotOTPverify,
     forgotPasswordReset,
+    resendLoginOtp,
+    resendForgotPasswordOtp,
 } from './login.controller';
 import { jwtMiddleware } from '@app/utils/jwt';
 
@@ -49,6 +53,52 @@ const router = Router();
  *         description: User not found
  */
 router.post('/', validate(LoginRequestSchema), login);
+
+/**
+ * @swagger
+ * /login/resend-otp:
+ *   post:
+ *     tags: [Login]
+ *     summary: Resend OTP for login authentication
+ *     description: Resends the OTP to the registered email for login authentication
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             oneOf:
+ *               - type: object
+ *                 properties:
+ *                   clientId:
+ *                     type: string
+ *                     example: "CLIENT001"
+ *                 required:
+ *                   - clientId
+ *               - type: object
+ *                 properties:
+ *                   email:
+ *                     type: string
+ *                     format: email
+ *                     example: "user@example.com"
+ *                 required:
+ *                   - email
+ *     responses:
+ *       200:
+ *         description: OTP resent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: OTP resent successfully.
+ *       400:
+ *         description: Invalid request
+ *       404:
+ *         description: User not found
+ */
+router.post('/resend-otp', validate(ResendLoginOtpSchema), resendLoginOtp);
 
 /**
  * @swagger
@@ -158,6 +208,50 @@ router.post('/reset-password', [jwtMiddleware, validate(ResetPasswordSchema)], r
  *         description: No account found with this PAN number
  */
 router.post('/forgot-password/initiate', validate(ForgotPasswordInitiateSchema), forgotPasswordInitiate);
+
+/**
+ * @swagger
+ * /login/forgot-password/resend-otp:
+ *   post:
+ *     tags: [Login]
+ *     summary: Resend OTP for forgot password
+ *     description: Resend the OTP to email during forgot password process
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - requestId
+ *             properties:
+ *               requestId:
+ *                 type: string
+ *                 example: 123e4567-e89b-12d3-a456-426614174000
+ *                 description: Request ID from initiate step
+ *     responses:
+ *       200:
+ *         description: OTP resent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: OTP resent successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     maskedEmail:
+ *                       type: string
+ *                       example: ab***@example.com
+ *       400:
+ *         description: Invalid request
+ *       401:
+ *         description: Session expired or already used
+ */
+router.post('/forgot-password/resend-otp', validate(ResendForgotPasswordOtpSchema), resendForgotPasswordOtp);
 
 /**
  * @swagger

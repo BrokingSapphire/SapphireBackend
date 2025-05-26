@@ -40,6 +40,10 @@ export type ForgotOTPVerifyRequestType = {
     otp: string;
 };
 
+export type ResendForgotPasswordOtpRequestType = {
+    requestId: string;
+};
+
 export type NewPasswordRequestType = {
     requestId: string;
     newPassword: string;
