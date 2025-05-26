@@ -152,14 +152,108 @@ router.put('/ipv/:uid', jwtMiddleware, putIpv);
  */
 router.get('/ipv', jwtMiddleware, getIpv);
 
+/**
+ * @swagger
+ * /signature/{uid}:
+ *   put:
+ *     tags: [Signup]
+ *     summary: Update signature information
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: uid
+ *         in: path
+ *         required: true
+ *         description: User ID
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Signature updated successfully
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: User not found
+ */
 router.put('/signature/:uid', jwtMiddleware, putSignature);
 
+/**
+ * @swagger
+ * /signature:
+ *   get:
+ *     tags: [Signup]
+ *     summary: Get signature information
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Signature information retrieved successfully
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Signature not found
+ */
 router.get('/signature', jwtMiddleware, getSignature);
 
+/**
+ * @swagger
+ * /income-proof/{uid}:
+ *   put:
+ *     tags: [Signup]
+ *     summary: Update income proof information
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: uid
+ *         in: path
+ *         required: true
+ *         description: User ID
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Income proof updated successfully
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: User not found
+ */
 router.put('/income-proof/:uid', jwtMiddleware, putIncomeProof);
 
+/**
+ * @swagger
+ * /income-proof:
+ *   get:
+ *     tags: [Signup]
+ *     summary: Get income proof information
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Income proof information retrieved successfully
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Income proof not found
+ */
 router.get('/income-proof', jwtMiddleware, getIncomeProof);
 
+/**
+ * @swagger
+ * /finalize:
+ *   post:
+ *     tags: [Signup]
+ *     summary: Finalize the signup process
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Signup finalized successfully
+ *       401:
+ *         description: Unauthorized
+ *       400:
+ *         description: Signup process incomplete or invalid
+ */
 router.post('/finalize', jwtMiddleware, finalizeSignup);
 
 export default router;
