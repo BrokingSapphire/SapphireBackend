@@ -588,6 +588,10 @@ const finalizeVerification = async (req: Request, res: Response) => {
         const plainTextPassword = panDetail.pan_number;
         const password = await hashPassword(plainTextPassword, 'bcrypt');
 
+        if (!checkpoint.client_id) {
+            throw new Error('Checkpoint client_id is missing');
+        }
+
         await trx
             .insertInto('user_password_details')
             .values({
@@ -804,6 +808,9 @@ const autoFinalVerification = async (req: Request, res: Response) => {
 
         const plainTextPassword = panDetail.pan_number;
         const password = await hashPassword(plainTextPassword, 'bcrypt');
+        if (!checkpoint.client_id) {
+            throw new Error('Checkpoint client_id is missing');
+        }
 
         await trx
             .insertInto('user_password_details')
