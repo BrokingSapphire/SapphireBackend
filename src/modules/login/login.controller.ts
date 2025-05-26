@@ -55,7 +55,7 @@ const login = async (
         throw new UnauthorizedError('Invalid credentials');
     }
 
-    const emailOtp = new EmailOtpVerification(user.email, 'signup');
+    const emailOtp = new EmailOtpVerification(user.email, 'login');
     await emailOtp.sendOtp();
 
     res.status(OK).json({
@@ -84,7 +84,7 @@ const verifyLoginOtp = async (
         })
         .executeTakeFirstOrThrow();
 
-    const emailOtp = new EmailOtpVerification(user.email, 'signup');
+    const emailOtp = new EmailOtpVerification(user.email, 'login');
     await emailOtp.verifyOtp(otp);
 
     const token = sign<SessionJwtType>({
@@ -119,7 +119,7 @@ const resendLoginOtp = async (
         })
         .executeTakeFirstOrThrow();
 
-    const emailOtp = new EmailOtpVerification(user.email);
+    const emailOtp = new EmailOtpVerification(user.email, 'login');
     await emailOtp.sendOtp();
 
     res.status(OK).json({
@@ -150,7 +150,7 @@ const resetPassword = async (
         .executeTakeFirstOrThrow();
 
     // Verify current password
-    const isCurrentPasswordValid = verifyPassword(currentPassword, user);
+    const isCurrentPasswordValid = await verifyPassword(currentPassword, user);
 
     if (!isCurrentPasswordValid) {
         throw new UnauthorizedError('Current password is incorrect');
@@ -207,7 +207,7 @@ const forgotPasswordInitiate = async (
     await redisClient.set(redisKey, JSON.stringify(session));
     await redisClient.expire(redisKey, 15 * 60);
 
-    const emailOtp = new EmailOtpVerification(user.email, 'signup');
+    const emailOtp = new EmailOtpVerification(user.email, 'login');
     await emailOtp.sendOtp();
 
     res.status(OK).json({
@@ -235,7 +235,7 @@ const forgotOTPverify = async (
         throw new UnauthorizedError('Session already verified or used');
     }
 
-    const emailOtp = new EmailOtpVerification(session.email, 'signup');
+    const emailOtp = new EmailOtpVerification(session.email, 'login');
     await emailOtp.verifyOtp(otp);
 
     session.isVerified = true;
@@ -264,7 +264,7 @@ const resendForgotPasswordOtp = async (
         throw new UnauthorizedError('Session already used');
     }
 
-    const emailOtp = new EmailOtpVerification(session.email);
+    const emailOtp = new EmailOtpVerification(session.email, 'login');
     await emailOtp.sendOtp();
 
     await redisClient.expire(redisKey, 10 * 60);
