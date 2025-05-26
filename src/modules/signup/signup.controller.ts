@@ -1128,6 +1128,15 @@ const finalizeSignup = async (req: Request<JwtType>, res: Response) => {
 
     const id = await new IdGenerator('user_id').nextValue();
 
+    // return first Name
+    const userData = await db
+        .selectFrom('signup_checkpoints')
+        .innerJoin('pan_detail', 'signup_checkpoints.pan_id', 'pan_detail.id')
+        .innerJoin('user_name', 'pan_detail.name', 'user_name.id')
+        .select(['user_name.first_name'])
+        .where('signup_checkpoints.email', '=', email)
+        .executeTakeFirstOrThrow();
+
     await db.transaction().execute(async (tx) => {
         await tx
             .updateTable('signup_checkpoints')
@@ -1142,6 +1151,7 @@ const finalizeSignup = async (req: Request<JwtType>, res: Response) => {
         message: 'Sign up successfully.',
         data: {
             clientId: id,
+            firstName: userData.first_name,
         },
     });
 };
