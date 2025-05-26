@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { CheckpointSchema, RequestOtpSchema, VerifyOtpSchema } from './signup.validator';
+import { CheckpointSchema, RequestOtpSchema, ResendOtpSchema, VerifyOtpSchema } from './signup.validator';
 import { validate } from '@app/middlewares';
 import {
     finalizeSignup,
@@ -12,6 +12,7 @@ import {
     putIpv,
     putSignature,
     requestOtp,
+    resendOtp,
     verifyOtp,
 } from './signup.controller';
 import { jwtMiddleware } from '@app/utils/jwt';
@@ -45,6 +46,30 @@ const router = Router();
  *         description: Email or phone number not found
  */
 router.post('/request-otp', validate(RequestOtpSchema), requestOtp);
+
+/**
+ * @swagger
+ * /resend-otp:
+ *   post:
+ *     tags: [Signup]
+ *     summary: Resend OTP for signup
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ResendOtpSchema'
+ *     responses:
+ *       200:
+ *         description: OTP resent successfully
+ *       400:
+ *         description: Invalid request or too many attempts
+ *       401:
+ *         description: No active OTP session found
+ *       429:
+ *         description: Rate limit exceeded
+ */
+router.post('/resend-otp', validate(ResendOtpSchema), resendOtp);
 
 /**
  * @swagger

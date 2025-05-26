@@ -114,6 +114,8 @@ export type VerifyOtpType =
           otp: string;
       };
 
+export type ResendOtpType = RequestOtpType;
+
 export type GetCheckpointType = {
     step: CheckpointStep;
 };

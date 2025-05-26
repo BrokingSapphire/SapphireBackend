@@ -27,6 +27,17 @@ const RequestOtpSchema = Joi.object({
     email: Joi.string().email().required(),
 });
 
+const ResendOtpSchema = Joi.object({
+    type: Joi.string()
+        .valid(...Object.values(CredentialsType))
+        .required(),
+    email: Joi.string().email().required(),
+    phone: Joi.alternatives().conditional('type', {
+        is: CredentialsType.PHONE,
+        then: Joi.string().regex(PHONE_REGEX).required(),
+    }),
+});
+
 const VerifyOtpSchema = Joi.object({
     type: Joi.string()
         .valid(...Object.values(CredentialsType))
@@ -142,4 +153,4 @@ const CheckpointSchema = Joi.object({
     }),
 });
 
-export { RequestOtpSchema, VerifyOtpSchema, CheckpointSchema };
+export { RequestOtpSchema, ResendOtpSchema, VerifyOtpSchema, CheckpointSchema };

@@ -20,6 +20,7 @@ import {
     GetCheckpointType,
     UIDParams,
     AccountType,
+    ResendOtpType,
 } from './signup.types';
 import { CredentialsType, ResponseWithToken } from '@app/modules/common.types';
 import DigiLockerService from '@app/services/surepass/digilocker.service';
@@ -80,6 +81,90 @@ const requestOtp = async (
     }
 
     res.status(OK).json({ message: 'OTP sent' });
+};
+
+// resendOTP
+
+const resendOtp = async (
+    req: Request<undefined, ParamsDictionary, DefaultResponseData, ResendOtpType>,
+    res: Response,
+) => {
+    const { type, email } = req.body;
+    const rateLimitKey = `resend-otp-limit:${email}:${type}`;
+    const rateLimitCount = await redisClient.get(rateLimitKey);
+
+    if (rateLimitCount && parseInt(rateLimitCount, 10) >= 3) {
+        throw new BadRequestError('Too many resend attempts. Please wait before trying again.');
+    }
+
+    if (type === CredentialsType.EMAIL) {
+        // Check if there's an active OTP session for email
+        const emailOtpKey = `email-otp:signup:${email}`;
+        const existingOtp = await redisClient.get(emailOtpKey);
+
+        if (!existingOtp) {
+            throw new BadRequestError('No active OTP session found. Please request a new OTP.');
+        }
+        const userExists = await db.selectFrom('user').where('email', '=', email).executeTakeFirst();
+
+        if (userExists) {
+            throw new BadRequestError('Email already exists');
+        }
+
+        const emailOtp = new EmailOtpVerification(email, 'signup');
+        await emailOtp.sendOtp();
+
+        await redisClient.incr(rateLimitKey);
+        await redisClient.expire(rateLimitKey, 10 * 60); // 10 mins expiration
+    } else if (type === CredentialsType.PHONE) {
+        const { phone } = req.body;
+
+        if (!phone) {
+            throw new BadRequestError('Phone number is required');
+        }
+
+        // Check if there's an active OTP session for phone
+        const phoneOtpKey = `phone-otp:signup:${email}:${phone}`;
+        const existingOtp = await redisClient.get(phoneOtpKey);
+
+        if (!existingOtp) {
+            throw new BadRequestError('No active OTP session found. Please request a new OTP.');
+        }
+
+        const phoneExists = await db
+            .selectFrom('user')
+            .innerJoin('phone_number', 'user.phone', 'phone_number.id')
+            .select('user.email')
+            .where('phone_number.phone', '=', phone)
+            .executeTakeFirst();
+
+        if (phoneExists) {
+            throw new BadRequestError('Phone number already exists');
+        }
+
+        const checkpointExists = await db
+            .selectFrom('signup_checkpoints')
+            .innerJoin('phone_number', 'signup_checkpoints.phone_id', 'phone_number.id')
+            .select('signup_checkpoints.email')
+            .where('phone_number.phone', '=', phone)
+            .executeTakeFirst();
+
+        if (checkpointExists && checkpointExists.email !== email) {
+            throw new BadRequestError('Phone number already exists');
+        }
+
+        if (!(await redisClient.get(`email-verified:${email}`))) {
+            throw new UnauthorizedError('Email not verified');
+        }
+
+        const phoneOtp = new PhoneOtpVerification(email, 'signup', phone);
+        await phoneOtp.sendOtp();
+
+        await redisClient.incr(rateLimitKey);
+        await redisClient.expire(rateLimitKey, 10 * 60); // 10 mins expiration
+    }
+
+    res.status(OK).json({ message: 'OTP resent successfully' });
 };
 
 const verifyOtp = async (
@@ -1063,6 +1148,7 @@ const finalizeSignup = async (req: Request<JwtType>, res: Response) => {
 
 export {
     requestOtp,
+    resendOtp,
     verifyOtp,
     postCheckpoint,
     getCheckpoint,
