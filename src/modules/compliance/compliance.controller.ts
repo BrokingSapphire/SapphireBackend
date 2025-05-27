@@ -554,6 +554,32 @@ const finalizeVerification = async (req: Request, res: Response) => {
             .where('id', '=', checkpointId)
             .executeTakeFirstOrThrow();
 
+        await trx
+            .insertInto('user')
+            .values({
+                id: checkpoint.client_id!,
+                email: checkpoint.email,
+                name: checkpoint.name!,
+                dob: checkpoint.dob!,
+                phone: checkpoint.phone_id,
+                pan_id: checkpoint.pan_id!,
+                aadhaar_id: checkpoint.aadhaar_id!,
+                address_id: checkpoint.address_id!,
+                father_name: checkpoint.father_name!,
+                mother_name: checkpoint.mother_name!,
+                marital_status: checkpoint.marital_status!,
+                annual_income: checkpoint.annual_income!,
+                occupation: checkpoint.occupation!,
+                trading_exp: checkpoint.trading_exp!,
+                account_settlement: checkpoint.account_settlement!,
+                is_politically_exposed: checkpoint.is_politically_exposed ?? false,
+                signature: checkpoint.signature!,
+                ipv: checkpoint.ipv!,
+                created_at: new Date(),
+                updated_at: new Date(),
+            })
+            .execute();
+
         // Get PAN number to use as password
         const panDetail = await trx
             .selectFrom('pan_detail')
@@ -588,44 +614,14 @@ const finalizeVerification = async (req: Request, res: Response) => {
         const plainTextPassword = panDetail.pan_number;
         const password = await hashPassword(plainTextPassword, 'bcrypt');
 
-        if (!checkpoint.client_id) {
-            throw new Error('Checkpoint client_id is missing');
-        }
-
         await trx
             .insertInto('user_password_details')
             .values({
-                user_id: checkpoint.client_id,
+                user_id: checkpoint.client_id!,
                 password_hash: password.hashedPassword,
                 password_salt: password.salt,
                 hash_algo_id: hashAlgoId,
                 is_first_login: true,
-            })
-            .execute();
-
-        await trx
-            .insertInto('user')
-            .values({
-                id: checkpoint.client_id!,
-                email: checkpoint.email,
-                name: checkpoint.name!,
-                dob: checkpoint.dob!,
-                phone: checkpoint.phone_id,
-                pan_id: checkpoint.pan_id!,
-                aadhaar_id: checkpoint.aadhaar_id!,
-                address_id: checkpoint.address_id!,
-                father_name: checkpoint.father_name!,
-                mother_name: checkpoint.mother_name!,
-                marital_status: checkpoint.marital_status!,
-                annual_income: checkpoint.annual_income!,
-                occupation: checkpoint.occupation!,
-                trading_exp: checkpoint.trading_exp!,
-                account_settlement: checkpoint.account_settlement!,
-                is_politically_exposed: checkpoint.is_politically_exposed ?? false,
-                signature: checkpoint.signature!,
-                ipv: checkpoint.ipv!,
-                created_at: new Date(),
-                updated_at: new Date(),
             })
             .execute();
 
@@ -775,6 +771,32 @@ const autoFinalVerification = async (req: Request, res: Response) => {
             .where('id', '=', checkpointId)
             .executeTakeFirstOrThrow();
 
+        await trx
+            .insertInto('user')
+            .values({
+                id: checkpoint.client_id!,
+                email: checkpoint.email,
+                name: checkpoint.name!,
+                dob: checkpoint.dob!,
+                phone: checkpoint.phone_id,
+                pan_id: checkpoint.pan_id!,
+                aadhaar_id: checkpoint.aadhaar_id!,
+                address_id: checkpoint.address_id!,
+                father_name: checkpoint.father_name!,
+                mother_name: checkpoint.mother_name!,
+                marital_status: checkpoint.marital_status!,
+                annual_income: checkpoint.annual_income!,
+                occupation: checkpoint.occupation!,
+                trading_exp: checkpoint.trading_exp!,
+                account_settlement: checkpoint.account_settlement!,
+                is_politically_exposed: checkpoint.is_politically_exposed ?? false,
+                signature: checkpoint.signature!,
+                ipv: checkpoint.ipv!,
+                created_at: new Date(),
+                updated_at: new Date(),
+            })
+            .execute();
+
         // Get PAN number to use as password
         const panDetail = await trx
             .selectFrom('pan_detail')
@@ -808,44 +830,15 @@ const autoFinalVerification = async (req: Request, res: Response) => {
 
         const plainTextPassword = panDetail.pan_number;
         const password = await hashPassword(plainTextPassword, 'bcrypt');
-        if (!checkpoint.client_id) {
-            throw new Error('Checkpoint client_id is missing');
-        }
 
         await trx
             .insertInto('user_password_details')
             .values({
-                user_id: checkpoint.client_id,
+                user_id: checkpoint.client_id!,
                 password_hash: password.hashedPassword,
                 password_salt: password.salt,
                 hash_algo_id: hashAlgoId,
                 is_first_login: true,
-            })
-            .execute();
-
-        await trx
-            .insertInto('user')
-            .values({
-                id: checkpoint.client_id!,
-                email: checkpoint.email,
-                name: checkpoint.name!,
-                dob: checkpoint.dob!,
-                phone: checkpoint.phone_id,
-                pan_id: checkpoint.pan_id!,
-                aadhaar_id: checkpoint.aadhaar_id!,
-                address_id: checkpoint.address_id!,
-                father_name: checkpoint.father_name!,
-                mother_name: checkpoint.mother_name!,
-                marital_status: checkpoint.marital_status!,
-                annual_income: checkpoint.annual_income!,
-                occupation: checkpoint.occupation!,
-                trading_exp: checkpoint.trading_exp!,
-                account_settlement: checkpoint.account_settlement!,
-                is_politically_exposed: checkpoint.is_politically_exposed ?? false,
-                signature: checkpoint.signature!,
-                ipv: checkpoint.ipv!,
-                created_at: new Date(),
-                updated_at: new Date(),
             })
             .execute();
 
