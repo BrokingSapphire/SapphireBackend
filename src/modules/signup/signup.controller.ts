@@ -522,6 +522,7 @@ const postCheckpoint = async (
 
         await db.transaction().execute(async (tx) => {
             const address = parser.address();
+            parser.log();
             const addressId = await insertAddressGetId(tx, address);
 
             const nameId = await insertNameGetId(tx, splitName(parser.name()));
