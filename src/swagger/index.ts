@@ -163,6 +163,24 @@ const swaggerDocument = {
                 bearerFormat: 'JWT',
             },
         },
+        responses: {
+            Unauthorized: {
+                description: 'Unauthorized - Invalid or missing authentication token',
+                content: {
+                    'application/json': {
+                        schema: { $ref: '#/components/schemas/Error' },
+                    },
+                },
+            },
+            UnprocessableEntity: {
+                description: 'Unprocessable Entity - Validation error',
+                content: {
+                    'application/json': {
+                        schema: { $ref: '#/components/schemas/Error' },
+                    },
+                },
+            },
+        },
         schemas: {
             Error: {
                 type: 'object',
