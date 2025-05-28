@@ -17,7 +17,7 @@ const assignOfficer = async (req: Request<SessionJwtType>, res: Response) => {
                 officer_id: req.auth!!.userId,
                 checkpoint_id: checkpointId,
             })
-            .onConflict((oc) => oc.constraint('PK_Compliance_Checkpoint_Id').doNothing())
+            .onConflict((oc) => oc.constraint('pk_compliance_checkpoint_id').doNothing())
             .returning('checkpoint_id')
             .execute();
     });
@@ -697,7 +697,7 @@ const finalizeVerification = async (req: Request, res: Response) => {
                 },
             ])
             .onConflict((oc) =>
-                oc.constraint('UQ_Watchlist_Category').doUpdateSet((eb) => ({
+                oc.constraint('uq_watchlist_category').doUpdateSet((eb) => ({
                     category: eb.ref('excluded.category'),
                 })),
             )
@@ -914,7 +914,7 @@ const autoFinalVerification = async (req: Request, res: Response) => {
                 },
             ])
             .onConflict((oc) =>
-                oc.constraint('UQ_Watchlist_Category').doUpdateSet((eb) => ({
+                oc.constraint('uq_watchlist_category').doUpdateSet((eb) => ({
                     category: eb.ref('excluded.category'),
                 })),
             )
@@ -942,6 +942,7 @@ const autoFinalVerification = async (req: Request, res: Response) => {
         await trx.deleteFrom('investment_segments_to_checkpoint').where('checkpoint_id', '=', checkpointId).execute();
 
         // Then remove the main checkpoint record
+        await trx.deleteFrom('signup_verification_status').where('id', '=', checkpointId).execute();
         await trx.deleteFrom('signup_checkpoints').where('id', '=', checkpointId).execute();
 
         return checkpoint.client_id;

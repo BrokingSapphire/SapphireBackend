@@ -34,7 +34,7 @@ const createWatchlist = async (
                 name,
             })
             .onConflict((oc) =>
-                oc.constraint('UQ_Watchlist').doUpdateSet((eb) => ({
+                oc.constraint('uq_watchlist').doUpdateSet((eb) => ({
                     name: eb.ref('excluded.name'),
                 })),
             )
@@ -51,7 +51,7 @@ const createWatchlist = async (
                     .select(eb.fn.countAll<number>().as('all'))
                     .where('user_id', '=', userId),
             }))
-            .onConflict((oc) => oc.constraint('UQ_User_Watchlist').doNothing())
+            .onConflict((oc) => oc.constraint('uq_user_watchlist').doNothing())
             .returning(['id', 'position_index'])
             .executeTakeFirst();
     });
@@ -128,7 +128,7 @@ const updateWatchlistName = async (
                     name,
                 })
                 .onConflict((oc) =>
-                    oc.constraint('UQ_Watchlist').doUpdateSet((eb) => ({
+                    oc.constraint('uq_watchlist').doUpdateSet((eb) => ({
                         name: eb.ref('excluded.name'),
                     })),
                 )
@@ -345,7 +345,7 @@ const createCategoryInWatchlist = async (
                 category: name,
             })
             .onConflict((oc) =>
-                oc.constraint('UQ_Watchlist_Category').doUpdateSet((eb) => ({
+                oc.constraint('uq_watchlist_category').doUpdateSet((eb) => ({
                     category: eb.ref('excluded.category'),
                 })),
             )
@@ -362,7 +362,7 @@ const createCategoryInWatchlist = async (
                     .select(eb.fn.countAll<number>().as('all'))
                     .where('user_watchlist_id', '=', watchlistId),
             }))
-            .onConflict((oc) => oc.constraint('UQ_User_Watchlist').doNothing())
+            .onConflict((oc) => oc.constraint('uq_user_watchlist').doNothing())
             .returning(['id', 'position_index'])
             .executeTakeFirst();
     });
@@ -452,7 +452,7 @@ const updateCategoryName = async (
                     category: categoryName,
                 })
                 .onConflict((oc) =>
-                    oc.constraint('UQ_Watchlist_Category').doUpdateSet((eb) => ({
+                    oc.constraint('uq_watchlist_category').doUpdateSet((eb) => ({
                         category: eb.ref('excluded.category'),
                     })),
                 )
@@ -776,7 +776,7 @@ const addWatchlistEntries = async (
                     position_index: count + offset + index + 1,
                 })),
             ])
-            .onConflict((oc) => oc.constraint('PK_User_Watchlist_Entry').doNothing())
+            .onConflict((oc) => oc.constraint('pk_user_watchlist_entry').doNothing())
             .execute();
     });
 
