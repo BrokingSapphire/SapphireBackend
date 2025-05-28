@@ -4,7 +4,7 @@ import { UpdateObjectExpression } from 'kysely/dist/cjs/parser/update-set-parser
 import countries from '@app/services/i18n-countries';
 
 export interface Address {
-    address1: string;
+    address1: string | null;
     address2: string | null;
     streetName: string | null;
     city: string;
