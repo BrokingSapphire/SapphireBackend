@@ -528,8 +528,11 @@ const postCheckpoint = async (
             const nameId = await insertNameGetId(tx, splitName(parser.name()));
 
             let co = parser.co();
-            if (co.startsWith('C/O')) co = co.substring(4).trim();
-            const coId = await insertNameGetId(tx, splitName(co));
+            let coId = null;
+            if (co) {
+                if (co.startsWith('C/O')) co = co.substring(4).trim();
+                coId = await insertNameGetId(tx, splitName(co));
+            }
 
             const exists = await tx
                 .selectFrom('signup_checkpoints')
@@ -553,7 +556,7 @@ const postCheckpoint = async (
                     dob: parser.dob(),
                     co: coId,
                     address_id: addressId,
-                    post_office: parser.postOffice(),
+                    post_office: parser.postOffice() === undefined ? null : parser.postOffice(),
                     gender: parser.gender(),
                 })
                 .returning('id')
