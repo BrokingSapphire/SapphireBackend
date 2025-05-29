@@ -248,15 +248,15 @@ const getCheckpoint = async (req: Request<JwtType, GetCheckpointType>, res: Resp
 
     const { step } = req.params;
     if (step === CheckpointStep.PAN) {
-        const { pan_number, full_name, dob } = await db
+        const { pan_number, full_name, dob, masked_aadhaar } = await db
             .selectFrom('signup_checkpoints')
             .innerJoin('pan_detail', 'signup_checkpoints.pan_id', 'pan_detail.id')
             .innerJoin('user_name', 'pan_detail.name', 'user_name.id')
-            .select(['pan_detail.pan_number', 'user_name.full_name', 'pan_detail.dob'])
+            .select(['pan_detail.pan_number', 'user_name.full_name', 'pan_detail.dob', 'pan_detail.masked_aadhaar'])
             .where('email', '=', email)
             .executeTakeFirstOrThrow();
 
-        res.status(OK).json({ data: { pan_number, full_name, dob }, message: 'PAN number fetched' });
+        res.status(OK).json({ data: { pan_number, full_name, dob, masked_aadhaar }, message: 'PAN number fetched' });
     } else if (step === CheckpointStep.AADHAAR) {
         const { masked_aadhaar_no } = await db
             .selectFrom('signup_checkpoints')
@@ -332,7 +332,14 @@ const getCheckpoint = async (req: Request<JwtType, GetCheckpointType>, res: Resp
             .selectFrom('signup_checkpoints')
             .innerJoin('bank_to_checkpoint', 'signup_checkpoints.id', 'bank_to_checkpoint.checkpoint_id')
             .innerJoin('bank_account', 'bank_to_checkpoint.bank_account_id', 'bank_account.id')
-            .select(['bank_account.account_no', 'bank_account.ifsc_code', 'bank_account.account_type'])
+            .innerJoin('pan_detail', 'signup_checkpoints.pan_id', 'pan_detail.id')
+            .innerJoin('user_name', 'pan_detail.name', 'user_name.id')
+            .select([
+                'bank_account.account_no',
+                'bank_account.ifsc_code',
+                'bank_account.account_type',
+                'user_name.full_name',
+            ])
             .where('email', '=', email)
             .executeTakeFirstOrThrow();
 
