@@ -18,9 +18,11 @@ interface OtpSettings {
 abstract class OtpVerification {
     protected readonly id: string; // Unique identifier (email or phone)
     protected readonly settings: OtpSettings;
+    protected readonly context: string; // Add context to distinguish different OTP types
 
-    protected constructor(id: string, settings: Partial<OtpSettings> = {}) {
+    protected constructor(id: string, context: string = 'default', settings: Partial<OtpSettings> = {}) {
         this.id = id;
+        this.context = context;
         this.settings = {
             ...settings,
             otpExpiry: settings.otpExpiry || DEFAULT_OTP_EXPIRY,
@@ -37,21 +39,21 @@ abstract class OtpVerification {
      * Verify the OTP provided by the user
      */
     public async verifyOtp(inputOtp: string): Promise<void> {
-        const key = `otp:${this.id}`;
+        const key = `otp:${this.context}:${this.id}`; // Include context in key
 
         const storedOtp = await redisClient.get(key);
 
         if (!storedOtp) {
-            logger.error(`No OTP found for ${this.id}`);
+            logger.error(`No OTP found for ${this.id} with context ${this.context}`);
             throw new UnauthorizedError('No OTP found for this ID');
         }
 
         if (storedOtp === inputOtp) {
             // Delete the OTP after successful verification to prevent reuse
             await redisClient.del(key);
-            logger.debug(`OTP verified successfully for ${this.id}`);
+            logger.debug(`OTP verified successfully for ${this.id} with context ${this.context}`);
         } else {
-            logger.debug(`Invalid OTP for ${this.id}`);
+            logger.debug(`Invalid OTP for ${this.id} with context ${this.context}`);
             throw new UnauthorizedError('Invalid OTP provided');
         }
     }
@@ -60,7 +62,7 @@ abstract class OtpVerification {
      * Check if an OTP exists for this ID
      */
     public async hasActiveOtp(): Promise<boolean> {
-        const key = `otp:${this.id}`;
+        const key = `otp:${this.context}:${this.id}`;
         try {
             const exists = await redisClient.exists(key);
             return exists === 1;
@@ -74,7 +76,7 @@ abstract class OtpVerification {
      * Get remaining time before OTP expires (in seconds)
      */
     public async getOtpTtl(): Promise<number> {
-        const key = `otp:${this.id}`;
+        const key = `otp:${this.context}:${this.id}`;
         try {
             return await redisClient.ttl(key);
         } catch (error) {
@@ -88,7 +90,7 @@ abstract class OtpVerification {
      */
     protected async storeOtp(): Promise<string> {
         const otp = this.generateOtp();
-        const key = `otp:${this.id}`;
+        const key = `otp:${this.context}:${this.id}`; // Include context in key
 
         try {
             await redisClient.set(key, otp);
@@ -111,13 +113,14 @@ abstract class OtpVerification {
     }
 }
 
-type EmailTemplate = 'login' | 'signup';
+type EmailTemplate = 'login' | 'signup' | 'forgot-password';
 
 class EmailOtpVerification extends OtpVerification {
     private readonly template: EmailTemplate;
 
     constructor(email: string, template: EmailTemplate, settings?: Partial<OtpSettings>) {
-        super(email, settings);
+        // Use template as context to create unique Redis keys
+        super(email, template, settings);
         this.template = template;
     }
 
@@ -125,19 +128,40 @@ class EmailOtpVerification extends OtpVerification {
      * Send OTP to the user's email
      */
     public async sendOtp(): Promise<void> {
-        const content = fs.readFileSync(`templates/${this.template}-email.html`, 'utf-8');
+        // Use login template for forgot-password if forgot-password template doesn't exist
+        let templateFile = this.template;
+        try {
+            fs.accessSync(`templates/${this.template}-email.html`);
+        } catch (error) {
+            logger.warn(`Template ${this.template}-email.html not found, using login template`);
+            templateFile = 'login';
+        }
+
+        const content = fs.readFileSync(`templates/${templateFile}-email.html`, 'utf-8');
 
         const otp = await this.storeOtp();
 
         const mailOptions: Mail.Options = {
             from: env.email.from,
             to: this.id,
-            subject: 'Your Verification Code - Sapphire Broking',
+            subject: this.getSubject(),
             html: formatHtml(content, otp, this.id, undefined, this.settings.ip),
         };
 
         await transporter.sendMail(mailOptions);
-        logger.debug(`Sent OTP ${otp} to ${this.id}`);
+        logger.debug(`Sent OTP ${otp} to ${this.id} for ${this.template}`);
+    }
+
+    private getSubject(): string {
+        switch (this.template) {
+            case 'forgot-password':
+                return 'Password Reset Code - Sapphire Broking';
+            case 'signup':
+                return 'Welcome to Sapphire - Verification Code';
+            case 'login':
+            default:
+                return 'Your Verification Code - Sapphire Broking';
+        }
     }
 }
 
@@ -146,7 +170,7 @@ class PhoneOtpVerification extends OtpVerification {
     private readonly template: EmailTemplate;
 
     constructor(email: string, template: EmailTemplate, phoneNumber: string, settings?: Partial<OtpSettings>) {
-        super(phoneNumber);
+        super(phoneNumber, `phone_${template}`, settings);
         this.email = email;
         this.template = template;
     }
@@ -155,31 +179,27 @@ class PhoneOtpVerification extends OtpVerification {
      * Send OTP to the user's phone
      */
     public async sendOtp(): Promise<void> {
-        // FIXME
-        // try {
-        //     const otp = await this.storeOtp();
-        //
-        //     const message = `Welcome to Sapphire! Your OTP for signup is ${otp}. Do not share this OTP with anyone. It is valid for 10 minutes. - Sapphire Broking`;
-        //     await smsService.sendSms(this.id, message, '1007898245699377543'); // FIXME: Remove raw template ID
-        //     logger.debug(`Sent OTP ${otp} to ${this.id}`);
-        // } catch (error) {
-        //     logger.error(`Failed to send OTP to phone ${this.id}:`, error);
-        //     throw new Error('Failed to send OTP via SMS');
-        // }
-        const content = fs.readFileSync(`templates/${this.template}-email.html`, 'utf-8');
+        // Use login template as fallback
+        let templateFile = this.template;
+        try {
+            fs.accessSync(`templates/${this.template}-email.html`);
+        } catch (error) {
+            logger.warn(`Template ${this.template}-email.html not found, using login template`);
+            templateFile = 'login';
+        }
+
+        const content = fs.readFileSync(`templates/${templateFile}-email.html`, 'utf-8');
 
         const otp = await this.storeOtp();
 
         const mailOptions: Mail.Options = {
             from: env.email.from,
-            // to: this.id,
             to: this.email,
             subject: 'Your Phone Verification Code - Sapphire Broking',
             html: formatHtml(content, otp, this.email, this.id, this.settings.ip),
         };
 
         await transporter.sendMail(mailOptions);
-        logger.debug(`Sent OTP ${otp} to ${this.id}`);
     }
 }
 

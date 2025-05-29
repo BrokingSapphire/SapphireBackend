@@ -55,6 +55,7 @@ export const ResendForgotPasswordOtpSchema = Joi.object({
 });
 
 export const ForgotPasswordResetSchema = Joi.object({
+    requestId: Joi.string().required(),
     newPassword: Joi.string()
         .min(8)
         .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/)

@@ -207,7 +207,7 @@ const forgotPasswordInitiate = async (
     await redisClient.set(redisKey, JSON.stringify(session));
     await redisClient.expire(redisKey, 15 * 60);
 
-    const emailOtp = new EmailOtpVerification(user.email, 'login');
+    const emailOtp = new EmailOtpVerification(user.email, 'forgot-password');
     await emailOtp.sendOtp();
 
     res.status(OK).json({
@@ -222,7 +222,7 @@ const forgotOTPverify = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, ForgotOTPVerifyRequestType>,
     res: Response,
 ) => {
-    const { requestId, otp } = req.body;
+    const { requestId, emailOtp } = req.body;
     const redisKey = `forgot_password:${requestId}`;
     const sessionStr = await redisClient.get(redisKey);
 
@@ -235,8 +235,8 @@ const forgotOTPverify = async (
         throw new UnauthorizedError('Session already verified or used');
     }
 
-    const emailOtp = new EmailOtpVerification(session.email, 'login');
-    await emailOtp.verifyOtp(otp);
+    const emailOtpInstance = new EmailOtpVerification(session.email, 'forgot-password');
+    await emailOtpInstance.verifyOtp(emailOtp);
 
     session.isVerified = true;
     await redisClient.set(redisKey, JSON.stringify(session));
