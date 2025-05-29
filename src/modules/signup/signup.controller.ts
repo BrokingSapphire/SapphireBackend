@@ -476,6 +476,13 @@ const postCheckpoint = async (
     } else if (step === CheckpointStep.AADHAAR_URI) {
         const { redirect } = req.body;
 
+        const checkpointData = await db
+            .selectFrom('signup_checkpoints')
+            .leftJoin('pan_detail', 'signup_checkpoints.pan_id', 'pan_detail.id')
+            .select(['signup_checkpoints.id', 'pan_detail.masked_aadhaar'])
+            .where('signup_checkpoints.email', '=', email)
+            .executeTakeFirstOrThrow();
+
         const digilocker = new DigiLockerService();
         const digiResponse = await digilocker.initialize({
             prefill_options: {
@@ -500,6 +507,7 @@ const postCheckpoint = async (
         res.status(OK).json({
             data: {
                 uri: digiResponse.data.data.url,
+                masked_aadhaar: checkpointData.masked_aadhaar ? `XXXXXXXX${checkpointData.masked_aadhaar}` : null,
             },
             message: 'Digilocker URI generated',
         });
