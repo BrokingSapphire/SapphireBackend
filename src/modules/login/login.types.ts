@@ -23,6 +23,7 @@ export type LoginRequestType = Pretty<
 export type LoginOtpVerifyRequestType = Pretty<
     EmailOrClientId & {
         otp: string;
+        sessionId: string;
     }
 >;
 

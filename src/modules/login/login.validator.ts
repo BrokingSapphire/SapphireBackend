@@ -21,6 +21,7 @@ export const LoginOtpVerifySchema = EmailOrClientIdSchema.keys({
         .length(DEFAULT_OTP_LENGTH)
         .pattern(/^[0-9]{6}$/)
         .required(),
+    sessionId: Joi.string().required(),
 });
 
 export const ResetPasswordSchema = Joi.object({

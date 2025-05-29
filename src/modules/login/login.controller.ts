@@ -55,11 +55,28 @@ const login = async (
         throw new UnauthorizedError('Invalid credentials');
     }
 
+    const loginSessionId = randomUUID();
+    const loginSession = {
+        sessionId: loginSessionId,
+        userId: user.id,
+        email: user.email,
+        clientId: 'clientId' in req.body ? req.body.clientId : undefined,
+        isUsed: false,
+        createdAt: new Date().toISOString(),
+    };
+
+    const redisKey = `login_session:${loginSessionId}`;
+    await redisClient.set(redisKey, JSON.stringify(loginSession));
+    await redisClient.expire(redisKey, 10 * 60);
+
     const emailOtp = new EmailOtpVerification(user.email, 'login');
     await emailOtp.sendOtp();
 
     res.status(OK).json({
         message: 'OTP sent.',
+        data: {
+            sessionId: loginSessionId,
+        },
     });
 };
 
@@ -68,27 +85,48 @@ const verifyLoginOtp = async (
     req: Request<undefined, ParamsDictionary, ResponseWithToken, LoginOtpVerifyRequestType>,
     res: Response<ResponseWithToken>,
 ) => {
-    const { otp } = req.body;
+    const { otp, sessionId } = req.body;
+
+    const redisKey = `login_session:${sessionId}`;
+    const sessionStr = await redisClient.get(redisKey);
+
+    if (!sessionStr) {
+        throw new UnauthorizedError('Login session expired or invalid');
+    }
+
+    const session = JSON.parse(sessionStr);
+
+    if (session.isUsed) {
+        throw new UnauthorizedError('Login session already used');
+    }
+
+    const requestClientId = 'clientId' in req.body ? req.body.clientId : undefined;
+    const requestEmail = 'email' in req.body ? req.body.email : undefined;
+
+    if (requestClientId && session.clientId !== requestClientId) {
+        throw new UnauthorizedError('Invalid login session - client ID mismatch');
+    }
+    if (requestEmail && session.email !== requestEmail) {
+        throw new UnauthorizedError('Invalid login session - email mismatch');
+    }
+
+    const emailOtp = new EmailOtpVerification(session.email, 'login');
+    await emailOtp.verifyOtp(otp);
+
+    // Mark session as used
+    session.isUsed = true;
+    await redisClient.set(redisKey, JSON.stringify(session));
 
     const user = await db
         .selectFrom('user')
         .innerJoin('user_password_details', 'user_password_details.user_id', 'user.id')
         .select(['user.id', 'user.email', 'user_password_details.is_first_login'])
-        .$call((qb) => {
-            if ('clientId' in req.body) {
-                qb.where('user.id', '=', req.body.clientId);
-            } else if ('email' in req.body) {
-                qb.where('user.email', '=', req.body.email);
-            }
-            return qb;
-        })
+        .where('user.id', '=', session.userId)
         .executeTakeFirstOrThrow();
 
-    const emailOtp = new EmailOtpVerification(user.email, 'login');
-    await emailOtp.verifyOtp(otp);
-
+    // Generate token for the original user
     const token = sign<SessionJwtType>({
-        userId: user.id,
+        userId: session.userId,
     });
 
     res.status(OK).json({
