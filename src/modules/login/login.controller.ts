@@ -29,10 +29,12 @@ const login = async (
         .selectFrom('user')
         .innerJoin('user_password_details', 'user.id', 'user_password_details.user_id')
         .innerJoin('hashing_algorithm', 'user_password_details.hash_algo_id', 'hashing_algorithm.id')
+        .innerJoin('user_name', 'user.name', 'user_name.id')
         .select([
             'user.id',
             'user.email',
             'user.phone',
+            'user_name.first_name',
             'hashing_algorithm.name as hashAlgo',
             'user_password_details.password_salt as salt',
             'user_password_details.password_hash as hashedPassword',
@@ -60,6 +62,7 @@ const login = async (
         sessionId: loginSessionId,
         userId: user.id,
         email: user.email,
+        userName: user.first_name,
         clientId: 'clientId' in req.body ? req.body.clientId : undefined,
         isUsed: false,
         createdAt: new Date().toISOString(),
@@ -146,7 +149,8 @@ const resendLoginOtp = async (
 ) => {
     const user = await db
         .selectFrom('user')
-        .select(['user.id', 'user.email'])
+        .innerJoin('user_name', 'user.name', 'user_name.id')
+        .select(['user.id', 'user.email', 'user_name.first_name'])
         .$call((qb) => {
             if ('clientId' in req.body) {
                 qb.where('user.id', '=', req.body.clientId);
@@ -223,7 +227,8 @@ const forgotPasswordInitiate = async (
     const user = await db
         .selectFrom('user')
         .innerJoin('pan_detail', 'user.pan_id', 'pan_detail.id')
-        .select(['user.id', 'user.email'])
+        .innerJoin('user_name', 'user.name', 'user_name.id')
+        .select(['user.id', 'user.email', 'user_name.first_name'])
         .where('pan_detail.pan_number', '=', panNumber)
         .executeTakeFirstOrThrow();
 
@@ -235,6 +240,7 @@ const forgotPasswordInitiate = async (
         requestId,
         userId: user.id,
         email: user.email,
+        userName: user.first_name,
         isVerified: false,
         isUsed: false,
         createdAt: new Date().toISOString(),
