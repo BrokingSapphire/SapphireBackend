@@ -8,6 +8,7 @@ import { BalanceTransactionStatus, DepositTransactionType } from '@app/database/
 import { InternalServerError } from '@app/apiError';
 import logger from '@app/logger';
 import { SessionJwtType } from '../common.types';
+import { sendFundsAdded } from '@app/services/notification.service';
 
 /**
  * Get user funds
@@ -66,7 +67,7 @@ const depositFunds = async (req: Request<SessionJwtType>, res: Response): Promis
         .selectFrom('user')
         .innerJoin('phone_number', 'user.phone', 'phone_number.id')
         .innerJoin('user_name', 'user_name.id', 'user.name')
-        .select(['user_name.full_name', 'user.email', 'phone_number.phone'])
+        .select(['user_name.full_name', 'user_name.first_name', 'user.email', 'phone_number.phone'])
         .where('user.id', '=', userId)
         .executeTakeFirstOrThrow();
 

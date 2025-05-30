@@ -36,6 +36,7 @@ import { randomUUID } from 'crypto';
 import { imageUpload, pdfUpload, wrappedMulterHandler } from '@app/services/multer-s3.service';
 import logger from '@app/logger';
 import IdGenerator from '@app/services/id-generator';
+import { sendDocumentsReceivedConfirmation } from '@app/services/notification.service';
 
 const requestOtp = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, RequestOtpType>,
@@ -1104,6 +1105,24 @@ const putIncomeProof = async (req: Request<JwtType, UIDParams>, res: Response) =
             .where('id', '=', checkpoint.id)
             .execute();
     });
+
+    const userDetails = await db
+        .selectFrom('signup_checkpoints')
+        .innerJoin('pan_detail', 'signup_checkpoints.pan_id', 'pan_detail.id')
+        .innerJoin('user_name', 'pan_detail.name', 'user_name.id')
+        .select(['user_name.first_name'])
+        .where('signup_checkpoints.email', '=', email)
+        .executeTakeFirst();
+
+    if (userDetails) {
+        // Send documents received confirmation email
+        await sendDocumentsReceivedConfirmation(email, {
+            userName: userDetails.first_name,
+            email,
+        });
+
+        logger.info(`Documents received confirmation email sent to ${email}`);
+    }
 
     await redisClient.del(`signup_income_proof:${uid}`);
     res.status(CREATED).json({

@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no" />
+    <title>Withdrawal Processed - Sapphire Broking</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+        :root {
+            --primary: #064d51;
+            --primary-light: rgba(6, 77, 81, 0.1);
+            --accent: #ffd62d;
+            --accent-light: rgba(255, 214, 45, 0.2);
+            --background: #eafbf0;
+            --white: #ffffff;
+            --text-dark: #1a2b2c;
+            --text-medium: #415657;
+            --text-light: #6e7878;
+            --border-light: #e5e7eb;
+            --success: #16a34a;
+            --success-light: rgba(22, 163, 74, 0.1);
+            --warning: #f59e0b;
+            --warning-light: rgba(245, 158, 11, 0.1);
+            --info: #0ea5e9;
+            --info-light: rgba(14, 165, 233, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background);
+            color: var(--text-dark);
+            line-height: 1.6;
+            font-size: 16px;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .email-wrapper {
+            background-color: var(--white);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+        }
+
+        .email-header {
+            background-color: var(--primary);
+            padding: 30px 40px;
+            text-align: center;
+            position: relative;
+        }
+
+        .logo {
+            max-width: 150px;
+            height: auto;
+        }
+
+        .header-accent {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 10% 20%, rgba(255, 214, 45, 0.3) 0%, transparent 30%);
+        }
+
+        .email-body {
+            padding: 40px;
+        }
+
+        .email-footer {
+            background-color: var(--primary-light);
+            padding: 30px;
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-medium);
+        }
+
+        .disclaimer {
+            font-size: 11px;
+            color: var(--text-light);
+            margin-top: 25px;
+            padding-top: 25px;
+            border-top: 1px solid var(--border-light);
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--primary);
+            margin-bottom: 16px;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+
+        h1 {
+            font-size: 28px;
+            letter-spacing: -0.5px;
+        }
+
+        h2 {
+            font-size: 24px;
+            letter-spacing: -0.3px;
+        }
+
+        h3 {
+            font-size: 20px;
+        }
+
+        p {
+            margin-bottom: 16px;
+            color: var(--text-medium);
+        }
+
+        .icon-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .icon-circle {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background-color: var(--success-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+        }
+
+        .icon {
+            font-size: 40px;
+            color: var(--success);
+        }
+
+        .withdrawal-summary {
+            background-color: var(--success-light);
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            margin: 32px 0;
+            border: 2px solid var(--success);
+        }
+
+        .amount-display {
+            font-size: 36px;
+            font-weight: 700;
+            color: var(--success);
+            margin: 16px 0;
+        }
+
+        .processing-info {
+            background-color: var(--info-light);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+        }
+
+        .processing-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+        }
+
+        .processing-icon {
+            margin-right: 8px;
+            color: var(--info);
+        }
+
+        .detail-row {
+            display: flex;
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-light);
+        }
+
+        .detail-row:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        .detail-label {
+            flex: 1;
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+
+        .detail-value {
+            flex: 2;
+            text-align: right;
+        }
+
+        .help-section {
+            background-color: var(--accent-light);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 32px;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .help-icon {
+            flex-shrink: 0;
+            margin-right: 12px;
+            font-size: 24px;
+            color: var(--accent);
+        }
+
+        .help-content {
+            font-size: 14px;
+            color: var(--text-medium);
+        }
+
+        /* Mobile Optimization */
+        @media (max-width: 550px) {
+            .email-body {
+                padding: 30px 24px;
+            }
+
+            .amount-display {
+                font-size: 28px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="email-wrapper">
+        <!-- Header with Logo -->
+        <div class="email-header">
+            <div class="header-accent"></div>
+            <img
+                src="https://www.sapphirebroking.com/logo-white.svg"
+                alt="Sapphire Broking"
+                class="logo"
+                style="padding-right: 10px"
+            />
+            <span style="color: white; font-size: 1.2rem; margin-right: 10px">Sapphire</span>
+        </div>
+
+        <!-- Email Body -->
+        <div class="email-body">
+            <div class="icon-header">
+                <div class="icon-circle">
+                    <div class="icon">💰</div>
+                </div>
+                <h1>Withdrawal Processed Successfully</h1>
+                <p>Your withdrawal request has been completed</p>
+            </div>
+
+            <p>Dear <strong>{{ userName }}</strong>,</p>
+
+            <p>
+                Your withdrawal request of ₹{{ amount }} has been processed. Expected credit within {{ creditHours }} hours.
+            </p>
+
+            <div class="withdrawal-summary">
+                <h3 style="color: var(--success); margin-bottom: 8px;">Withdrawal Amount</h3>
+                <div class="amount-display">₹{{ amount }}</div>
+                <p style="margin: 0; color: var(--text-dark);">Successfully processed and transferred</p>
+            </div>
+
+            <div class="processing-info">
+                <div class="processing-title">
+                    <span class="processing-icon">⏰</span>
+                    Processing Timeline
+                </div>
+
+                <div class="detail-row">
+                    <div class="detail-label">Request Date</div>
+                    <div class="detail-value">{{ date }}</div>
+                </div>
+
+                <div class="detail-row">
+                    <div class="detail-label">Processing Time</div>
+                    <div class="detail-value">{{ time }}</div>
+                </div>
+
+                <div class="detail-row">
+                    <div class="detail-label">Expected Credit</div>
+                    <div class="detail-value">Within {{ creditHours }} hours</div>
+                </div>
+
+                <div class="detail-row">
+                    <div class="detail-label">Account Email</div>
+                    <div class="detail-value">{{ email }}</div>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <div class="help-icon">❓</div>
+                <div class="help-content">
+                    <p style="margin-bottom: 8px"><strong>Need Assistance?</strong></p>
+                    <p style="margin-bottom: 0">
+                        If you have any questions about your withdrawal or need support, our customer service team is available
+                        24/7 at <strong>support@sapphirebroking.com</strong> or call
+                        <strong>+91 98903 36989</strong>.
+                    </p>
+                </div>
+            </div>
+
+            <p style="text-align: center; margin-top: 32px; font-style: italic">
+                This is an automated message. Please do not reply to this email.
+            </p>
+        </div>
+
+        <!-- Footer -->
+        <div class="email-footer">
+            <p>
+                <strong>Sapphire Broking</strong><br />
+                84-A, New Sneh Nagar<br />
+                Pande Layout, Khamla<br />
+                Nagpur, Maharashtra 440025<br />
+                Customer Support: +91 98903 36989
+            </p>
+
+            <p>© 2025 Sapphire Broking. All Rights Reserved.</p>
+
+            <div class="disclaimer">
+                <p>
+                    DISCLAIMER: Investments in securities market are subject to market risks. Read all the
+                    related documents carefully before investing. Registration granted by SEBI, membership of
+                    NSE, BSE, MCX, and NCDEX, and registration of the DP with SEBI does not guarantee quality of
+                    services. Details of compliance officer: Name: Compliance Officer, Email:
+                    compliance@sapphirebroking.com, Phone: +91 98903 36989
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

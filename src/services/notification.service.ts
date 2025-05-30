@@ -12,9 +12,27 @@ interface NotificationData {
     ip?: string;
     deviceType?: string;
     location?: string;
+    amount?: string;
+    availableBalance?: string;
+    creditHours?: string;
+    reason?: string;
+    marginShortfall?: string;
 }
 
-type NotificationTemplate = 'password-change-confirmation' | 'account-locked' | 'login-alert' | 'welcome';
+type NotificationTemplate =
+    | 'password-change-confirmation'
+    | 'account-locked'
+    | 'login-alert'
+    | 'welcome'
+    | 'withdrawal-processed'
+    | 'account-successfully-opened'
+    | 'documents-received-confirmation'
+    | 'margin-shortfall-alert'
+    | 'payout-rejected'
+    | 'documents-rejected-notification'
+    | 'kyc-update-required'
+    | 'funds-added'
+    | 'account-suspension-notice';
 
 class EmailNotificationService {
     private readonly email: string;
@@ -67,6 +85,24 @@ class EmailNotificationService {
                 return 'New Login Detected - Sapphire Broking';
             case 'welcome':
                 return 'Welcome to Sapphire Broking';
+            case 'withdrawal-processed':
+                return 'Withdrawal Processed Successfully - Sapphire Broking';
+            case 'account-successfully-opened':
+                return 'Welcome to Sapphire - Account Successfully Opened';
+            case 'documents-received-confirmation':
+                return 'Documents Received - Sapphire Broking';
+            case 'margin-shortfall-alert':
+                return 'Margin Shortfall Alert - Sapphire Broking';
+            case 'payout-rejected':
+                return 'Payout Request Rejected - Sapphire Broking';
+            case 'documents-rejected-notification':
+                return 'Documents Rejected - Sapphire Broking';
+            case 'kyc-update-required':
+                return 'KYC Update Required - Sapphire Broking';
+            case 'funds-added':
+                return 'Funds Added Successfully - Sapphire Broking';
+            case 'account-suspension-notice':
+                return 'Account Suspension Notice - Sapphire Broking';
             default:
                 return 'Notification - Sapphire Broking';
         }
@@ -100,7 +136,12 @@ class EmailNotificationService {
             .replace(/{{ time }}/g, currentTime)
             .replace(/{{ ip }}/g, data.ip || 'N/A')
             .replace(/\[Device Type\]/g, data.deviceType || 'Unknown Device')
-            .replace(/\[Location\]/g, data.location || 'Unknown Location');
+            .replace(/\[Location\]/g, data.location || 'Unknown Location')
+            .replace(/{{ amount }}/g, data.amount || 'N/A')
+            .replace(/{{ availableBalance }}/g, data.availableBalance || 'N/A')
+            .replace(/{{ creditHours }}/g, data.creditHours || 'N/A')
+            .replace(/{{ reason }}/g, data.reason || 'N/A')
+            .replace(/{{ marginShortfall }}/g, data.marginShortfall || 'N/A');
     }
 }
 
@@ -133,6 +174,78 @@ export async function sendLoginAlert(email: string, userData: NotificationData):
  */
 export async function sendWelcomeEmail(email: string, userData: NotificationData): Promise<void> {
     const notificationService = new EmailNotificationService(email, 'welcome');
+    await notificationService.sendNotification(userData);
+}
+
+/**
+ * Helper function to send withdrawal processed notification
+ */
+export async function sendWithdrawalProcessed(email: string, userData: NotificationData): Promise<void> {
+    const notificationService = new EmailNotificationService(email, 'withdrawal-processed');
+    await notificationService.sendNotification(userData);
+}
+
+/**
+ * Helper function to send account successfully opened notification
+ */
+export async function sendAccountSuccessfullyOpened(email: string, userData: NotificationData): Promise<void> {
+    const notificationService = new EmailNotificationService(email, 'account-successfully-opened');
+    await notificationService.sendNotification(userData);
+}
+
+/**
+ * Helper function to send documents received confirmation
+ */
+export async function sendDocumentsReceivedConfirmation(email: string, userData: NotificationData): Promise<void> {
+    const notificationService = new EmailNotificationService(email, 'documents-received-confirmation');
+    await notificationService.sendNotification(userData);
+}
+
+/**
+ * Helper function to send margin shortfall alert
+ */
+export async function sendMarginShortfallAlert(email: string, userData: NotificationData): Promise<void> {
+    const notificationService = new EmailNotificationService(email, 'margin-shortfall-alert');
+    await notificationService.sendNotification(userData);
+}
+
+/**
+ * Helper function to send payout rejected notification
+ */
+export async function sendPayoutRejected(email: string, userData: NotificationData): Promise<void> {
+    const notificationService = new EmailNotificationService(email, 'payout-rejected');
+    await notificationService.sendNotification(userData);
+}
+
+/**
+ * Helper function to send documents rejected notification
+ */
+export async function sendDocumentsRejectedNotification(email: string, userData: NotificationData): Promise<void> {
+    const notificationService = new EmailNotificationService(email, 'documents-rejected-notification');
+    await notificationService.sendNotification(userData);
+}
+
+/**
+ * Helper function to send KYC update required notification
+ */
+export async function sendKycUpdateRequired(email: string, userData: NotificationData): Promise<void> {
+    const notificationService = new EmailNotificationService(email, 'kyc-update-required');
+    await notificationService.sendNotification(userData);
+}
+
+/**
+ * Helper function to send funds added notification
+ */
+export async function sendFundsAdded(email: string, userData: NotificationData): Promise<void> {
+    const notificationService = new EmailNotificationService(email, 'funds-added');
+    await notificationService.sendNotification(userData);
+}
+
+/**
+ * Helper function to send account suspension notice
+ */
+export async function sendAccountSuspensionNotice(email: string, userData: NotificationData): Promise<void> {
+    const notificationService = new EmailNotificationService(email, 'account-suspension-notice');
     await notificationService.sendNotification(userData);
 }
 

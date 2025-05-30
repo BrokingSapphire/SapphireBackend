@@ -19,7 +19,7 @@ import {
 } from './login.types';
 import { ResponseWithToken, SessionJwtType } from '@app/modules/common.types';
 import { hashPassword, verifyPassword } from '@app/utils/passwords';
-import { sendPasswordChangeConfirmation } from '@app/services/notification.service';
+import { sendPasswordChangeConfirmation, sendLoginAlert } from '@app/services/notification.service';
 
 const login = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, LoginRequestType>,
@@ -131,6 +131,14 @@ const verifyLoginOtp = async (
     // Generate token for the original user
     const token = sign<SessionJwtType>({
         userId: session.userId,
+    });
+
+    await sendLoginAlert(session.email, {
+        userName: session.userName,
+        email: session.email,
+        ip: req.ip || 'N/A',
+        deviceType: req.get('User-Agent') || 'Unknown Device',
+        location: 'Unknown Location',
     });
 
     res.status(OK).json({
