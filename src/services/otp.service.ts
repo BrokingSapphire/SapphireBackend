@@ -103,7 +103,7 @@ abstract class OtpVerification {
     }
 
     /**
-     * Generates a random 6-digit OTP
+     * Generates a random OTP with specified length
      */
     private generateOtp(): string {
         // Generate OTP with specified length

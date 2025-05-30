@@ -19,6 +19,7 @@ import {
 } from './login.types';
 import { ResponseWithToken, SessionJwtType } from '@app/modules/common.types';
 import { hashPassword, verifyPassword } from '@app/utils/passwords';
+import { sendPasswordChangeConfirmation } from '@app/services/notification.service';
 
 const login = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, LoginRequestType>,
@@ -182,8 +183,11 @@ const resetPassword = async (
         .selectFrom('user')
         .innerJoin('user_password_details', 'user.id', 'user_password_details.user_id')
         .innerJoin('hashing_algorithm', 'user_password_details.hash_algo_id', 'hashing_algorithm.id')
+        .innerJoin('user_name', 'user.name', 'user_name.id')
         .select([
             'user.id',
+            'user.email',
+            'user_name.first_name',
             'user_password_details.password_hash as hashedPassword',
             'user_password_details.password_salt as salt',
             'hashing_algorithm.name as hashAlgo',
@@ -212,6 +216,14 @@ const resetPassword = async (
             .execute();
     });
 
+    // Send password change confirmation email using notification service
+    await sendPasswordChangeConfirmation(user.email, {
+        userName: user.first_name,
+        email: user.email,
+        ip: req.ip || req.connection.remoteAddress || 'N/A',
+        deviceType: req.get('User-Agent') || 'Unknown Device',
+        location: 'Unknown Location', // You can add geolocation if needed
+    });
     res.status(OK).json({
         message: 'Password reset successful',
     });
@@ -356,10 +368,19 @@ const forgotPasswordReset = async (
             .execute();
     });
 
-    // mark the newpassword set to true
+    // mark the session as used
     session.isUsed = true;
     await redisClient.set(redisKey, JSON.stringify(session));
     await redisClient.expire(redisKey, 5 * 60);
+
+    // Send password change confirmation email using data from session
+    await sendPasswordChangeConfirmation(session.email, {
+        userName: session.userName,
+        email: session.email,
+        ip: req.ip || 'N/A',
+        deviceType: req.get('User-Agent') || 'Unknown Device',
+        location: 'Unknown Location',
+    });
 
     res.status(OK).json({ message: 'Password reset successful' });
 };
