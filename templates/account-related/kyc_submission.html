@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no">
+    <title>KYC Documents Submission - Sapphire Broking</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        :root {
+            --primary: #064D51;
+            --primary-light: rgba(6, 77, 81, 0.1);
+            --accent: #FFD62D;
+            --accent-light: rgba(255, 214, 45, 0.2);
+            --background: #EAFBF0;
+            --white: #FFFFFF;
+            --text-dark: #1A2B2C;
+            --text-medium: #415657;
+            --text-light: #6E7878;
+            --border-light: #E5E7EB;
+            --success: #16A34A;
+            --success-light: rgba(22, 163, 74, 0.1);
+            --warning: #F59E0B;
+            --warning-light: rgba(245, 158, 11, 0.1);
+            --info: #0EA5E9;
+            --info-light: rgba(14, 165, 233, 0.1);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background);
+            color: var(--text-dark);
+            line-height: 1.6;
+            font-size: 16px;
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        .email-wrapper {
+            background-color: var(--white);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+        }
+        
+        .email-header {
+            background-color: var(--primary);
+            padding: 30px 40px;
+            text-align: center;
+            position: relative;
+        }
+        
+        .logo {
+            max-width: 150px;
+            height: auto;
+        }
+        
+        .header-accent {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 10% 20%, rgba(255, 214, 45, 0.3) 0%, transparent 30%);
+        }
+        
+        .email-body {
+            padding: 40px;
+        }
+        
+        .email-footer {
+            background-color: var(--primary-light);
+            padding: 30px;
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-medium);
+        }
+        
+        .social-links {
+            margin: 25px 0;
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+        }
+        
+        .social-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            background-color: var(--primary);
+            border-radius: 50%;
+            color: var(--white);
+            transition: all 0.2s ease;
+        }
+        
+        .disclaimer {
+            font-size: 11px;
+            color: var(--text-light);
+            margin-top: 25px;
+            padding-top: 25px;
+            border-top: 1px solid var(--border-light);
+        }
+        
+        .button {
+            display: inline-block;
+            padding: 14px 28px;
+            background-color: var(--primary);
+            color: var(--white) !important;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 15px;
+            transition: all 0.2s ease;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(6, 77, 81, 0.2);
+        }
+        
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(6, 77, 81, 0.25);
+        }
+        
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--primary);
+            margin-bottom: 16px;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+        
+        h1 {
+            font-size: 28px;
+            letter-spacing: -0.5px;
+        }
+        
+        h2 {
+            font-size: 24px;
+            letter-spacing: -0.3px;
+        }
+        
+        h3 {
+            font-size: 20px;
+        }
+        
+        p {
+            margin-bottom: 16px;
+            color: var(--text-medium);
+        }
+        
+        .kyc-banner {
+            margin: 0 0 32px 0;
+            position: relative;
+            text-align: center;
+        }
+        
+        .kyc-image {
+            width: 100%;
+            height: auto;
+            border-radius: 12px;
+            margin-bottom: 24px;
+        }
+        
+        .kyc-title {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--primary);
+            margin: 0 0 12px 0;
+            text-align: center;
+            position: relative;
+            display: inline-block;
+        }
+        
+        .kyc-title:after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(to right, var(--accent), var(--primary));
+            border-radius: 3px;
+        }
+        
+        .kyc-subtitle {
+            font-size: 18px;
+            color: var(--text-medium);
+            margin-bottom: 32px;
+            text-align: center;
+        }
+        
+        .message-box {
+            background-color: var(--primary-light);
+            border-radius: 12px;
+            padding: 32px;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 32px;
+        }
+        
+        .message-box:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(to right, var(--accent), var(--primary));
+        }
+        
+        .message-content {
+            position: relative;
+            z-index: 1;
+        }
+        
+        .pattern-bg {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 120px;
+            height: 120px;
+            opacity: 0.1;
+            z-index: 0;
+        }
+        
+        .docs-required-section {
+            background-color: var(--white);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+            border: 1px solid var(--border-light);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+        }
+        
+        .docs-required-title {
+            text-align: center;
+            margin-bottom: 24px;
+            color: var(--primary);
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .doc-item {
+            display: flex;
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-light);
+        }
+        
+        .doc-item:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+        
+        .doc-icon {
+            flex-shrink: 0;
+            width: 48px;
+            height: 48px;
+            border-radius: 8px;
+            background-color: var(--primary-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: var(--primary);
+            margin-right: 16px;
+        }
+        
+        .doc-content {
+            flex-grow: 1;
+        }
+        
+        .doc-title {
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 4px;
+        }
+        
+        .doc-description {
+            font-size: 14px;
+            color: var(--text-medium);
+            margin-bottom: 8px;
+        }
+        
+        .doc-format {
+            font-size: 13px;
+            color: var(--text-light);
+            display: flex;
+            align-items: center;
+        }
+        
+        .format-icon {
+            margin-right: 4px;
+            font-size: 14px;
+        }
+        
+        .submission-process {
+            background-color: var(--white);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+            border: 1px solid var(--border-light);
+        }
+        
+        .submission-process-title {
+            margin-bottom: 24px;
+            color: var(--primary);
+            font-size: 18px;
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        .step {
+            display: flex;
+            margin-bottom: 24px;
+            position: relative;
+            align-items: flex-start;
+        }
+        
+        .step:last-child {
+            margin-bottom: 0;
+        }
+        
+        .step-number {
+            flex-shrink: 0;
+            width: 32px;
+            height: 32px;
+            background-color: var(--primary);
+            border-radius: 50%;
+            color: var(--white);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            margin-right: 16px;
+            margin-top: 4px;
+        }
+        
+        .step-content {
+            flex-grow: 1;
+        }
+        
+        .step-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--primary);
+        }
+        
+        .step-description {
+            font-size: 14px;
+            color: var(--text-medium);
+        }
+        
+        .deadline-box {
+            background-color: var(--warning-light);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            margin: 32px 0;
+        }
+        
+        .deadline-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--warning);
+            margin-bottom: 8px;
+        }
+        
+        .deadline-date {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--warning);
+        }
+        
+        .help-box {
+            background-color: var(--success-light);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 32px;
+            display: flex;
+            align-items: flex-start;
+        }
+        
+        .help-icon {
+            flex-shrink: 0;
+            margin-right: 12px;
+            font-size: 24px;
+            color: var(--success);
+        }
+        
+        .help-content {
+            font-size: 14px;
+            color: var(--text-medium);
+        }
+        
+        .cta-container {
+            text-align: center;
+            margin: 32px 0;
+        }
+        
+        /* Mobile Optimization */
+        @media (max-width: 550px) {
+            .email-body {
+                padding: 30px 24px;
+            }
+            
+            .kyc-title {
+                font-size: 28px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="email-wrapper">
+            <!-- Header with Logo -->
+            <div class="email-header">
+                <div class="header-accent"></div>
+                <!-- In production, replace with your actual logo URL -->
+                <img src="/api/placeholder/150/50" alt="Sapphire Broking" class="logo" />
+            </div>
+            
+            <!-- Email Body -->
+            <div class="email-body">
+                <div class="kyc-banner">
+                    <!-- Replace with appropriate KYC image -->
+                    <img src="/api/placeholder/520/200" alt="KYC Submission" class="kyc-image" />
+                    
+                    <h1 class="kyc-title">KYC Documents Submission</h1>
+                    <p class="kyc-subtitle">Complete your account verification process</p>
+                </div>
+                
+                <p>Dear <strong>[Client Name]</strong>,</p>
+                
+                <p>Thank you for choosing Sapphire Broking for your investment journey. To comply with regulatory requirements and activate your trading account, we need you to submit your Know Your Customer (KYC) documents as soon as possible.</p>
+                
+                <div class="message-box">
+                    <div class="pattern-bg">📋</div>
+                    <div class="message-content">
+                        <p>Your KYC verification is essential for:</p>
+                        <ul style="margin-bottom: 16px; padding-left: 20px;">
+                            <li>Activating your trading account</li>
+                            <li>Ensuring regulatory compliance</li>
+                            <li>Protecting your financial interests</li>
+                            <li>Enabling seamless trading experience</li>
+                        </ul>
+                        <p style="margin-bottom: 0;">Please submit the required documents at your earliest convenience to avoid any delays in your account activation.</p>
+                    </div>
+                </div>
+                
+                <div class="docs-required-section">
+                    <h3 class="docs-required-title">Required Documents</h3>
+                    
+                    <div class="doc-item">
+                        <div class="doc-icon">📄</div>
+                        <div class="doc-content">
+                            <h4 class="doc-title">Identity Proof (Any one)</h4>
+                            <p class="doc-description">PAN Card (Mandatory), Aadhaar Card, Passport, Voter ID, or Driving License</p>
+                            <div class="doc-format">
+                                <span class="format-icon">📎</span> JPG, PNG, or PDF format (Max 5MB)
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="doc-item">
+                        <div class="doc-icon">🏠</div>
+                        <div class="doc-content">
+                            <h4 class="doc-title">Address Proof (Any one)</h4>
+                            <p class="doc-description">Aadhaar Card, Passport, Utility Bill (not older than 3 months), Bank Statement</p>
+                            <div class="doc-format">
+                                <span class="format-icon">📎</span> JPG, PNG, or PDF format (Max 5MB)
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="doc-item">
+                        <div class="doc-icon">🏦</div>
+                        <div class="doc-content">
+                            <h4 class="doc-title">Bank Account Proof</h4>
+                            <p class="doc-description">Cancelled Cheque Leaf or Bank Statement (not older than 3 months)</p>
+                            <div class="doc-format">
+                                <span class="format-icon">📎</span> JPG, PNG, or PDF format (Max 5MB)
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="doc-item">
+                        <div class="doc-icon">📸</div>
+                        <div class="doc-content">
+                            <h4 class="doc-title">Passport Size Photograph</h4>
+                            <p class="doc-description">Recent passport size photograph with white background</p>
+                            <div class="doc-format">
+                                <span class="format-icon">📎</span> JPG or PNG format (Max 2MB)
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="doc-item">
+                        <div class="doc-icon">✍️</div>
+                        <div class="doc-content">
+                            <h4 class="doc-title">Signature</h4>
+                            <p class="doc-description">Clear image of your signature on a white background</p>
+                            <div class="doc-format">
+                                <span class="format-icon">📎</span> JPG or PNG format (Max 2MB)
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="submission-process">
+                    <h3 class="submission-process-title">How to Submit Your KYC Documents</h3>
+                    
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h4 class="step-title">Log in to Your Account</h4>
+                            <p class="step-description">Use your registered email and password to log in to your Sapphire Broking account.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h4 class="step-title">Navigate to KYC Section</h4>
+                            <p class="step-description">Go to the Profile section and select "Complete KYC" option.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h4 class="step-title">Upload Required Documents</h4>
+                            <p class="step-description">Upload clear scans or photos of all the required documents as mentioned above.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <h4 class="step-title">Submit for Verification</h4>
+                            <p class="step-description">Once all documents are uploaded, click on the "Submit for Verification" button.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="deadline-box">
+                    <div class="deadline-title">Submission Deadline</div>
+                    <div class="deadline-date">[Deadline Date]</div>
+                </div>
+                
+                <div class="cta-container">
+                    <a href="#" class="button">UPLOAD KYC DOCUMENTS NOW</a>
+                </div>
+                
+                <div class="help-box">
+                    <div class="help-icon">💬</div>
+                    <div class="help-content">
+                        <p style="margin-bottom: 8px;"><strong>Need Assistance?</strong></p>
+                        <p style="margin-bottom: 0;">If you have any questions or face any issues during the KYC submission process, our dedicated support team is available to assist you. Contact us at <strong>support@sapphirebroking.com</strong> or call <strong>+91 XXXX XXX XXX</strong>.</p>
+                    </div>
+                </div>
+                
+                <p style="text-align: center; margin-top: 32px;">Thank you for your cooperation. We look forward to serving your investment needs.</p>
+            </div>
+            
+            <!-- Footer -->
+            <div class="email-footer">
+                <p><strong>Sapphire Broking</strong><br>
+                123 Financial District, Suite 789<br>
+                Mumbai, Maharashtra 400001<br>
+                Customer Support: +91 XXXX XXX XXX</p>
+                
+                <div class="social-links">
+                    <!-- Placeholder social icons -->
+                    <div class="social-icon">f</div>
+                    <div class="social-icon">t</div>
+                    <div class="social-icon">in</div>
+                    <div class="social-icon">ig</div>
+                </div>
+                
+                <p>© 2025 Sapphire Broking. All Rights Reserved.</p>
+                
+                <div class="disclaimer">
+                    <p>DISCLAIMER: Investments in securities market are subject to market risks. Read all the related documents carefully before investing. Registration granted by SEBI, membership of BSE, NSE, and MCX-SX, and registration of the DP with SEBI does not guarantee quality of services. Details of compliance officer: Name: Compliance Officer, Email: compliance@sapphirebroking.com, Phone: +91 XXXX XXX XXX</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

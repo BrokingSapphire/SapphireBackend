@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {{> head}}
+    {{> styles}}
+    {{#if customStyles}}
+    <style>
+        {{{customStyles}}}
+    </style>
+    {{/if}}
+</head>
+<body>
+    <div class="container">
+        <div class="email-wrapper">
+            {{> header}}
+            
+            <div class="email-body">
+                {{{body}}}
+            </div>
+            
+            {{> footer}}
+        </div>
+    </div>
+</body>
+</html>

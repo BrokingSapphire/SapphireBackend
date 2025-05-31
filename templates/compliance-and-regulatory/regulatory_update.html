@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no">
+    <title>Important Regulatory Update - Sapphire Broking</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        :root {
+            --primary: #064D51;
+            --primary-light: rgba(6, 77, 81, 0.1);
+            --accent: #FFD62D;
+            --accent-light: rgba(255, 214, 45, 0.2);
+            --background: #EAFBF0;
+            --white: #FFFFFF;
+            --text-dark: #1A2B2C;
+            --text-medium: #415657;
+            --text-light: #6E7878;
+            --border-light: #E5E7EB;
+            --success: #16A34A;
+            --success-light: rgba(22, 163, 74, 0.1);
+            --warning: #F59E0B;
+            --warning-light: rgba(245, 158, 11, 0.1);
+            --info: #0EA5E9;
+            --info-light: rgba(14, 165, 233, 0.1);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background);
+            color: var(--text-dark);
+            line-height: 1.6;
+            font-size: 16px;
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        .email-wrapper {
+            background-color: var(--white);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+        }
+        
+        .email-header {
+            background-color: var(--primary);
+            padding: 30px 40px;
+            text-align: center;
+            position: relative;
+        }
+        
+        .logo {
+            max-width: 150px;
+            height: auto;
+        }
+        
+        .header-accent {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 10% 20%, rgba(255, 214, 45, 0.3) 0%, transparent 30%);
+        }
+        
+        .email-body {
+            padding: 40px;
+        }
+        
+        .email-footer {
+            background-color: var(--primary-light);
+            padding: 30px;
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-medium);
+        }
+        
+        .social-links {
+            margin: 25px 0;
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+        }
+        
+        .social-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            background-color: var(--primary);
+            border-radius: 50%;
+            color: var(--white);
+            transition: all 0.2s ease;
+        }
+        
+        .disclaimer {
+            font-size: 11px;
+            color: var(--text-light);
+            margin-top: 25px;
+            padding-top: 25px;
+            border-top: 1px solid var(--border-light);
+        }
+        
+        .button {
+            display: inline-block;
+            padding: 14px 28px;
+            background-color: var(--primary);
+            color: var(--white) !important;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 15px;
+            transition: all 0.2s ease;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(6, 77, 81, 0.2);
+        }
+        
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(6, 77, 81, 0.25);
+        }
+        
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--primary);
+            margin-bottom: 16px;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+        
+        h1 {
+            font-size: 28px;
+            letter-spacing: -0.5px;
+        }
+        
+        h2 {
+            font-size: 24px;
+            letter-spacing: -0.3px;
+        }
+        
+        h3 {
+            font-size: 20px;
+        }
+        
+        p {
+            margin-bottom: 16px;
+            color: var(--text-medium);
+        }
+        
+        .update-banner {
+            margin: 0 0 32px 0;
+            position: relative;
+            text-align: center;
+            background-color: var(--info-light);
+            padding: 24px;
+            border-radius: 12px;
+        }
+        
+        .update-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        
+        .update-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--primary);
+            margin: 0 0 12px 0;
+            text-align: center;
+        }
+        
+        .update-subtitle {
+            font-size: 18px;
+            color: var(--text-medium);
+            margin-bottom: 0;
+            text-align: center;
+        }
+        
+        .message-box {
+            background-color: var(--primary-light);
+            border-radius: 12px;
+            padding: 32px;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 32px;
+        }
+        
+        .message-box:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: var(--primary);
+        }
+        
+        .message-content {
+            position: relative;
+            z-index: 1;
+        }
+        
+        .regulatory-details {
+            background-color: var(--white);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+            border: 1px solid var(--border-light);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+        }
+        
+        .regulatory-details-title {
+            text-align: center;
+            margin-bottom: 16px;
+            color: var(--primary);
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .key-changes-list {
+            margin-bottom: 24px;
+        }
+        
+        .change-item {
+            display: flex;
+            margin-bottom: 16px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border-light);
+        }
+        
+        .change-item:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+        
+        .change-icon {
+            flex-shrink: 0;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background-color: var(--info-light);
+            color: var(--info);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 16px;
+            margin-top: 4px;
+        }
+        
+        .change-content {
+            flex-grow: 1;
+        }
+        
+        .change-title {
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 4px;
+        }
+        
+        .change-description {
+            font-size: 14px;
+            color: var(--text-medium);
+        }
+        
+        .timeline-box {
+            background-color: var(--white);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+            border: 1px solid var(--border-light);
+        }
+        
+        .timeline-title {
+            margin-bottom: 16px;
+            color: var(--primary);
+            font-size: 18px;
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        .timeline-item {
+            display: flex;
+            margin-bottom: 16px;
+            position: relative;
+        }
+        
+        .timeline-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .timeline-item:not(:last-child):after {
+            content: "";
+            position: absolute;
+            left: 12px;
+            top: 24px;
+            bottom: -8px;
+            width: 2px;
+            background-color: var(--border-light);
+        }
+        
+        .timeline-date {
+            flex-shrink: 0;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background-color: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--white);
+            font-size: 12px;
+            margin-right: 16px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .timeline-content {
+            flex-grow: 1;
+            padding-bottom: 16px;
+        }
+        
+        .timeline-event {
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+        
+        .timeline-description {
+            font-size: 14px;
+            color: var(--text-medium);
+        }
+        
+        .action-required-box {
+            background-color: var(--warning-light);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 32px 0;
+            border-left: 4px solid var(--warning);
+        }
+        
+        .action-required-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--warning);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .action-icon {
+            margin-right: 8px;
+        }
+        
+        .action-required-content {
+            font-size: 14px;
+            color: var(--text-medium);
+        }
+        
+        .additional-info {
+            background-color: var(--info-light);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 32px;
+        }
+        
+        .additional-info-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--info);
+            margin-bottom: 8px;
+        }
+        
+        .additional-info-content {
+            font-size: 14px;
+            color: var(--text-medium);
+        }
+        
+        .cta-container {
+            text-align: center;
+            margin: 32px 0;
+        }
+        
+        /* Mobile Optimization */
+        @media (max-width: 550px) {
+            .email-body {
+                padding: 30px 24px;
+            }
+            
+            .update-title {
+                font-size: 24px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="email-wrapper">
+            <!-- Header with Logo -->
+            <div class="email-header">
+                <div class="header-accent"></div>
+                <!-- In production, replace with your actual logo URL -->
+                <img src="/api/placeholder/150/50" alt="Sapphire Broking" class="logo" />
+            </div>
+            
+            <!-- Email Body -->
+            <div class="email-body">
+                <div class="update-banner">
+                    <div class="update-icon">📜</div>
+                    <h1 class="update-title">Important Regulatory Update</h1>
+                    <p class="update-subtitle">Changes to SEBI Guidelines Affecting Your Trading Account</p>
+                </div>
+                
+                <p>Dear <strong>[Client Name]</strong>,</p>
+                
+                <p>We are writing to inform you about important regulatory changes announced by the Securities and Exchange Board of India (SEBI) that will impact trading procedures and requirements for all market participants.</p>
+                
+                <div class="message-box">
+                    <div class="message-content">
+                        <p>As your trusted broker, we at Sapphire Broking are committed to keeping you informed about regulatory developments that affect your trading activities and ensuring your seamless compliance with these new requirements.</p>
+                        
+                        <p>Please review this information carefully as some of these changes may require action from your end.</p>
+                    </div>
+                </div>
+                
+                <div class="regulatory-details">
+                    <h3 class="regulatory-details-title">Key Regulatory Changes</h3>
+                    
+                    <div class="key-changes-list">
+                        <div class="change-item">
+                            <div class="change-icon">1</div>
+                            <div class="change-content">
+                                <h4 class="change-title">Peak Margin Reporting Requirements</h4>
+                                <p class="change-description">SEBI has updated the peak margin reporting requirements. Intraday leverage will now be limited to a maximum of [X]× of the available margin, effective [Date].</p>
+                            </div>
+                        </div>
+                        
+                        <div class="change-item">
+                            <div class="change-icon">2</div>
+                            <div class="change-content">
+                                <h4 class="change-title">Two-Factor Authentication for All Transactions</h4>
+                                <p class="change-description">All trading platforms must implement mandatory two-factor authentication for fund transfers and high-value trades exceeding ₹[Amount].</p>
+                            </div>
+                        </div>
+                        
+                        <div class="change-item">
+                            <div class="change-icon">3</div>
+                            <div class="change-content">
+                                <h4 class="change-title">Updated KYC Requirements</h4>
+                                <p class="change-description">Enhanced KYC verification will be required for all clients, including periodic re-verification of PAN, address, and other essential details every [X] years.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="change-item">
+                            <div class="change-icon">4</div>
+                            <div class="change-content">
+                                <h4 class="change-title">Pledge/Re-pledge Mechanism Changes</h4>
+                                <p class="change-description">The process for pledging and re-pledging securities has been revised to provide greater transparency and security for investors.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="timeline-box">
+                    <h3 class="timeline-title">Implementation Timeline</h3>
+                    
+                    <div class="timeline-item">
+                        <div class="timeline-date">1</div>
+                        <div class="timeline-content">
+                            <div class="timeline-event">[Date 1]</div>
+                            <div class="timeline-description">Official announcement of regulatory changes by SEBI</div>
+                        </div>
+                    </div>
+                    
+                    <div class="timeline-item">
+                        <div class="timeline-date">2</div>
+                        <div class="timeline-content">
+                            <div class="timeline-event">[Date 2]</div>
+                            <div class="timeline-description">Preparatory phase: System updates and client notifications</div>
+                        </div>
+                    </div>
+                    
+                    <div class="timeline-item">
+                        <div class="timeline-date">3</div>
+                        <div class="timeline-content">
+                            <div class="timeline-event">[Date 3]</div>
+                            <div class="timeline-description">Deadline for clients to complete required actions</div>
+                        </div>
+                    </div>
+                    
+                    <div class="timeline-item">
+                        <div class="timeline-date">4</div>
+                        <div class="timeline-content">
+                            <div class="timeline-event">[Date 4]</div>
+                            <div class="timeline-description">Full implementation of all regulatory changes</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="action-required-box">
+                    <h3 class="action-required-title">
+                        <span class="action-icon">⚠️</span> Action Required
+                    </h3>
+                    <div class="action-required-content">
+                        <p>To ensure compliance with the new regulations and avoid any disruption to your trading activities, please complete the following actions by [Deadline Date]:</p>
+                        
+                        <ol style="margin-top: 12px; padding-left: 24px;">
+                            <li style="margin-bottom: 8px;">Update your KYC information through your account dashboard</li>
+                            <li style="margin-bottom: 8px;">Enable two-factor authentication for your trading account</li>
+                            <li style="margin-bottom: 8px;">Review your margin requirements and adjust your trading strategy if necessary</li>
+                            <li>Acknowledge receipt of this regulatory update by clicking the button below</li>
+                        </ol>
+                    </div>
+                </div>
+                
+                <div class="cta-container">
+                    <a href="#" class="button">ACKNOWLEDGE & UPDATE KYC</a>
+                </div>
+                
+                <div class="additional-info">
+                    <h4 class="additional-info-title">Need More Information?</h4>
+                    <div class="additional-info-content">
+                        <p>We have organized a webinar to discuss these regulatory changes in detail and answer any questions you may have.</p>
+                        <p><strong>Webinar Date:</strong> [Webinar Date] at [Webinar Time]<br>
+                        <strong>Registration Link:</strong> <a href="#" style="color: var(--info); text-decoration: none;">Click here to register</a></p>
+                    </div>
+                </div>
+                
+                <p style="margin-top: 32px;">If you have any questions or require assistance regarding these regulatory changes, please contact our compliance team:</p>
+                
+                <p>Email: <strong>compliance@sapphirebroking.com</strong><br>
+                Phone: <strong>+91 XXXX XXX XXX</strong><br>
+                Hours: Monday to Friday, 9:00 AM to 6:00 PM</p>
+                
+                <p style="text-align: center; margin-top: 32px; font-style: italic;">We appreciate your cooperation in implementing these regulatory changes and thank you for your continued trust in Sapphire Broking.</p>
+            </div>
+            
+            <!-- Footer -->
+            <div class="email-footer">
+                <p><strong>Sapphire Broking</strong><br>
+                123 Financial District, Suite 789<br>
+                Mumbai, Maharashtra 400001<br>
+                Customer Support: +91 XXXX XXX XXX</p>
+                
+                <div class="social-links">
+                    <!-- Placeholder social icons -->
+                    <div class="social-icon">f</div>
+                    <div class="social-icon">t</div>
+                    <div class="social-icon">in</div>
+                    <div class="social-icon">ig</div>
+                </div>
+                
+                <p>© 2025 Sapphire Broking. All Rights Reserved.</p>
+                
+                <div class="disclaimer">
+                    <p>DISCLAIMER: Investments in securities market are subject to market risks. Read all the related documents carefully before investing. Registration granted by SEBI, membership of BSE, NSE, and MCX-SX, and registration of the DP with SEBI does not guarantee quality of services. Details of compliance officer: Name: Compliance Officer, Email: compliance@sapphirebroking.com, Phone: +91 XXXX XXX XXX</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

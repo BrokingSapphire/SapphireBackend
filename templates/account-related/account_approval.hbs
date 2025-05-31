@@ -1,0 +1,139 @@
+{{#> layout}}
+{{#*inline "customStyles"}}
+.status-banner {
+    margin: 0 0 32px 0;
+    position: relative;
+    text-align: center;
+}
+
+.status-icon {
+    font-size: 64px;
+    color: var(--success);
+    margin-bottom: 16px;
+}
+
+.status-title {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--success);
+    margin: 0 0 12px 0;
+    text-align: center;
+}
+
+.status-subtitle {
+    font-size: 18px;
+    color: var(--text-medium);
+    margin-bottom: 32px;
+    text-align: center;
+}
+
+.message-box {
+    background-color: var(--success-light);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 32px;
+}
+
+.account-details {
+    background-color: var(--primary-light);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 32px;
+}
+
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.detail-row:last-child {
+    border-bottom: none;
+}
+
+.detail-label {
+    font-weight: 500;
+    color: var(--text-medium);
+}
+
+.detail-value {
+    font-weight: 500;
+    color: var(--text-dark);
+}
+
+.cta-container {
+    text-align: center;
+    margin: 32px 0;
+}
+
+.signature {
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border-light);
+}
+
+.signature-image {
+    max-width: 150px;
+    height: auto;
+    margin-bottom: 16px;
+}
+{{/inline}}
+
+{{#*inline "body"}}
+<div class="status-banner">
+    <div class="status-icon">✅</div>
+    <h1 class="status-title">Account Approved!</h1>
+    <p class="status-subtitle">Your Sapphire Broking account is now active and ready to use.</p>
+</div>
+
+<p>Dear <strong>{{userName}}</strong>,</p>
+
+<p>We're pleased to inform you that your Sapphire Broking account has been successfully approved and activated. You can now start trading in equities, derivatives, and other financial instruments.</p>
+
+<div class="message-box">
+    <h3 style="color: var(--success); margin-top: 0;">Important Information</h3>
+    <p style="margin-bottom: 0;">Your account is now fully operational. You can log in using your Client ID and the password you created during registration. If you haven't set a password yet, please use the 'Forgot Password' option on the login page.</p>
+</div>
+
+<h2>Your Account Details</h2>
+
+<div class="account-details">
+    {{> detail-row label="Client ID" value=clientId}}
+    {{> detail-row label="Account Number" value=accountNumber}}
+    {{> detail-row label="Account Type" value=accountType}}
+    {{> detail-row label="Activation Date" value=activationDate}}
+    {{> detail-row label="Account Status" value="Active" valueStyle="color: var(--success); font-weight: 600;"}}
+</div>
+
+<h2>Next Steps</h2>
+
+<p>To start trading, please follow these simple steps:</p>
+
+<ol style="margin-bottom: 24px; padding-left: 24px;">
+    <li style="margin-bottom: 12px;">Log in to your account using your Client ID and password.</li>
+    <li style="margin-bottom: 12px;">Complete your risk profiling questionnaire if you haven't already.</li>
+    <li style="margin-bottom: 12px;">Fund your trading account.</li>
+    <li style="margin-bottom: 12px;">Start exploring investment opportunities and place your first trade.</li>
+</ol>
+
+<div class="cta-container">
+    <a href="#" class="button button-success">LOGIN TO YOUR ACCOUNT</a>
+</div>
+
+<p>If you have any questions or need assistance with your account, our dedicated support team is available to help you:</p>
+
+<p>Email: <strong>support@sapphirebroking.com</strong><br>
+Phone: <strong>+91 XXXX XXX XXX</strong><br>
+Hours: Monday to Friday, 9:00 AM to 6:00 PM</p>
+
+<div class="signature">
+    <img src="/api/placeholder/150/60" alt="Signature" class="signature-image" />
+    <p><strong>{{accountManagerName}}</strong><br>
+    Account Manager<br>
+    Sapphire Broking</p>
+</div>
+
+<p style="text-align: center;">Welcome to the Sapphire Broking family! We look forward to helping you achieve your financial goals.</p>
+{{/inline}}
+{{/layout}}

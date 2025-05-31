@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no">
+    <title>Happy Ram Navami - Sapphire Broking</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        :root {
+            --primary: #064D51;
+            --primary-light: rgba(6, 77, 81, 0.1);
+            --accent: #FFD62D;
+            --accent-light: rgba(255, 214, 45, 0.2);
+            --background: #EAFBF0;
+            --white: #FFFFFF;
+            --text-dark: #1A2B2C;
+            --text-medium: #415657;
+            --text-light: #6E7878;
+            --border-light: #E5E7EB;
+            
+            /* Ram Navami-specific colors */
+            --saffron: #FF9933;
+            --red: #FF5733;
+            --yellow: #FFCC33;
+            --light-saffron: rgba(255, 153, 51, 0.1);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background);
+            color: var(--text-dark);
+            line-height: 1.6;
+            font-size: 16px;
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        .email-wrapper {
+            background-color: var(--white);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+        }
+        
+        .email-header {
+            background: linear-gradient(135deg, var(--red) 0%, var(--saffron) 100%);
+            padding: 30px 40px;
+            text-align: center;
+            position: relative;
+        }
+        
+        .logo {
+            max-width: 150px;
+            height: auto;
+            margin-bottom: 20px;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 8px;
+            border-radius: 8px;
+        }
+        
+        .header-accent {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 60 60"><path d="M30,10 L30,50 M10,30 L50,30" stroke="%23FFCC33" stroke-width="1" opacity="0.3"/></svg>');
+            opacity: 0.2;
+        }
+        
+        .festival-banner {
+            width: 100%;
+            max-height: 200px;
+            object-fit: cover;
+            border-radius: 0;
+        }
+        
+        .email-body {
+            padding: 40px;
+            background-color: var(--white);
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><path d="M20,5 L25,10 L20,15 L15,10 Z" fill="%23FF9933" opacity="0.05"/></svg>');
+            background-position: center;
+            background-size: 80px;
+        }
+        
+        .email-footer {
+            background-color: var(--primary-light);
+            padding: 30px;
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-medium);
+        }
+        
+        .social-links {
+            margin: 25px 0;
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+        }
+        
+        .social-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            background-color: var(--primary);
+            border-radius: 50%;
+            color: var(--white);
+            transition: all 0.2s ease;
+        }
+        
+        .disclaimer {
+            font-size: 11px;
+            color: var(--text-light);
+            margin-top: 25px;
+            padding-top: 25px;
+            border-top: 1px solid var(--border-light);
+        }
+        
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--saffron);
+            margin-bottom: 16px;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+        
+        h1 {
+            font-size: 28px;
+            letter-spacing: -0.5px;
+            text-align: center;
+            color: var(--white);
+            margin-bottom: 0;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        h2 {
+            font-size: 24px;
+            letter-spacing: -0.3px;
+            text-align: center;
+            margin: 32px 0 24px;
+        }
+        
+        h3 {
+            font-size: 20px;
+        }
+        
+        p {
+            margin-bottom: 16px;
+            color: var(--text-medium);
+        }
+        
+        .greeting-text {
+            font-size: 18px;
+            font-weight: 500;
+            text-align: center;
+            margin-bottom: 24px;
+            color: var(--text-dark);
+        }
+        
+        .message-box {
+            background-color: var(--light-saffron);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 24px 0;
+            border: 1px solid rgba(255, 153, 51, 0.2);
+            text-align: center;
+        }
+        
+        .quote {
+            font-style: italic;
+            font-size: 16px;
+            color: var(--red);
+            margin: 16px 0;
+            text-align: center;
+        }
+        
+        .divider {
+            text-align: center;
+            margin: 32px 0;
+            font-size: 24px;
+            color: var(--saffron);
+            position: relative;
+        }
+        
+        .divider::before,
+        .divider::after {
+            content: "";
+            position: absolute;
+            height: 1px;
+            background: linear-gradient(to right, transparent, var(--light-saffron), transparent);
+            width: 40%;
+            top: 50%;
+        }
+        
+        .divider::before {
+            left: 0;
+        }
+        
+        .divider::after {
+            right: 0;
+        }
+        
+        .virtues {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 16px;
+            margin: 32px 0;
+        }
+        
+        .virtue-item {
+            background-color: var(--light-saffron);
+            border-radius: 12px;
+            padding: 16px;
+            width: calc(50% - 8px);
+            text-align: center;
+            border: 1px solid rgba(255, 153, 51, 0.2);
+        }
+        
+        .virtue-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+        
+        .virtue-text {
+            font-size: 14px;
+            color: var(--text-dark);
+            font-weight: 500;
+        }
+        
+        .signature {
+            margin-top: 40px;
+            text-align: center;
+        }
+        
+        .company-name {
+            font-weight: 700;
+            color: var(--primary);
+            font-size: 18px;
+            margin-bottom: 4px;
+        }
+        
+        .company-slogan {
+            font-style: italic;
+            color: var(--text-light);
+            font-size: 14px;
+        }
+        
+        /* Mobile Optimization */
+        @media (max-width: 550px) {
+            .email-body {
+                padding: 30px 24px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+            
+            .virtues {
+                flex-direction: column;
+            }
+            
+            .virtue-item {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="email-wrapper">
+            <!-- Header with Festival Branding -->
+            <div class="email-header">
+                <div class="header-accent"></div>
+                <img src="/api/placeholder/150/50" alt="Sapphire Broking" class="logo" />
+                <h1>Happy Ram Navami</h1>
+            </div>
+            
+            <!-- Festival Banner -->
+            <img src="/api/placeholder/600/200" alt="Ram Navami Celebration" class="festival-banner" />
+            
+            <!-- Email Body -->
+            <div class="email-body">
+                <p class="greeting-text">Dear [Customer Name],</p>
+                
+                <div class="message-box">
+                    <h2>May Lord Ram's Blessings Be With You</h2>
+                    <p>On this auspicious occasion of Ram Navami, we at Sapphire Broking extend our warmest wishes to you and your family. May Lord Ram's divine virtues of righteousness, courage, and integrity inspire and guide you in all aspects of your life.</p>
+                </div>
+                
+                <p class="quote">"The path of dharma may not be the easiest, but it is always the right path to follow."</p>
+                
+                <div class="divider">🏹</div>
+                
+                <div class="virtues">
+                    <div class="virtue-item">
+                        <div class="virtue-icon">⚖️</div>
+                        <div class="virtue-text">Righteousness (Dharma)</div>
+                    </div>
+                    <div class="virtue-item">
+                        <div class="virtue-icon">🦁</div>
+                        <div class="virtue-text">Courage (Shaurya)</div>
+                    </div>
+                    <div class="virtue-item">
+                        <div class="virtue-icon">🤝</div>
+                        <div class="virtue-text">Integrity (Sachai)</div>
+                    </div>
+                    <div class="virtue-item">
+                        <div class="virtue-icon">💫</div>
+                        <div class="virtue-text">Leadership (Netritva)</div>
+                    </div>
+                </div>
+                
+                <p style="text-align: center;">Just as Lord Ram embodied righteousness in his thoughts and actions, we strive to uphold the highest standards of integrity and transparency in our financial services. May this Ram Navami bring prosperity and ethical growth to your investments.</p>
+                
+                <p style="text-align: center;">Our offices will remain closed on [Date] for Ram Navami celebrations. We will resume our services on [Date].</p>
+                
+                <p style="text-align: center; margin-top: 24px; font-weight: 600; color: var(--saffron);">जय श्री राम (Jai Shri Ram)</p>
+                
+                <div class="signature">
+                    <p class="company-name">Sapphire Broking</p>
+                    <p class="company-slogan">Following the Path of Righteous Investing</p>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="email-footer">
+                <p><strong>Sapphire Broking</strong><br>
+                123 Financial District, Suite 789<br>
+                Mumbai, Maharashtra 400001<br>
+                Customer Support: +91 XXXX XXX XXX</p>
+                
+                <div class="social-links">
+                    <!-- Placeholder social icons -->
+                    <div class="social-icon">f</div>
+                    <div class="social-icon">t</div>
+                    <div class="social-icon">in</div>
+                    <div class="social-icon">ig</div>
+                </div>
+                
+                <p>© 2025 Sapphire Broking. All Rights Reserved.</p>
+                
+                <div class="disclaimer">
+                    <p>DISCLAIMER: Investments in securities market are subject to market risks. Read all the related documents carefully before investing. Registration granted by SEBI, membership of BSE, NSE, and MCX-SX, and registration of the DP with SEBI does not guarantee quality of services.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

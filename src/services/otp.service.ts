@@ -5,6 +5,10 @@ import { env } from '@app/env';
 import transporter from '@app/services/email.service';
 import Mail from 'nodemailer/lib/mailer';
 import * as fs from 'node:fs';
+// Replace the current Handlebars import
+// import Handlebars from 'handlebars';
+// With:
+import Handlebars from '@app/services/handlebars-helpers';
 
 export const DEFAULT_OTP_LENGTH = 6;
 export const DEFAULT_OTP_EXPIRY = 10 * 60; // 10 minutes in seconds
@@ -117,6 +121,7 @@ type EmailTemplate = 'login' | 'signup' | 'forgot-password';
 
 class EmailOtpVerification extends OtpVerification {
     private readonly template: EmailTemplate;
+    private static readonly templateCache: Map<string, Handlebars.TemplateDelegate> = new Map();
 
     constructor(email: string, template: EmailTemplate, settings?: Partial<OtpSettings>) {
         // Use template as context to create unique Redis keys
@@ -128,28 +133,98 @@ class EmailOtpVerification extends OtpVerification {
      * Send OTP to the user's email
      */
     public async sendOtp(): Promise<void> {
-        // Use login template for forgot-password if forgot-password template doesn't exist
-        let templateFile = this.template;
-        try {
-            fs.accessSync(`templates/${this.template}-email.html`);
-        } catch (error) {
-            logger.warn(`Template ${this.template}-email.html not found, using login template`);
-            templateFile = 'login';
+        // Find the appropriate template path
+        const templatePath = this.findTemplatePath();
+        if (!templatePath) {
+            logger.error(`Template file not found for: ${this.template}`);
+            throw new Error(`Template file not found for: ${this.template}`);
         }
 
-        const content = fs.readFileSync(`templates/${templateFile}-email.html`, 'utf-8');
+        // Get compiled template from cache or compile it
+        let compiledTemplate = EmailOtpVerification.templateCache.get(templatePath);
+        if (!compiledTemplate) {
+            const content = fs.readFileSync(templatePath, 'utf-8');
+            compiledTemplate = Handlebars.compile(content);
+            EmailOtpVerification.templateCache.set(templatePath, compiledTemplate);
+        }
 
         const otp = await this.storeOtp();
+
+        const templateData = {
+            otp,
+            email: this.id,
+            date: new Date().toLocaleDateString('en-IN', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                weekday: 'long',
+            }),
+            time: new Date().toLocaleTimeString('en-IN', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true,
+            }),
+            ip: this.settings.ip || 'N/A',
+            userName: this.id.split('@')[0], // Basic fallback if userName is not provided
+
+            // Account details
+            accountNumber: 'N/A',
+            clientId: 'N/A',
+            accountType: 'N/A',
+
+            // Transaction details
+            transactionId: 'N/A',
+            amount: 'N/A',
+            currency: 'INR',
+            transactionDate: 'N/A',
+            transactionTime: 'N/A',
+            transactionStatus: 'N/A',
+
+            // Document details
+            documentType: 'N/A',
+            documentStatus: 'N/A',
+            submissionDate: 'N/A',
+
+            // Support details
+            ticketId: 'N/A',
+            ticketStatus: 'N/A',
+            ticketSubject: 'N/A',
+        };
 
         const mailOptions: Mail.Options = {
             from: env.email.from,
             to: this.id,
             subject: this.getSubject(),
-            html: formatHtml(content, otp, this.id, undefined, this.settings.ip),
+            html: compiledTemplate(templateData),
         };
 
         await transporter.sendMail(mailOptions);
         logger.debug(`Sent OTP ${otp} to ${this.id} for ${this.template}`);
+    }
+
+    /**
+     * Find the template path based on template type
+     */
+    private findTemplatePath(): string | null {
+        // First check the original location
+        const originalPath = `templates/${this.template}-email.html`;
+        if (fs.existsSync(originalPath)) {
+            return originalPath;
+        }
+
+        // Check in the new categorized structure
+        const templateMap: Record<string, string> = {
+            login: 'templates/otp/login_otp.html',
+            signup: 'templates/otp/signup_otp.html',
+            'forgot-password': 'templates/security-and-support/password_reset.html',
+        };
+
+        const mappedPath = templateMap[this.template];
+        if (mappedPath && fs.existsSync(mappedPath)) {
+            return mappedPath;
+        }
+
+        return null;
     }
 
     private getSubject(): string {
@@ -168,6 +243,7 @@ class EmailOtpVerification extends OtpVerification {
 class PhoneOtpVerification extends OtpVerification {
     private readonly email: string;
     private readonly template: EmailTemplate;
+    private static readonly templateCache: Map<string, Handlebars.TemplateDelegate> = new Map();
 
     constructor(email: string, template: EmailTemplate, phoneNumber: string, settings?: Partial<OtpSettings>) {
         super(phoneNumber, `phone_${template}`, settings);
@@ -179,53 +255,78 @@ class PhoneOtpVerification extends OtpVerification {
      * Send OTP to the user's phone
      */
     public async sendOtp(): Promise<void> {
-        // Use login template as fallback
-        let templateFile = this.template;
-        try {
-            fs.accessSync(`templates/${this.template}-email.html`);
-        } catch (error) {
-            logger.warn(`Template ${this.template}-email.html not found, using login template`);
-            templateFile = 'login';
+        // Find the appropriate template path
+        const templatePath = this.findTemplatePath();
+        if (!templatePath) {
+            logger.error(`Template file not found for: ${this.template}`);
+            throw new Error(`Template file not found for: ${this.template}`);
         }
 
-        const content = fs.readFileSync(`templates/${templateFile}-email.html`, 'utf-8');
+        // Get compiled template from cache or compile it
+        let compiledTemplate = PhoneOtpVerification.templateCache.get(templatePath);
+        if (!compiledTemplate) {
+            const content = fs.readFileSync(templatePath, 'utf-8');
+            compiledTemplate = Handlebars.compile(content);
+            PhoneOtpVerification.templateCache.set(templatePath, compiledTemplate);
+        }
 
         const otp = await this.storeOtp();
 
-        const mailOptions: Mail.Options = {
-            from: env.email.from,
-            to: this.email,
-            subject: 'Your Phone Verification Code - Sapphire Broking',
-            html: formatHtml(content, otp, this.email, this.id, this.settings.ip),
-        };
-
-        await transporter.sendMail(mailOptions);
-    }
-}
-
-function formatHtml(content: string, otp: string, email: string, phone?: string, ip?: string): string {
-    return content
-        .replace('{{ otp }}', otp)
-        .replace(
-            '{{ date }}',
-            new Date().toLocaleDateString('en-IN', {
+        const templateData = {
+            otp,
+            email: this.email,
+            phone: this.id,
+            date: new Date().toLocaleDateString('en-IN', {
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric',
                 weekday: 'long',
             }),
-        )
-        .replace(
-            '{{ time }}',
-            new Date().toLocaleTimeString('en-IN', {
+            time: new Date().toLocaleTimeString('en-IN', {
                 hour: '2-digit',
                 minute: '2-digit',
                 hour12: true,
             }),
-        )
-        .replace('{{ ip }}', ip || 'N/A')
-        .replace('{{ email }}', email)
-        .replace('{{ phone }}', phone || '');
+            ip: this.settings.ip || 'N/A',
+            userName: this.email.split('@')[0], // Basic fallback if userName is not provided
+        };
+
+        const mailOptions: Mail.Options = {
+            from: env.email.from,
+            to: this.email,
+            subject: 'Your Phone Verification Code - Sapphire Broking',
+            html: compiledTemplate(templateData),
+        };
+
+        await transporter.sendMail(mailOptions);
+    }
+
+    /**
+     * Find the template path based on template type
+     */
+    private findTemplatePath(): string | null {
+        // First check the original location
+        const originalPath = `templates/${this.template}-email.html`;
+        if (fs.existsSync(originalPath)) {
+            return originalPath;
+        }
+
+        // Check in the new categorized structure
+        const templateMap: Record<string, string> = {
+            login: 'templates/otp/login_otp.html',
+            signup: 'templates/otp/signup_otp.html',
+            'forgot-password': 'templates/security-and-support/password_reset.html',
+        };
+
+        const mappedPath = templateMap[this.template];
+        if (mappedPath && fs.existsSync(mappedPath)) {
+            return mappedPath;
+        }
+
+        return null;
+    }
 }
+
+// Remove the formatHtml function as it's no longer needed
 
 export { EmailOtpVerification, PhoneOtpVerification };

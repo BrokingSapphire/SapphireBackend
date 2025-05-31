@@ -1,0 +1,63 @@
+{{#> layout}}
+  <div class="icon-header">
+    <div class="icon-circle danger">❌</div>
+    <h1>Payout Request Rejected</h1>
+    <p>Your withdrawal request could not be processed</p>
+  </div>
+
+  <p>Dear <strong>{{userName}}</strong>,</p>
+
+  <p>Your payout request of {{formatCurrency amount 'INR'}} has been rejected due to {{reason}}. Please check and retry.</p>
+
+  <div class="alert-box">
+    <h3 style="color: var(--danger); margin-bottom: 8px;">❌ Payout Request Rejected</h3>
+    <div class="amount-display danger">{{formatCurrency amount 'INR'}}</div>
+    <p style="margin: 0; color: var(--text-dark);">Request could not be processed</p>
+  </div>
+
+  <div class="warning-box">
+    <h4 style="color: var(--primary); margin-bottom: 12px;">📋 Rejection Reason</h4>
+    <p style="margin: 0; color: var(--text-dark); font-weight: 600;">{{reason}}</p>
+  </div>
+
+  <div style="text-align: center; margin: 32px 0;">
+    <h4 style="color: var(--primary); margin-bottom: 16px;">Next Steps</h4>
+    <p style="margin-bottom: 20px;">Please review the rejection reason and submit a new request:</p>
+    <a href="https://terminal.sapphirebroking.com/payout" class="button" target="_blank">Submit New Request</a>
+  </div>
+
+  <div class="primary-box">
+    <h4 style="color: var(--primary); margin-bottom: 12px;">📊 Request Details</h4>
+    <div class="balance-row">
+      <span class="balance-label">Request Date:</span>
+      <span class="balance-value">{{formatDate date 'short'}}</span>
+    </div>
+    <div class="balance-row">
+      <span class="balance-label">Request Time:</span>
+      <span class="balance-value">{{time}}</span>
+    </div>
+    <div class="balance-row">
+      <span class="balance-label">Amount:</span>
+      <span class="balance-value" style="color: var(--danger);">{{formatCurrency amount 'INR'}}</span>
+    </div>
+    <div class="balance-row">
+      <span class="balance-label">Account Email:</span>
+      <span class="balance-value">{{email}}</span>
+    </div>
+  </div>
+
+  <div class="help-section">
+    <div class="help-icon">❓</div>
+    <div class="help-content">
+      <p style="margin-bottom: 8px; font-weight: 600;">Need Assistance?</p>
+      <p style="margin: 0; font-size: 14px;">
+        If you need help with your payout request, contact our support team at 
+        <strong>support@sapphirebroking.com</strong> or call <strong>+91 98903 36989</strong>.
+      </p>
+    </div>
+  </div>
+
+  <p style="text-align: center; margin-top: 32px; font-style: italic;">
+    This is an automated message. Please do not reply to this email.
+  </p>
+{{/layout}}

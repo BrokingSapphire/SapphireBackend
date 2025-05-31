@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no">
+    <title>Introducing New Feature - Sapphire Broking</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        :root {
+            --primary: #064D51;
+            --primary-light: rgba(6, 77, 81, 0.1);
+            --accent: #FFD62D;
+            --accent-light: rgba(255, 214, 45, 0.2);
+            --background: #EAFBF0;
+            --white: #FFFFFF;
+            --text-dark: #1A2B2C;
+            --text-medium: #415657;
+            --text-light: #6E7878;
+            --border-light: #E5E7EB;
+            --success: #16A34A;
+            --success-light: rgba(22, 163, 74, 0.1);
+            --warning: #F59E0B;
+            --warning-light: rgba(245, 158, 11, 0.1);
+            --info: #0EA5E9;
+            --info-light: rgba(14, 165, 233, 0.1);
+            --feature: #8B5CF6;
+            --feature-light: rgba(139, 92, 246, 0.1);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background);
+            color: var(--text-dark);
+            line-height: 1.6;
+            font-size: 16px;
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        .email-wrapper {
+            background-color: var(--white);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+        }
+        
+        .email-header {
+            background-color: var(--primary);
+            padding: 30px 40px;
+            text-align: center;
+            position: relative;
+        }
+        
+        .logo {
+            max-width: 150px;
+            height: auto;
+        }
+        
+        .header-accent {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 10% 20%, rgba(255, 214, 45, 0.3) 0%, transparent 30%);
+        }
+        
+        .email-body {
+            padding: 40px;
+        }
+        
+        .email-footer {
+            background-color: var(--primary-light);
+            padding: 30px;
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-medium);
+        }
+        
+        .social-links {
+            margin: 25px 0;
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+        }
+        
+        .social-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            background-color: var(--primary);
+            border-radius: 50%;
+            color: var(--white);
+            transition: all 0.2s ease;
+        }
+        
+        .disclaimer {
+            font-size: 11px;
+            color: var(--text-light);
+            margin-top: 25px;
+            padding-top: 25px;
+            border-top: 1px solid var(--border-light);
+        }
+        
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--primary);
+            margin-bottom: 16px;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+        
+        h1 {
+            font-size: 28px;
+            letter-spacing: -0.5px;
+        }
+        
+        h2 {
+            font-size: 24px;
+            letter-spacing: -0.3px;
+        }
+        
+        h3 {
+            font-size: 20px;
+        }
+        
+        p {
+            margin-bottom: 16px;
+            color: var(--text-medium);
+        }
+        
+        .hero-image {
+            width: 100%;
+            height: auto;
+            border-radius: 12px;
+            margin-bottom: 24px;
+        }
+        
+        .feature-badge {
+            display: inline-block;
+            background-color: var(--feature-light);
+            color: var(--feature);
+            font-weight: 600;
+            font-size: 14px;
+            padding: 6px 12px;
+            border-radius: 30px;
+            margin-bottom: 16px;
+        }
+        
+        .feature-container {
+            background-color: var(--feature-light);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+        }
+        
+        .feature-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--feature);
+            margin-bottom: 16px;
+        }
+        
+        .benefits-container {
+            margin: 32px 0;
+        }
+        
+        .benefit-item {
+            display: flex;
+            margin-bottom: 24px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid var(--border-light);
+        }
+        
+        .benefit-item:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+        
+        .benefit-icon {
+            flex-shrink: 0;
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background-color: var(--feature-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 16px;
+            color: var(--feature);
+            font-size: 24px;
+        }
+        
+        .benefit-content {
+            flex-grow: 1;
+        }
+        
+        .benefit-title {
+            font-weight: 600;
+            font-size: 18px;
+            color: var(--text-dark);
+            margin-bottom: 8px;
+        }
+        
+        .steps-container {
+            background-color: var(--success-light);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+        }
+        
+        .steps-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--success);
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        
+        .step {
+            display: flex;
+            margin-bottom: 16px;
+        }
+        
+        .step:last-child {
+            margin-bottom: 0;
+        }
+        
+        .step-number {
+            flex-shrink: 0;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background-color: var(--success);
+            color: var(--white);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            margin-right: 16px;
+            margin-top: 4px;
+            font-size: 14px;
+        }
+        
+        .step-content {
+            flex-grow: 1;
+        }
+        
+        .step-title {
+            font-weight: 600;
+            color: var(--success);
+            margin-bottom: 4px;
+        }
+        
+        .step-description {
+            font-size: 14px;
+            color: var(--text-medium);
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background-color: var(--feature);
+            color: var(--white);
+            font-weight: 600;
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            margin-top: 8px;
+        }
+        
+        .testimonial-container {
+            background-color: var(--info-light);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+        }
+        
+        .testimonial-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--info);
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        
+        .testimonial-content {
+            font-style: italic;
+            color: var(--text-medium);
+            border-left: 3px solid var(--info);
+            padding-left: 16px;
+            margin-bottom: 16px;
+        }
+        
+        .testimonial-author {
+            font-weight: 600;
+            color: var(--text-dark);
+            text-align: right;
+        }
+        
+        .testimonial-position {
+            color: var(--text-light);
+            font-size: 14px;
+            text-align: right;
+        }
+        
+        .help-section {
+            background-color: var(--accent-light);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 32px;
+            display: flex;
+            align-items: flex-start;
+        }
+        
+        .help-icon {
+            flex-shrink: 0;
+            margin-right: 12px;
+            font-size: 24px;
+            color: var(--accent);
+        }
+        
+        .help-content {
+            font-size: 14px;
+            color: var(--text-medium);
+        }
+        
+        .divider {
+            height: 1px;
+            background-color: var(--border-light);
+            margin: 32px 0;
+        }
+        
+        /* Mobile Optimization */
+        @media (max-width: 550px) {
+            .email-body {
+                padding: 30px 24px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+            
+            .feature-title {
+                font-size: 22px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="email-wrapper">
+            <!-- Header with Logo -->
+            <div class="email-header">
+                <div class="header-accent"></div>
+                <!-- In production, replace with your actual logo URL -->
+                <img src="/api/placeholder/150/50" alt="Sapphire Broking" class="logo" />
+            </div>
+            
+            <!-- Email Body -->
+            <div class="email-body">
+                <span class="feature-badge">NEW FEATURE</span>
+                <h1>Introducing [Feature Name]</h1>
+                <p>A powerful new way to [primary benefit]</p>
+                
+                <!-- Feature hero image -->
+                <img src="/api/placeholder/520/260" alt="Feature Preview" class="hero-image" />
+                
+                <p>Dear [Customer Name],</p>
+                
+                <p>We're excited to announce the launch of <strong>[Feature Name]</strong>, our newest addition designed to help you [primary benefit] more efficiently than ever before.</p>
+                
+                <div class="feature-container">
+                    <h2 class="feature-title">[Feature Name] is now available!</h2>
+                    <p>Based on your feedback and our commitment to continuous improvement, we've developed this feature to [describe the core functionality and purpose]. Now you can [explain what users can accomplish with this feature] with just a few clicks.</p>
+                </div>
+                
+                <h2>What's New?</h2>
+                <div class="benefits-container">
+                    <div class="benefit-item">
+                        <div class="benefit-icon">💨</div>
+                        <div class="benefit-content">
+                            <h3 class="benefit-title">[Benefit #1]</h3>
+                            <p>[Detailed explanation of the first key benefit with specific details about how it improves the user experience or solves a problem]</p>
+                        </div>
+                    </div>
+                    
+                    <div class="benefit-item">
+                        <div class="benefit-icon">🔄</div>
+                        <div class="benefit-content">
+                            <h3 class="benefit-title">[Benefit #2]</h3>
+                            <p>[Detailed explanation of the second key benefit with concrete examples of how it makes tasks easier or more efficient]</p>
+                        </div>
+                    </div>
+                    
+                    <div class="benefit-item">
+                        <div class="benefit-icon">📊</div>
+                        <div class="benefit-content">
+                            <h3 class="benefit-title">[Benefit #3]</h3>
+                            <p>[Detailed explanation of the third key benefit with specific metrics or improvements users can expect]</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="steps-container">
+                    <h3 class="steps-title">Getting Started Is Easy</h3>
+                    
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h4 class="step-title">Log in to your account</h4>
+                            <p class="step-description">Access your Sapphire Terminal dashboard with your usual credentials.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h4 class="step-title">Navigate to [specific section]</h4>
+                            <p class="step-description">Find the new feature in the [menu/tab/section] of your dashboard.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h4 class="step-title">Click on [specific button/option]</h4>
+                            <p class="step-description">Select the [button/toggle/option] to activate the feature.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <h4 class="step-title">[Final step to complete setup]</h4>
+                            <p class="step-description">[Any additional configuration or settings to optimize the feature].</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="text-align: center; margin: 32px 0;">
+                    <p>Ready to explore [Feature Name]?</p>
+                    <a href="#" class="cta-button">Try It Now</a>
+                </div>
+                
+
+                
+                <div class="help-section">
+                    <div class="help-icon">❓</div>
+                    <div class="help-content">
+                        <p style="margin-bottom: 8px;"><strong>Need Help Getting Started?</strong></p>
+                        <p style="margin-bottom: 0;">Our team has prepared a comprehensive guide to help you make the most of [Feature Name]. <a href="#" style="color: var(--feature); font-weight: 600;">View the documentation</a> or <a href="#" style="color: var(--feature); font-weight: 600;">schedule a demo</a> with our product specialists.</p>
+                    </div>
+                </div>
+                
+                <div class="divider"></div>
+                
+                <p>We're constantly working to improve your experience with Sapphire Broking. [Feature Name] is just one of many exciting updates we have planned for this year.</p>
+                
+                <p>Have questions? Our team is ready to help at <a href="mailto:support@sapphirebroking.com" style="color: var(--feature); font-weight: 600;">support@sapphirebroking.com</a>.</p>
+                
+                <p>Best regards,<br>
+                [Sender Name]<br>
+                [Position]<br>
+                Sapphire Broking Team</p>
+            </div>
+            
+            <!-- Footer -->
+            <div class="email-footer">
+                <p><strong>Sapphire Broking</strong><br>
+                123 Financial District, Suite 789<br>
+                Mumbai, Maharashtra 400001<br>
+                Customer Support: +91 XXXX XXX XXX</p>
+                
+                <div class="social-links">
+                    <!-- Placeholder social icons -->
+                    <div class="social-icon">f</div>
+                    <div class="social-icon">t</div>
+                    <div class="social-icon">in</div>
+                    <div class="social-icon">ig</div>
+                </div>
+                
+                <p>© 2025 Sapphire Broking. All Rights Reserved.</p>
+                
+                <div class="disclaimer">
+                    <p>You're receiving this email because you're a valued customer of Sapphire Broking. <a href="#" style="color: var(--text-medium);">Unsubscribe</a> | <a href="#" style="color: var(--text-medium);">Privacy Policy</a> | <a href="#" style="color: var(--text-medium);">Terms of Service</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

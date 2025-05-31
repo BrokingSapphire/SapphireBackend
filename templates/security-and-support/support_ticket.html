@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no">
+    <title>Support Ticket Confirmation - Sapphire Broking</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        :root {
+            --primary: #064D51;
+            --primary-light: rgba(6, 77, 81, 0.1);
+            --accent: #FFD62D;
+            --accent-light: rgba(255, 214, 45, 0.2);
+            --background: #EAFBF0;
+            --white: #FFFFFF;
+            --text-dark: #1A2B2C;
+            --text-medium: #415657;
+            --text-light: #6E7878;
+            --border-light: #E5E7EB;
+            --success: #16A34A;
+            --success-light: rgba(22, 163, 74, 0.1);
+            --warning: #F59E0B;
+            --warning-light: rgba(245, 158, 11, 0.1);
+            --info: #0EA5E9;
+            --info-light: rgba(14, 165, 233, 0.1);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background);
+            color: var(--text-dark);
+            line-height: 1.6;
+            font-size: 16px;
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        .email-wrapper {
+            background-color: var(--white);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+        }
+        
+        .email-header {
+            background-color: var(--primary);
+            padding: 30px 40px;
+            text-align: center;
+            position: relative;
+        }
+        
+        .logo {
+            max-width: 150px;
+            height: auto;
+        }
+        
+        .header-accent {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 10% 20%, rgba(255, 214, 45, 0.3) 0%, transparent 30%);
+        }
+        
+        .email-body {
+            padding: 40px;
+        }
+        
+        .email-footer {
+            background-color: var(--primary-light);
+            padding: 30px;
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-medium);
+        }
+        
+        .social-links {
+            margin: 25px 0;
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+        }
+        
+        .social-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            background-color: var(--primary);
+            border-radius: 50%;
+            color: var(--white);
+            transition: all 0.2s ease;
+        }
+        
+        .disclaimer {
+            font-size: 11px;
+            color: var(--text-light);
+            margin-top: 25px;
+            padding-top: 25px;
+            border-top: 1px solid var(--border-light);
+        }
+        
+        .button {
+            display: inline-block;
+            padding: 14px 28px;
+            background-color: var(--primary);
+            color: var(--white) !important;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 15px;
+            transition: all 0.2s ease;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(6, 77, 81, 0.2);
+        }
+        
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(6, 77, 81, 0.25);
+        }
+        
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--primary);
+            margin-bottom: 16px;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+        
+        h1 {
+            font-size: 28px;
+            letter-spacing: -0.5px;
+        }
+        
+        h2 {
+            font-size: 24px;
+            letter-spacing: -0.3px;
+        }
+        
+        h3 {
+            font-size: 20px;
+        }
+        
+        p {
+            margin-bottom: 16px;
+            color: var(--text-medium);
+        }
+        
+        .ticket-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        
+        .ticket-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 8px;
+        }
+        
+        .ticket-number {
+            font-size: 18px;
+            font-weight: 600;
+            padding: 8px 16px;
+            background-color: var(--primary-light);
+            color: var(--primary);
+            border-radius: 6px;
+            display: inline-block;
+        }
+        
+        .ticket-details {
+            background-color: var(--white);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+            border: 1px solid var(--border-light);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+        }
+        
+        .ticket-details-title {
+            text-align: center;
+            margin-bottom: 16px;
+            color: var(--primary);
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .detail-row {
+            display: flex;
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-light);
+        }
+        
+        .detail-row:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+        
+        .detail-label {
+            flex: 1;
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+        
+        .detail-value {
+            flex: 2;
+            text-align: right;
+        }
+        
+        .priority-high {
+            color: var(--danger);
+            font-weight: 600;
+        }
+        
+        .priority-medium {
+            color: var(--warning);
+            font-weight: 600;
+        }
+        
+        .priority-low {
+            color: var(--info);
+            font-weight: 600;
+        }
+        
+        .status-open {
+            color: var(--success);
+            font-weight: 600;
+        }
+        
+        .ticket-message {
+            background-color: var(--primary-light);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+        }
+        
+        .ticket-message-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .message-icon {
+            margin-right: 8px;
+        }
+        
+        .ticket-query {
+            background-color: var(--white);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 0;
+            border-left: 4px solid var(--primary);
+            font-style: italic;
+        }
+        
+        .what-next {
+            background-color: var(--success-light);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+        }
+        
+        .what-next-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--success);
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        
+        .step {
+            display: flex;
+            margin-bottom: 16px;
+        }
+        
+        .step:last-child {
+            margin-bottom: 0;
+        }
+        
+        .step-number {
+            flex-shrink: 0;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background-color: var(--success);
+            color: var(--white);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            margin-right: 16px;
+            margin-top: 4px;
+            font-size: 14px;
+        }
+        
+        .step-content {
+            flex-grow: 1;
+        }
+        
+        .step-title {
+            font-weight: 600;
+            color: var(--success);
+            margin-bottom: 4px;
+        }
+        
+        .step-description {
+            font-size: 14px;
+            color: var(--text-medium);
+        }
+        
+        .sla-box {
+            background-color: var(--info-light);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            margin: 32px 0;
+        }
+        
+        .sla-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--info);
+            margin-bottom: 8px;
+        }
+        
+        .sla-time {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--info);
+        }
+        
+        .help-section {
+            background-color: var(--accent-light);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 32px;
+            display: flex;
+            align-items: flex-start;
+        }
+        
+        .help-icon {
+            flex-shrink: 0;
+            margin-right: 12px;
+            font-size: 24px;
+            color: var(--accent);
+        }
+        
+        .help-content {
+            font-size: 14px;
+            color: var(--text-medium);
+        }
+        
+        .cta-container {
+            text-align: center;
+            margin: 32px 0;
+        }
+        
+        /* Mobile Optimization */
+        @media (max-width: 550px) {
+            .email-body {
+                padding: 30px 24px;
+            }
+            
+            .ticket-title {
+                font-size: 24px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="email-wrapper">
+            <!-- Header with Logo -->
+            <div class="email-header">
+                <div class="header-accent"></div>
+                <!-- In production, replace with your actual logo URL -->
+                <img src="/api/placeholder/150/50" alt="Sapphire Broking" class="logo" />
+            </div>
+            
+            <!-- Email Body -->
+            <div class="email-body">
+                <div class="ticket-header">
+                    <h1 class="ticket-title">Support Ticket Received</h1>
+                    <div class="ticket-number">#[Ticket Number]</div>
+                </div>
+                
+                <p>Dear <strong>[Client Name]</strong>,</p>
+                
+                <p>Thank you for reaching out to Sapphire Broking support. This email confirms that we have received your support request and a ticket has been created. Our team will review your query and get back to you as soon as possible.</p>
+                
+                <div class="ticket-details">
+                    <h3 class="ticket-details-title">Ticket Details</h3>
+                    
+                    <div class="detail-row">
+                        <div class="detail-label">Ticket Number</div>
+                        <div class="detail-value">#[Ticket Number]</div>
+                    </div>
+                    
+                    <div class="detail-row">
+                        <div class="detail-label">Date Created</div>
+                        <div class="detail-value">[Creation Date] at [Creation Time]</div>
+                    </div>
+                    
+                    <div class="detail-row">
+                        <div class="detail-label">Category</div>
+                        <div class="detail-value">[Ticket Category]</div>
+                    </div>
+                    
+                    <div class="detail-row">
+                        <div class="detail-label">Subject</div>
+                        <div class="detail-value">[Ticket Subject]</div>
+                    </div>
+                    
+                    <div class="detail-row">
+                        <div class="detail-label">Priority</div>
+                        <div class="detail-value priority-medium">[Ticket Priority]</div>
+                    </div>
+                    
+                    <div class="detail-row">
+                        <div class="detail-label">Status</div>
+                        <div class="detail-value status-open">Open</div>
+                    </div>
+                </div>
+                
+                <div class="ticket-message">
+                    <h3 class="ticket-message-title">
+                        <span class="message-icon">💬</span> Your Message
+                    </h3>
+                    
+                    <p class="ticket-query">"[Client's Support Query]"</p>
+                </div>
+                
+                <div class="what-next">
+                    <h3 class="what-next-title">What Happens Next?</h3>
+                    
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h4 class="step-title">Ticket Assignment</h4>
+                            <p class="step-description">Your ticket has been assigned to the appropriate department and will be reviewed by our support team.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h4 class="step-title">Initial Response</h4>
+                            <p class="step-description">A support representative will respond to your query within the estimated response time.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h4 class="step-title">Issue Resolution</h4>
+                            <p class="step-description">We'll work with you to resolve your issue as quickly and efficiently as possible.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <h4 class="step-title">Ticket Closure</h4>
+                            <p class="step-description">Once your issue is resolved, we'll close the ticket and request your feedback.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="sla-box">
+                    <div class="sla-title">Estimated Response Time</div>
+                    <div class="sla-time">Within 24 Hours</div>
+                </div>
+                
+                <div class="cta-container">
+                    <a href="#" class="button">CHECK TICKET STATUS</a>
+                </div>
+                
+                <div class="help-section">
+                    <div class="help-icon">💡</div>
+                    <div class="help-content">
+                        <p style="margin-bottom: 8px;"><strong>Need Immediate Assistance?</strong></p>
+                        <p style="margin-bottom: 0;">For urgent matters, you can call our support hotline at <strong>+91 XXXX XXX XXX</strong> (9:00 AM to 6:00 PM, Monday to Friday) or check our <a href="#" style="color: var(--primary); text-decoration: none;">Knowledge Base</a> for common solutions.</p>
+                    </div>
+                </div>
+                
+                <p style="text-align: center; margin-top: 32px; font-style: italic;">Please do not reply to this email. To add additional information to your ticket, please use the link above or log in to your Sapphire Broking account.</p>
+            </div>
+            
+            <!-- Footer -->
+            <div class="email-footer">
+                <p><strong>Sapphire Broking</strong><br>
+                123 Financial District, Suite 789<br>
+                Mumbai, Maharashtra 400001<br>
+                Customer Support: +91 XXXX XXX XXX</p>
+                
+                <div class="social-links">
+                    <!-- Placeholder social icons -->
+                    <div class="social-icon">f</div>
+                    <div class="social-icon">t</div>
+                    <div class="social-icon">in</div>
+                    <div class="social-icon">ig</div>
+                </div>
+                
+                <p>© 2025 Sapphire Broking. All Rights Reserved.</p>
+                
+                <div class="disclaimer">
+                    <p>DISCLAIMER: Investments in securities market are subject to market risks. Read all the related documents carefully before investing. Registration granted by SEBI, membership of BSE, NSE, and MCX-SX, and registration of the DP with SEBI does not guarantee quality of services. Details of compliance officer: Name: Compliance Officer, Email: compliance@sapphirebroking.com, Phone: +91 XXXX XXX XXX</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no">
+    <title>Account Approved - Sapphire Broking</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        :root {
+            --primary: #064D51;
+            --primary-light: rgba(6, 77, 81, 0.1);
+            --accent: #FFD62D;
+            --accent-light: rgba(255, 214, 45, 0.2);
+            --background: #EAFBF0;
+            --white: #FFFFFF;
+            --text-dark: #1A2B2C;
+            --text-medium: #415657;
+            --text-light: #6E7878;
+            --border-light: #E5E7EB;
+            --success: #16A34A;
+            --success-light: rgba(22, 163, 74, 0.1);
+            --warning: #F59E0B;
+            --warning-light: rgba(245, 158, 11, 0.1);
+            --festive: #FF6B6B;
+            --festive-light: rgba(255, 107, 107, 0.1);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background);
+            color: var(--text-dark);
+            line-height: 1.6;
+            font-size: 16px;
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        .email-wrapper {
+            background-color: var(--white);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+        }
+        
+        .email-header {
+            background-color: var(--primary);
+            padding: 30px 40px;
+            text-align: center;
+            position: relative;
+        }
+        
+        .logo {
+            max-width: 150px;
+            height: auto;
+        }
+        
+        .header-accent {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 10% 20%, rgba(255, 214, 45, 0.3) 0%, transparent 30%);
+        }
+        
+        .email-body {
+            padding: 40px;
+        }
+        
+        .email-footer {
+            background-color: var(--primary-light);
+            padding: 30px;
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-medium);
+        }
+        
+        .social-links {
+            margin: 25px 0;
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+        }
+        
+        .social-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            background-color: var(--primary);
+            border-radius: 50%;
+            color: var(--white);
+            transition: all 0.2s ease;
+        }
+        
+        .disclaimer {
+            font-size: 11px;
+            color: var(--text-light);
+            margin-top: 25px;
+            padding-top: 25px;
+            border-top: 1px solid var(--border-light);
+        }
+        
+        .button {
+            display: inline-block;
+            padding: 14px 28px;
+            background-color: var(--primary);
+            color: var(--white) !important;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 15px;
+            transition: all 0.2s ease;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(6, 77, 81, 0.2);
+        }
+        
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(6, 77, 81, 0.25);
+        }
+        
+        .button-success {
+            background-color: var(--success);
+        }
+        
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--primary);
+            margin-bottom: 16px;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+        
+        h1 {
+            font-size: 28px;
+            letter-spacing: -0.5px;
+        }
+        
+        h2 {
+            font-size: 24px;
+            letter-spacing: -0.3px;
+        }
+        
+        h3 {
+            font-size: 20px;
+        }
+        
+        p {
+            margin-bottom: 16px;
+            color: var(--text-medium);
+        }
+        
+        .status-banner {
+            margin: 0 0 32px 0;
+            position: relative;
+            text-align: center;
+        }
+        
+        .status-icon {
+            font-size: 64px;
+            color: var(--success);
+            margin-bottom: 16px;
+        }
+        
+        .status-title {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--success);
+            margin: 0 0 12px 0;
+            text-align: center;
+        }
+        
+        .status-subtitle {
+            font-size: 18px;
+            color: var(--text-medium);
+            margin-bottom: 32px;
+            text-align: center;
+        }
+        
+        .message-box {
+            background-color: var(--success-light);
+            border-radius: 12px;
+            padding: 32px;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 32px;
+        }
+        
+        .message-box:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: var(--success);
+        }
+        
+        .message-content {
+            position: relative;
+            z-index: 1;
+        }
+        
+        .account-details {
+            background-color: var(--white);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+            border: 1px solid var(--border-light);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+        }
+        
+        .account-details-title {
+            text-align: center;
+            margin-bottom: 16px;
+            color: var(--primary);
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .detail-row {
+            display: flex;
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-light);
+        }
+        
+        .detail-row:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+        
+        .detail-label {
+            flex: 1;
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+        
+        .detail-value {
+            flex: 2;
+            text-align: right;
+        }
+        
+        .cta-container {
+            text-align: center;
+            margin: 32px 0;
+        }
+        
+        .signature {
+            text-align: center;
+            margin: 32px 0;
+        }
+        
+        .signature-image {
+            max-width: 150px;
+            height: auto;
+            margin-bottom: 16px;
+        }
+        
+        /* Mobile Optimization */
+        @media (max-width: 550px) {
+            .email-body {
+                padding: 30px 24px;
+            }
+            
+            .message-box {
+                padding: 24px;
+            }
+            
+            .status-title {
+                font-size: 28px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="email-wrapper">
+            <!-- Header with Logo -->
+            <div class="email-header">
+                <div class="header-accent"></div>
+                <!-- In production, replace with your actual logo URL -->
+                <img src="/api/placeholder/150/50" alt="Sapphire Broking" class="logo" />
+            </div>
+            
+            <!-- Email Body -->
+            <div class="email-body">
+                <div class="status-banner">
+                    <div class="status-icon">✓</div>
+                    <h1 class="status-title">Account Approved!</h1>
+                    <p class="status-subtitle">Your Sapphire Broking trading account is now active</p>
+                </div>
+                
+                <div class="message-box">
+                    <div class="message-content">
+                        <p>Dear <strong>[Client Name]</strong>,</p>
+                        
+                        <p>We are pleased to inform you that your application for opening a trading account with Sapphire Broking has been approved. Your account is now active, and you can start trading immediately.</p>
+                        
+                        <p>Thank you for completing all the necessary formalities and providing the required documentation in a timely manner. We appreciate your cooperation throughout this process.</p>
+                    </div>
+                </div>
+                
+                <div class="account-details">
+                    <h3 class="account-details-title">Your Account Information</h3>
+                    
+                    <div class="detail-row">
+                        <div class="detail-label">Client ID</div>
+                        <div class="detail-value">[Client ID]</div>
+                    </div>
+                    
+                    <div class="detail-row">
+                        <div class="detail-label">Trading ID (NSE)</div>
+                        <div class="detail-value">[NSE ID]</div>
+                    </div>
+                    
+                    <div class="detail-row">
+                        <div class="detail-label">Trading ID (BSE)</div>
+                        <div class="detail-value">[BSE ID]</div>
+                    </div>
+                    
+                    <div class="detail-row">
+                        <div class="detail-label">DP ID</div>
+                        <div class="detail-value">[DP ID]</div>
+                    </div>
+                    
+                    <div class="detail-row">
+                        <div class="detail-label">Account Status</div>
+                        <div class="detail-value" style="color: var(--success); font-weight: 600;">Active</div>
+                    </div>
+                </div>
+                
+                <h2>Next Steps</h2>
+                
+                <p>To start trading, please follow these simple steps:</p>
+                
+                <ol style="margin-bottom: 24px; padding-left: 24px;">
+                    <li style="margin-bottom: 12px;">Log in to your account using your Client ID and password.</li>
+                    <li style="margin-bottom: 12px;">Complete your risk profiling questionnaire if you haven't already.</li>
+                    <li style="margin-bottom: 12px;">Fund your trading account.</li>
+                    <li style="margin-bottom: 12px;">Start exploring investment opportunities and place your first trade.</li>
+                </ol>
+                
+                <div class="cta-container">
+                    <a href="#" class="button button-success">LOGIN TO YOUR ACCOUNT</a>
+                </div>
+                
+                <p>If you have any questions or need assistance with your account, our dedicated support team is available to help you:</p>
+                
+                <p>Email: <strong>support@sapphirebroking.com</strong><br>
+                Phone: <strong>+91 XXXX XXX XXX</strong><br>
+                Hours: Monday to Friday, 9:00 AM to 6:00 PM</p>
+                
+                <div class="signature">
+                    <img src="/api/placeholder/150/60" alt="Signature" class="signature-image" />
+                    <p><strong>[Account Manager Name]</strong><br>
+                    Account Manager<br>
+                    Sapphire Broking</p>
+                </div>
+                
+                <p style="text-align: center;">Welcome to the Sapphire Broking family! We look forward to helping you achieve your financial goals.</p>
+            </div>
+            
+            <!-- Footer -->
+            <div class="email-footer">
+                <p><strong>Sapphire Broking</strong><br>
+                123 Financial District, Suite 789<br>
+                Mumbai, Maharashtra 400001<br>
+                Customer Support: +91 XXXX XXX XXX</p>
+                
+                <div class="social-links">
+                    <!-- Placeholder social icons -->
+                    <div class="social-icon">f</div>
+                    <div class="social-icon">t</div>
+                    <div class="social-icon">in</div>
+                    <div class="social-icon">ig</div>
+                </div>
+                
+                <p>© 2025 Sapphire Broking. All Rights Reserved.</p>
+                
+                <div class="disclaimer">
+                    <p>DISCLAIMER: Investments in securities market are subject to market risks. Read all the related documents carefully before investing. Registration granted by SEBI, membership of BSE, NSE, and MCX-SX, and registration of the DP with SEBI does not guarantee quality of services. Details of compliance officer: Name: Compliance Officer, Email: compliance@sapphirebroking.com, Phone: +91 XXXX XXX XXX</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,84 @@
+{{#> layout}}
+  <div class="info-banner">
+    <div class="banner-icon">↓</div>
+    <div class="amount-display info">{{formatCurrency amount 'INR'}}</div>
+    <p class="banner-subtitle">Withdrawal Processed</p>
+  </div>
+
+  <p>Dear <strong>{{clientName}}</strong>,</p>
+
+  <p>We are writing to confirm that your withdrawal request has been successfully processed. The funds have been initiated for transfer to your registered bank account.</p>
+
+  <div class="transaction-details">
+    <h3 class="detail-title">Withdrawal Details</h3>
+    
+    <div class="detail-row">
+      <div class="detail-label">Client ID</div>
+      <div class="detail-value">{{clientId}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Withdrawal ID</div>
+      <div class="detail-value">{{withdrawalId}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Request Date</div>
+      <div class="detail-value">{{formatDate requestDate 'short'}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Processing Date</div>
+      <div class="detail-value">{{formatDate processingDate 'short'}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Amount</div>
+      <div class="detail-value">{{formatCurrency amount 'INR'}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Bank Account</div>
+      <div class="detail-value">{{bankAccount}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Status</div>
+      <div class="detail-value" style="color: var(--info); font-weight: 600;">{{status}}</div>
+    </div>
+  </div>
+
+  <div class="balance-box">
+    <div class="balance-title">Remaining Account Balance</div>
+    <div class="balance-amount">{{formatCurrency remainingBalance 'INR'}}</div>
+  </div>
+
+  <h3>Withdrawal Timeline</h3>
+
+  <div class="timeline">
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-date">{{formatDate requestDate 'short'}}</div>
+      <div class="timeline-item-title">Withdrawal Requested</div>
+      <div class="timeline-desc">Your withdrawal request was received and queued for processing.</div>
+    </div>
+    
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-date">{{formatDate processingDate 'short'}}</div>
+      <div class="timeline-item-title">Withdrawal Processed</div>
+      <div class="timeline-desc">Your request was approved and funds were initiated for transfer.</div>
+    </div>
+    
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-date">{{formatDate expectedDate 'short'}}</div>
+      <div class="timeline-item-title">Expected Credit Date</div>
+      <div class="timeline-desc">Funds should reflect in your bank account within 1-2 business days.</div>
+    </div>
+  </div>
+
+  <div class="note-box">
+    <div class="note-icon">ℹ️</div>
+    <div class="note-content">
+      <p style="margin-bottom: 8px;"><strong>Important Note:</strong></p>
+      <p style="margin-bottom: 0;">The actual credit to your bank account may take 1-2 business days depending on your bank's processing time. If you don't see the funds in your account after 2 business days, please contact our support team.</p>
+    </div>
+  </div>
+
+  <p style="text-align: center; margin-top: 32px; font-size: 14px;">If you did not authorize this withdrawal or notice any discrepancy, please contact our support team immediately.</p>
+{{/layout}}

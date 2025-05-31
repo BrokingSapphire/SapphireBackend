@@ -1,48 +1,41 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no">
     <title>Your OTP for Account Signup - Sapphire Broking</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
+        
         :root {
-            --primary: #064d51;
+            --primary: #064D51;
             --primary-light: rgba(6, 77, 81, 0.1);
-            --accent: #ffd62d;
+            --accent: #FFD62D;
             --accent-light: rgba(255, 214, 45, 0.2);
-            --background: #eafbf0;
-            --white: #ffffff;
-            --text-dark: #1a2b2c;
+            --background: #EAFBF0;
+            --white: #FFFFFF;
+            --text-dark: #1A2B2C;
             --text-medium: #415657;
-            --text-light: #6e7878;
-            --border-light: #e5e7eb;
-            --success: #16a34a;
+            --text-light: #6E7878;
+            --border-light: #E5E7EB;
+            --success: #16A34A;
             --success-light: rgba(22, 163, 74, 0.1);
-            --warning: #f59e0b;
+            --warning: #F59E0B;
             --warning-light: rgba(245, 158, 11, 0.1);
-            --info: #0ea5e9;
+            --info: #0EA5E9;
             --info-light: rgba(14, 165, 233, 0.1);
         }
-
+        
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-
+        
         body {
-            font-family:
-                'Inter',
-                -apple-system,
-                BlinkMacSystemFont,
-                'Segoe UI',
-                Roboto,
-                Helvetica,
-                Arial,
-                sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             margin: 0;
             padding: 0;
             background-color: var(--background);
@@ -51,51 +44,32 @@
             font-size: 16px;
             -webkit-font-smoothing: antialiased;
         }
-
+        
         .container {
             max-width: 600px;
             margin: 0 auto;
             padding: 40px 20px;
         }
-
+        
         .email-wrapper {
             background-color: var(--white);
             border-radius: 16px;
             overflow: hidden;
             box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
         }
-
+        
         .email-header {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family:
-                'Inter',
-                -apple-system,
-                BlinkMacSystemFont,
-                'Segoe UI',
-                Roboto,
-                Helvetica,
-                Arial,
-                sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: var(--background);
-            color: var(--text-dark);
-            line-height: 1.6;
-            font-size: 24px;
-            -webkit-font-smoothing: antialiased;
             background-color: var(--primary);
             padding: 30px 40px;
             text-align: center;
             position: relative;
         }
-
+        
         .logo {
             max-width: 150px;
             height: auto;
         }
-
+        
         .header-accent {
             position: absolute;
             top: 0;
@@ -104,11 +78,11 @@
             height: 100%;
             background: radial-gradient(circle at 10% 20%, rgba(255, 214, 45, 0.3) 0%, transparent 30%);
         }
-
+        
         .email-body {
             padding: 40px;
         }
-
+        
         .email-footer {
             background-color: var(--primary-light);
             padding: 30px;
@@ -116,14 +90,14 @@
             font-size: 13px;
             color: var(--text-medium);
         }
-
+        
         .social-links {
             margin: 25px 0;
             display: flex;
             justify-content: center;
             gap: 16px;
         }
-
+        
         .social-icon {
             display: flex;
             align-items: center;
@@ -135,7 +109,7 @@
             color: var(--white);
             transition: all 0.2s ease;
         }
-
+        
         .disclaimer {
             font-size: 11px;
             color: var(--text-light);
@@ -143,43 +117,38 @@
             padding-top: 25px;
             border-top: 1px solid var(--border-light);
         }
-
-        h1,
-        h2,
-        h3,
-        h4,
-        h5,
-        h6 {
+        
+        h1, h2, h3, h4, h5, h6 {
             color: var(--primary);
             margin-bottom: 16px;
             font-weight: 600;
             line-height: 1.3;
         }
-
+        
         h1 {
             font-size: 28px;
             letter-spacing: -0.5px;
         }
-
+        
         h2 {
             font-size: 24px;
             letter-spacing: -0.3px;
         }
-
+        
         h3 {
             font-size: 20px;
         }
-
+        
         p {
             margin-bottom: 16px;
             color: var(--text-medium);
         }
-
+        
         .icon-header {
             text-align: center;
             margin-bottom: 32px;
         }
-
+        
         .icon-circle {
             width: 80px;
             height: 80px;
@@ -190,12 +159,12 @@
             justify-content: center;
             margin: 0 auto 16px;
         }
-
+        
         .icon {
             font-size: 40px;
             color: var(--primary);
         }
-
+        
         .otp-container {
             background-color: var(--primary-light);
             border-radius: 12px;
@@ -203,7 +172,7 @@
             text-align: center;
             margin: 32px 0;
         }
-
+        
         .otp-code {
             font-family: 'Courier New', monospace;
             font-size: 36px;
@@ -212,7 +181,7 @@
             color: var(--primary);
             margin: 16px 0;
         }
-
+        
         .timer-box {
             background-color: var(--warning-light);
             border-radius: 8px;
@@ -225,11 +194,11 @@
             color: var(--warning);
             font-weight: 600;
         }
-
+        
         .timer-icon {
             margin-right: 8px;
         }
-
+        
         .signup-details {
             background-color: var(--white);
             border-radius: 12px;
@@ -238,7 +207,7 @@
             border: 1px solid var(--border-light);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
         }
-
+        
         .signup-details-title {
             text-align: center;
             margin-bottom: 16px;
@@ -246,38 +215,38 @@
             font-size: 18px;
             font-weight: 600;
         }
-
+        
         .detail-row {
             display: flex;
             margin-bottom: 12px;
             padding-bottom: 12px;
             border-bottom: 1px solid var(--border-light);
         }
-
+        
         .detail-row:last-child {
             margin-bottom: 0;
             padding-bottom: 0;
             border-bottom: none;
         }
-
+        
         .detail-label {
             flex: 1;
             font-weight: 600;
             color: var(--text-dark);
         }
-
+        
         .detail-value {
             flex: 2;
             text-align: right;
         }
-
+        
         .security-tips {
             background-color: var(--info-light);
             border-radius: 12px;
             padding: 24px;
             margin: 32px 0;
         }
-
+        
         .security-tips-title {
             font-size: 18px;
             font-weight: 600;
@@ -286,21 +255,21 @@
             display: flex;
             align-items: center;
         }
-
+        
         .security-icon {
             margin-right: 8px;
             color: var(--primary);
         }
-
+        
         .security-tip-item {
             display: flex;
             margin-bottom: 12px;
         }
-
+        
         .security-tip-item:last-child {
             margin-bottom: 0;
         }
-
+        
         .tip-icon {
             flex-shrink: 0;
             width: 20px;
@@ -309,12 +278,12 @@
             margin-top: 4px;
             color: var(--primary);
         }
-
+        
         .tip-content {
             flex-grow: 1;
             font-size: 14px;
         }
-
+        
         .help-section {
             background-color: var(--accent-light);
             border-radius: 12px;
@@ -323,26 +292,26 @@
             display: flex;
             align-items: flex-start;
         }
-
+        
         .help-icon {
             flex-shrink: 0;
             margin-right: 12px;
             font-size: 24px;
             color: var(--accent);
         }
-
+        
         .help-content {
             font-size: 14px;
             color: var(--text-medium);
         }
-
+        
         .next-steps {
             background-color: var(--success-light);
             border-radius: 12px;
             padding: 24px;
             margin: 32px 0;
         }
-
+        
         .next-steps-title {
             font-size: 18px;
             font-weight: 600;
@@ -350,16 +319,16 @@
             margin-bottom: 16px;
             text-align: center;
         }
-
+        
         .step {
             display: flex;
             margin-bottom: 16px;
         }
-
+        
         .step:last-child {
             margin-bottom: 0;
         }
-
+        
         .step-number {
             flex-shrink: 0;
             width: 28px;
@@ -375,33 +344,33 @@
             margin-top: 4px;
             font-size: 14px;
         }
-
+        
         .step-content {
             flex-grow: 1;
         }
-
+        
         .step-title {
             font-weight: 600;
             color: var(--success);
             margin-bottom: 4px;
         }
-
+        
         .step-description {
             font-size: 14px;
             color: var(--text-medium);
         }
-
+        
         /* Mobile Optimization */
         @media (max-width: 550px) {
             .email-body {
                 padding: 30px 24px;
             }
-
+            
             .otp-code {
                 font-size: 28px;
                 letter-spacing: 6px;
             }
-
+            
             h1 {
                 font-size: 24px;
             }
@@ -409,190 +378,156 @@
     </style>
 </head>
 <body>
-<div class="container">
-    <div class="email-wrapper">
-        <!-- Header with Logo -->
-        <div class="email-header">
-            <div class="header-accent"></div>
-            <img
-                src="https://www.sapphirebroking.com/logo-white.svg"
-                alt="Sapphire Broking"
-                class="logo"
-                style="padding-right: 10px"
-            />
-            <span style="color: white; font-size: 1.2rem; margin-right: 10px">Sapphire</span>
-        </div>
-
-        <!-- Email Body -->
-        <div class="email-body">
-            <div class="icon-header">
-                <div class="icon-circle">
-                    <div class="icon">🔐</div>
-                </div>
-                <h1>Your OTP for Account Signup</h1>
-                <p>Please use this code to complete your registration</p>
+    <div class="container">
+        <div class="email-wrapper">
+            <!-- Header with Logo -->
+            <div class="email-header">
+                <div class="header-accent"></div>
+                <!-- In production, replace with your actual logo URL -->
+                <img src="/api/placeholder/150/50" alt="Sapphire Broking" class="logo" />
             </div>
-
-            <p>Dear <strong>User</strong>,</p>
-
-            <p>
-                Welcome to Sapphire! Your OTP for signup is provided below. Do not share this OTP with anyone. It is valid for 10 minutes.
-            </p>
-
-            <div class="otp-container">
-                <p>Your verification code:</p>
-                <div class="otp-code">{{ otp }}</div>
-                <div class="timer-box">
-                    <span class="timer-icon">⏱️</span>
-                    This code will expire in 10 minutes
+            
+            <!-- Email Body -->
+            <div class="email-body">
+                <div class="icon-header">
+                    <div class="icon-circle">
+                        <div class="icon">🔐</div>
+                    </div>
+                    <h1>Your OTP for Account Signup</h1>
+                    <p>Please use this code to complete your registration</p>
                 </div>
+                
+                <p>Dear <strong>[Applicant Name]</strong>,</p>
+                
+                <p>Thank you for choosing Sapphire Broking for your investment journey. To verify your email address and complete your account registration process, please use the One-Time Password (OTP) below:</p>
+                
+                <div class="otp-container">
+                    <p>Your verification code:</p>
+                    <div class="otp-code">[OTP CODE]</div>
+                    <div class="timer-box">
+                        <span class="timer-icon">⏱️</span> This code will expire in 10 minutes
+                    </div>
+                </div>
+                
+                <div class="signup-details">
+                    <h3 class="signup-details-title">Signup Details</h3>
+                    
+                    <div class="detail-row">
+                        <div class="detail-label">Email</div>
+                        <div class="detail-value">[Email Address]</div>
+                    </div>
+                    
+                    <div class="detail-row">
+                        <div class="detail-label">Mobile</div>
+                        <div class="detail-value">[Mobile Number]</div>
+                    </div>
+                    
+                    <div class="detail-row">
+                        <div class="detail-label">Signup Date & Time</div>
+                        <div class="detail-value">[Date] at [Time]</div>
+                    </div>
+                    
+                    <div class="detail-row">
+                        <div class="detail-label">IP Address</div>
+                        <div class="detail-value">[IP Address]</div>
+                    </div>
+                </div>
+                
+                <div class="next-steps">
+                    <h3 class="next-steps-title">Next Steps After Verification</h3>
+                    
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h4 class="step-title">Complete Your Profile</h4>
+                            <p class="step-description">Fill in your personal and contact information to help us know you better.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h4 class="step-title">Upload KYC Documents</h4>
+                            <p class="step-description">Submit your identity and address proof documents for verification.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h4 class="step-title">Complete Risk Profiling</h4>
+                            <p class="step-description">Answer a few questions to help us understand your investment preferences.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <h4 class="step-title">Account Activation</h4>
+                            <p class="step-description">Once verified, your account will be activated for trading.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="security-tips">
+                    <div class="security-tips-title">
+                        <span class="security-icon">🛡️</span> Security Tips
+                    </div>
+                    
+                    <div class="security-tip-item">
+                        <div class="tip-icon">✓</div>
+                        <div class="tip-content">Never share your OTP with anyone, including Sapphire Broking representatives.</div>
+                    </div>
+                    
+                    <div class="security-tip-item">
+                        <div class="tip-icon">✓</div>
+                        <div class="tip-content">Ensure you're on the official Sapphire Broking website before entering your OTP.</div>
+                    </div>
+                    
+                    <div class="security-tip-item">
+                        <div class="tip-icon">✓</div>
+                        <div class="tip-content">Create a strong password with a mix of letters, numbers, and special characters.</div>
+                    </div>
+                    
+                    <div class="security-tip-item">
+                        <div class="tip-icon">✓</div>
+                        <div class="tip-content">Enable two-factor authentication (2FA) once your account is created for added security.</div>
+                    </div>
+                </div>
+                
+                <div class="help-section">
+                    <div class="help-icon">❓</div>
+                    <div class="help-content">
+                        <p style="margin-bottom: 8px;"><strong>Didn't Request This OTP?</strong></p>
+                        <p style="margin-bottom: 0;">If you didn't initiate this account registration, please ignore this email or contact our support team immediately at <strong>support@sapphirebroking.com</strong> or call <strong>+91 XXXX XXX XXX</strong>.</p>
+                    </div>
+                </div>
+                
+                <p style="text-align: center; margin-top: 32px; font-style: italic;">This is an automated message. Please do not reply to this email.</p>
             </div>
-
-            <div class="signup-details">
-                <h3 class="signup-details-title">Signup Details</h3>
-
-                <div class="detail-row">
-                    <div class="detail-label">Email</div>
-                    <div class="detail-value">{{ email }}</div>
+            
+            <!-- Footer -->
+            <div class="email-footer">
+                <p><strong>Sapphire Broking</strong><br>
+                123 Financial District, Suite 789<br>
+                Mumbai, Maharashtra 400001<br>
+                Customer Support: +91 XXXX XXX XXX</p>
+                
+                <div class="social-links">
+                    <!-- Placeholder social icons -->
+                    <div class="social-icon">f</div>
+                    <div class="social-icon">t</div>
+                    <div class="social-icon">in</div>
+                    <div class="social-icon">ig</div>
                 </div>
-
-                <div class="detail-row">
-                    <div class="detail-label">Mobile</div>
-                    <div class="detail-value">{{ phone }}</div>
+                
+                <p>© 2025 Sapphire Broking. All Rights Reserved.</p>
+                
+                <div class="disclaimer">
+                    <p>DISCLAIMER: Investments in securities market are subject to market risks. Read all the related documents carefully before investing. Registration granted by SEBI, membership of BSE, NSE, and MCX-SX, and registration of the DP with SEBI does not guarantee quality of services. Details of compliance officer: Name: Compliance Officer, Email: compliance@sapphirebroking.com, Phone: +91 XXXX XXX XXX</p>
                 </div>
-
-                <div class="detail-row">
-                    <div class="detail-label">Signup Date & Time</div>
-                    <div class="detail-value">{{ date }} at {{ time }}</div>
-                </div>
-
-                <div class="detail-row">
-                    <div class="detail-label">IP Address</div>
-                    <div class="detail-value">{{ ip }}</div>
-                </div>
-            </div>
-
-            <div class="next-steps">
-                <h3 class="next-steps-title">Next Steps After Verification</h3>
-
-                <div class="step">
-                    <div class="step-number">1</div>
-                    <div class="step-content">
-                        <h4 class="step-title">Complete Your Profile</h4>
-                        <p class="step-description">
-                            Fill in your personal and contact information to help us know you better.
-                        </p>
-                    </div>
-                </div>
-
-                <div class="step">
-                    <div class="step-number">2</div>
-                    <div class="step-content">
-                        <h4 class="step-title">Upload KYC Documents</h4>
-                        <p class="step-description">
-                            Submit your identity and address proof documents for verification.
-                        </p>
-                    </div>
-                </div>
-
-                <div class="step">
-                    <div class="step-number">3</div>
-                    <div class="step-content">
-                        <h4 class="step-title">Complete Risk Profiling</h4>
-                        <p class="step-description">
-                            Answer a few questions to help us understand your investment preferences.
-                        </p>
-                    </div>
-                </div>
-
-                <div class="step">
-                    <div class="step-number">4</div>
-                    <div class="step-content">
-                        <h4 class="step-title">Account Activation</h4>
-                        <p class="step-description">
-                            Once verified, your account will be activated for trading.
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="security-tips">
-                <div class="security-tips-title">
-                    <span class="security-icon">🛡️</span>
-                    Security Tips
-                </div>
-
-                <div class="security-tip-item">
-                    <div class="tip-icon">✓</div>
-                    <div class="tip-content">
-                        Never share your OTP with anyone, including Sapphire Broking representatives.
-                    </div>
-                </div>
-
-                <div class="security-tip-item">
-                    <div class="tip-icon">✓</div>
-                    <div class="tip-content">
-                        Ensure you're on the official Sapphire Broking website before entering your OTP.
-                    </div>
-                </div>
-
-                <div class="security-tip-item">
-                    <div class="tip-icon">✓</div>
-                    <div class="tip-content">
-                        Create a strong password with a mix of letters, numbers, and special characters.
-                    </div>
-                </div>
-
-                <div class="security-tip-item">
-                    <div class="tip-icon">✓</div>
-                    <div class="tip-content">
-                        Enable two-factor authentication (2FA) once your account is created for added security.
-                    </div>
-                </div>
-            </div>
-
-            <div class="help-section">
-                <div class="help-icon">❓</div>
-                <div class="help-content">
-                    <p style="margin-bottom: 8px"><strong>Didn't Request This OTP?</strong></p>
-                    <p style="margin-bottom: 0">
-                        If you didn't initiate this account registration, please ignore this email or contact
-                        our support team immediately at
-                        <strong>support@sapphirebroking.com</strong>
-                        or call
-                        <strong>+91 98903 36989</strong>.
-                    </p>
-                </div>
-            </div>
-
-            <p style="text-align: center; margin-top: 32px; font-style: italic">
-                This is an automated message. Please do not reply to this email.
-            </p>
-        </div>
-
-        <!-- Footer -->
-        <div class="email-footer">
-            <p>
-                <strong>Sapphire Broking</strong><br />
-                84-A, New Sneh Nagar<br />
-                Pande Layout, Khamla<br />
-                Nagpur, Maharashtra 440025<br />
-                Customer Support: +91 98903 36989
-            </p>
-
-            <p>© 2025 Sapphire Broking. All Rights Reserved.</p>
-
-            <div class="disclaimer">
-                <p>
-                    DISCLAIMER: Investments in securities market are subject to market risks. Read all the
-                    related documents carefully before investing. Registration granted by SEBI, membership of
-                    NSE, BSE, MCX, and NCDEX, and registration of the DP with SEBI does not guarantee quality of
-                    services. Details of compliance officer: Name: Compliance Officer, Email:
-                    compliance@sapphirebroking.com, Phone: +91 98903 36989
-                </p>
             </div>
         </div>
     </div>
-</div>
 </body>
 </html>

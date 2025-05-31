@@ -1,0 +1,245 @@
+{{#> layout}}
+{{#*inline "customStyles"}}
+.icon-header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.icon-circle {
+    width: 80px;
+    height: 80px;
+    background-color: var(--primary-light);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+}
+
+.icon {
+    font-size: 32px;
+}
+
+.otp-container {
+    background-color: var(--primary-light);
+    border-radius: 12px;
+    padding: 24px;
+    text-align: center;
+    margin: 24px 0 32px;
+}
+
+.otp-code {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: 8px;
+    color: var(--primary);
+    margin: 16px 0;
+    padding: 8px 0;
+}
+
+.timer-box {
+    font-size: 14px;
+    color: var(--text-medium);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.timer-icon {
+    font-size: 16px;
+}
+
+.login-details {
+    background-color: var(--primary-light);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 32px;
+}
+
+.login-details-title {
+    margin-top: 0;
+    margin-bottom: 16px;
+    color: var(--primary);
+    font-size: 18px;
+}
+
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.detail-row:last-child {
+    border-bottom: none;
+}
+
+.detail-label {
+    font-weight: 500;
+    color: var(--text-medium);
+}
+
+.detail-value {
+    font-weight: 500;
+    color: var(--text-dark);
+}
+
+.security-tips {
+    background-color: var(--info-light);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+.security-tips-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 16px;
+    font-size: 18px;
+}
+
+.security-icon {
+    font-size: 20px;
+}
+
+.security-tip-item {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.security-tip-item:last-child {
+    margin-bottom: 0;
+}
+
+.tip-icon {
+    flex-shrink: 0;
+    color: var(--success);
+    font-weight: 700;
+}
+
+.tip-content {
+    font-size: 14px;
+    color: var(--text-medium);
+}
+
+.suspicious-alert {
+    background-color: var(--danger-light);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: flex-start;
+}
+
+.suspicious-icon {
+    flex-shrink: 0;
+    margin-right: 12px;
+    font-size: 24px;
+    color: var(--danger);
+}
+
+.suspicious-content {
+    font-size: 14px;
+    color: var(--danger);
+}
+
+.help-section {
+    background-color: var(--primary-light);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: flex-start;
+}
+
+.help-icon {
+    flex-shrink: 0;
+    margin-right: 12px;
+    font-size: 24px;
+    color: var(--primary);
+}
+
+.help-content {
+    font-size: 14px;
+    color: var(--text-medium);
+}
+{{/inline}}
+
+{{#*inline "body"}}
+<div class="icon-header">
+    <div class="icon-circle">
+        <div class="icon">🔒</div>
+    </div>
+    <h1>Login Verification Code</h1>
+    <p>Secure access to your Sapphire Terminal account</p>
+</div>
+
+<p>Dear <strong>{{userName}}</strong>,</p>
+
+<p>We've received a login request for your Sapphire Terminal account. To ensure the security of your account and proceed with the login, please use the One-Time Password (OTP) below:</p>
+
+<div class="otp-container">
+    <p>Your verification code:</p>
+    <div class="otp-code">{{otp}}</div>
+    <div class="timer-box">
+        <span class="timer-icon">⏱️</span> This code will expire in 10 minutes
+    </div>
+</div>
+
+<div class="login-details">
+    <h3 class="login-details-title">Login Attempt Details</h3>
+    
+    {{> detail-row label="Date & Time" value=(concat date " at " time)}}
+    {{> detail-row label="Device" value=deviceType}}
+    {{> detail-row label="Location" value=location}}
+    {{> detail-row label="IP Address" value=ip}}
+</div>
+
+<div class="security-tips">
+    <div class="security-tips-title"><span class="security-icon">🛡️</span> Security Reminders</div>
+
+    <div class="security-tip-item">
+        <div class="tip-icon">✓</div>
+        <div class="tip-content">Never share your OTP with anyone, including Sapphire Terminal support staff.</div>
+    </div>
+
+    <div class="security-tip-item">
+        <div class="tip-icon">✓</div>
+        <div class="tip-content">Ensure you're on the official Sapphire Terminal website before entering your OTP.</div>
+    </div>
+
+    <div class="security-tip-item">
+        <div class="tip-icon">✓</div>
+        <div class="tip-content">Always log out after completing your session, especially on shared devices.</div>
+    </div>
+
+    <div class="security-tip-item">
+        <div class="tip-icon">✓</div>
+        <div class="tip-content">Regularly update your password and enable two-factor authentication (2FA) for enhanced security.</div>
+    </div>
+</div>
+
+<div class="suspicious-alert">
+    <div class="suspicious-icon">⚠️</div>
+    <div class="suspicious-content">
+        <p style="margin-bottom: 8px;"><strong>Didn't Try to Log In?</strong></p>
+        <p style="margin-bottom: 0;">If you didn't initiate this login request, please secure your account immediately by changing your password and contact our security team at <strong>security@sapphireterminal.com</strong> or call <strong>+91 XXXX XXX XXX</strong>.</p>
+    </div>
+</div>
+
+<div class="help-section">
+    <div class="help-icon">❓</div>
+    <div class="help-content">
+        <p style="margin-bottom: 8px;"><strong>Need Assistance?</strong></p>
+        <p style="margin-bottom: 0;">If you're experiencing any issues with the login process, our support team is available 24/7 at <strong>support@sapphireterminal.com</strong> or call <strong>+91 XXXX XXX XXX</strong>.</p>
+    </div>
+</div>
+
+<p style="text-align: center; margin-top: 32px; font-style: italic;">This is an automated message. Please do not reply to this email.</p>
+{{/inline}}
+{{/layout}}

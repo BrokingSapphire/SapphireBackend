@@ -1,0 +1,56 @@
+{{#> layout}}
+  <div style="text-align: center; margin-bottom: 32px;">
+    <div style="width: 80px; height: 80px; background: rgba(22,163,74,0.1) !important; background-color: #f0f9f4 !important; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 40px; color: #16a34a; border: 2px solid #16a34a;">💰</div>
+    <h1>Funds Added Successfully</h1>
+    <p>Your trading account has been credited</p>
+  </div>
+
+  <p>Dear <strong>{{userName}}</strong>,</p>
+
+  <p>₹{{amount}} has been successfully added to your trading account. Available balance: ₹{{availableBalance}}.</p>
+
+  <div class="success-box">
+    <h3 style="color: #16a34a; margin-bottom: 8px;">✅ Funds Successfully Added</h3>
+    <div class="amount-display">₹{{amount}}</div>
+    <p style="margin: 8px 0 0 0; color: #1a2b2c; font-weight: 600;">
+      Added to your trading account
+    </p>
+  </div>
+
+  <div class="balance-box">
+    <h4 style="color: #064d51; margin-bottom: 16px; text-align: center;">💳 Account Balance Summary</h4>
+    
+    <div class="balance-row">
+      <span class="balance-label">Amount Added</span>
+      <span class="balance-value" style="color: #16a34a;">₹{{amount}}</span>
+    </div>
+    
+    <div class="balance-row">
+      <span class="balance-label">Available Balance</span>
+      <span class="balance-value" style="color: #064d51;">₹{{availableBalance}}</span>
+    </div>
+    
+    <div class="balance-row">
+      <span class="balance-label">Transaction Date</span>
+      <span class="balance-value">{{date}}</span>
+    </div>
+    
+    <div class="balance-row">
+      <span class="balance-label">Transaction Time</span>
+      <span class="balance-value">{{time}}</span>
+    </div>
+    
+    <div class="balance-row">
+      <span class="balance-label">Account Email</span>
+      <span class="balance-value">{{email}}</span>
+    </div>
+  </div>
+
+  {{> trading_section}}
+  {{> trading_tips}}
+  {{> help_section}}
+
+  <p style="text-align: center; margin-top: 32px; font-style: italic;">
+    Happy Trading! Make informed investment decisions.
+  </p>
+{{/layout}}

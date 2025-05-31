@@ -1,0 +1,61 @@
+{{#> layout}}
+  <div class="confirmation-banner">
+    <div class="banner-icon">✓</div>
+    <div class="amount-display success">{{formatCurrency amount 'INR'}}</div>
+    <p class="banner-subtitle">Successfully Deposited</p>
+  </div>
+
+  <p>Dear <strong>{{clientName}}</strong>,</p>
+
+  <p>We are pleased to confirm that your fund deposit has been successfully processed and credited to your Sapphire {{brand}} trading account.</p>
+
+  <div class="transaction-details">
+    <h3 class="detail-title">Transaction Details</h3>
+    
+    <div class="detail-row">
+      <div class="detail-label">Client ID</div>
+      <div class="detail-value">{{clientId}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Transaction ID</div>
+      <div class="detail-value">{{transactionId}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Date & Time</div>
+      <div class="detail-value">{{transactionDateTime}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Amount</div>
+      <div class="detail-value">{{formatCurrency amount 'INR'}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Payment Method</div>
+      <div class="detail-value">{{paymentMethod}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Status</div>
+      <div class="detail-value status-completed">Successful</div>
+    </div>
+  </div>
+
+  <div class="balance-box">
+    <div class="balance-title">Current Available Balance</div>
+    <div class="balance-amount">{{formatCurrency updatedBalance 'INR'}}</div>
+  </div>
+
+  <p>Your funds are now available for trading. You can start placing orders immediately.</p>
+
+  <div class="cta-container">
+    <a href="{{tradingUrl}}" class="button">START TRADING NOW</a>
+  </div>
+
+  <div class="note-box">
+    <div class="note-icon">💡</div>
+    <div class="note-content">
+      <p style="margin-bottom: 8px;"><strong>Did you know?</strong></p>
+      <p style="margin-bottom: 0;">You can set up auto-payment for faster deposits in the future. Visit your account settings to enable this feature.</p>
+    </div>
+  </div>
+
+  <p style="text-align: center; margin-top: 32px; font-size: 14px;">If you did not authorize this transaction or notice any discrepancy, please contact our support team immediately.</p>
+{{/layout}}

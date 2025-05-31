@@ -1,0 +1,90 @@
+{{#> layout}}
+  <div class="alert-banner">
+    <div class="banner-icon">⚠️</div>
+    <h1 class="banner-title">Margin Call Alert</h1>
+    <p class="banner-subtitle">Immediate Action Required</p>
+  </div>
+
+  <p>Dear <strong>{{clientName}}</strong>,</p>
+
+  <p>This is an urgent notification regarding your trading account with Sapphire {{brand}}. Your account currently has a <strong>margin shortfall</strong> that requires immediate attention to avoid potential liquidation of positions.</p>
+
+  <div class="account-details">
+    <h3 class="detail-title">Account Information</h3>
+    
+    <div class="detail-row">
+      <div class="detail-label">Client ID</div>
+      <div class="detail-value">{{clientId}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Account Type</div>
+      <div class="detail-value">{{accountType}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Current Margin</div>
+      <div class="detail-value">{{formatCurrency currentMargin 'INR'}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Required Margin</div>
+      <div class="detail-value">{{formatCurrency requiredMargin 'INR'}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Account Status</div>
+      <div class="detail-value" style="color: var(--danger); font-weight: 600;">Margin Call</div>
+    </div>
+  </div>
+
+  <div class="shortfall-box">
+    <div class="shortfall-title">Current Margin Shortfall</div>
+    <div class="shortfall-amount">{{formatCurrency shortfallAmount 'INR'}}</div>
+  </div>
+
+  <div class="deadline-box">
+    <div class="deadline-title">Deadline to Resolve Shortfall</div>
+    <div class="deadline-date">{{formatDate deadlineDate 'short'}} at {{deadlineTime}}</div>
+  </div>
+
+  <h2>Options to Resolve the Margin Call</h2>
+
+  <div class="options-grid">
+    <div class="option-card">
+      <h3 class="option-title">Add Funds</h3>
+      <p class="option-desc">Deposit additional funds to your trading account to meet the margin requirement.</p>
+    </div>
+    
+    <div class="option-card">
+      <h3 class="option-title">Close Positions</h3>
+      <p class="option-desc">Reduce your exposure by closing some of your open positions.</p>
+    </div>
+    
+    <div class="option-card">
+      <h3 class="option-title">Pledge Securities</h3>
+      <p class="option-desc">Pledge eligible securities from your demat account for additional margin.</p>
+    </div>
+    
+    <div class="option-card">
+      <h3 class="option-title">Reduce Leverage</h3>
+      <p class="option-desc">Modify your positions to reduce the overall leverage in your account.</p>
+    </div>
+  </div>
+
+  <div class="cta-container">
+    <a href="{{addFundsUrl}}" class="button">ADD FUNDS NOW</a>
+  </div>
+
+  <div class="warning-box">
+    <div class="warning-icon">⚠️</div>
+    <div class="warning-content">
+      <p style="margin-bottom: 8px;"><strong>Important Warning:</strong></p>
+      <p style="margin-bottom: 0;">If the margin shortfall is not resolved by the deadline, we may be forced to liquidate some or all of your positions to comply with regulatory requirements. This could result in losses and may have tax implications.</p>
+    </div>
+  </div>
+
+  <p style="margin-top: 32px;">If you need assistance or have any questions, please contact our risk management team immediately:</p>
+
+  <p>Email: <strong>{{riskEmail}}</strong><br>
+  Phone: <strong>{{riskPhone}}</strong><br>
+  Hours: Monday to Friday, 9:00 AM to 6:00 PM</p>
+
+  <p style="text-align: center; margin-top: 32px; font-size: 14px;">This is an automated notification. Please do not reply to this email.</p>
+{{/layout}}

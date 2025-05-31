@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no">
+    <title>Merry Christmas - Sapphire Broking</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        :root {
+            --primary: #064D51;
+            --primary-light: rgba(6, 77, 81, 0.1);
+            --accent: #FFD62D;
+            --accent-light: rgba(255, 214, 45, 0.2);
+            --background: #EAFBF0;
+            --white: #FFFFFF;
+            --text-dark: #1A2B2C;
+            --text-medium: #415657;
+            --text-light: #6E7878;
+            --border-light: #E5E7EB;
+            
+            /* Christmas-specific colors */
+            --red: #D42426;
+            --green: #0F5D2E;
+            --gold: #D4AF37;
+            --christmas-light: rgba(212, 36, 38, 0.08);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background);
+            color: var(--text-dark);
+            line-height: 1.6;
+            font-size: 16px;
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        .email-wrapper {
+            background-color: var(--white);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+        }
+        
+        .email-header {
+            background: linear-gradient(135deg, var(--red) 0%, var(--green) 100%);
+            padding: 30px 40px;
+            text-align: center;
+            position: relative;
+        }
+        
+        .logo {
+            max-width: 150px;
+            height: auto;
+            margin-bottom: 20px;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 8px;
+            border-radius: 8px;
+        }
+        
+        .header-accent {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1" fill="%23D4AF37" opacity="0.6"/></svg>');
+            background-size: 40px;
+            opacity: 0.3;
+        }
+        
+        .festival-banner {
+            width: 100%;
+            max-height: 200px;
+            object-fit: cover;
+            border-radius: 0;
+        }
+        
+        .email-body {
+            padding: 40px;
+            background-color: var(--white);
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><path d="M20,10 L25,20 L35,22 L27.5,30 L30,40 L20,35 L10,40 L12.5,30 L5,22 L15,20 Z" fill="none" stroke="%23D4AF37" stroke-width="0.5" opacity="0.1"/></svg>');
+            background-position: center;
+            background-size: 100px;
+        }
+        
+        .email-footer {
+            background-color: var(--primary-light);
+            padding: 30px;
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-medium);
+        }
+        
+        .social-links {
+            margin: 25px 0;
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+        }
+        
+        .social-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            background-color: var(--primary);
+            border-radius: 50%;
+            color: var(--white);
+            transition: all 0.2s ease;
+        }
+        
+        .disclaimer {
+            font-size: 11px;
+            color: var(--text-light);
+            margin-top: 25px;
+            padding-top: 25px;
+            border-top: 1px solid var(--border-light);
+        }
+        
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--green);
+            margin-bottom: 16px;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+        
+        h1 {
+            font-size: 28px;
+            letter-spacing: -0.5px;
+            text-align: center;
+            color: var(--white);
+            margin-bottom: 0;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        h2 {
+            font-size: 24px;
+            letter-spacing: -0.3px;
+            text-align: center;
+            margin: 32px 0 24px;
+        }
+        
+        h3 {
+            font-size: 20px;
+        }
+        
+        p {
+            margin-bottom: 16px;
+            color: var(--text-medium);
+        }
+        
+        .greeting-text {
+            font-size: 18px;
+            font-weight: 500;
+            text-align: center;
+            margin-bottom: 24px;
+            color: var(--text-dark);
+        }
+        
+        .message-box {
+            background-color: var(--christmas-light);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 24px 0;
+            border: 1px solid rgba(212, 36, 38, 0.15);
+            text-align: center;
+        }
+        
+        .quote {
+            font-style: italic;
+            font-size: 16px;
+            color: var(--red);
+            margin: 16px 0;
+            text-align: center;
+        }
+        
+        .christmas-divider {
+            text-align: center;
+            margin: 32px 0;
+            font-size: 24px;
+            color: var(--red);
+            position: relative;
+        }
+        
+        .christmas-divider::before,
+        .christmas-divider::after {
+            content: "";
+            position: absolute;
+            height: 1px;
+            background: linear-gradient(to right, transparent, var(--christmas-light), transparent);
+            width: 40%;
+            top: 50%;
+        }
+        
+        .christmas-divider::before {
+            left: 0;
+        }
+        
+        .christmas-divider::after {
+            right: 0;
+        }
+        
+        .wishes {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 16px;
+            margin: 32px 0;
+        }
+        
+        .wish-item {
+            background-color: var(--christmas-light);
+            border-radius: 12px;
+            padding: 16px;
+            width: calc(50% - 8px);
+            text-align: center;
+            border: 1px solid rgba(212, 36, 38, 0.15);
+        }
+        
+        .wish-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+        
+        .wish-text {
+            font-size: 14px;
+            color: var(--text-dark);
+            font-weight: 500;
+        }
+        
+        .signature {
+            margin-top: 40px;
+            text-align: center;
+        }
+        
+        .company-name {
+            font-weight: 700;
+            color: var(--primary);
+            font-size: 18px;
+            margin-bottom: 4px;
+        }
+        
+        .company-slogan {
+            font-style: italic;
+            color: var(--text-light);
+            font-size: 14px;
+        }
+        
+        /* Mobile Optimization */
+        @media (max-width: 550px) {
+            .email-body {
+                padding: 30px 24px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+            
+            .wishes {
+                flex-direction: column;
+            }
+            
+            .wish-item {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="email-wrapper">
+            <!-- Header with Festival Branding -->
+            <div class="email-header">
+                <div class="header-accent"></div>
+                <img src="/api/placeholder/150/50" alt="Sapphire Broking" class="logo" />
+                <h1>Merry Christmas &amp; Happy New Year</h1>
+            </div>
+            
+            <!-- Festival Banner -->
+            <img src="/api/placeholder/600/200" alt="Christmas Celebration" class="festival-banner" />
+            
+            <!-- Email Body -->
+            <div class="email-body">
+                <p class="greeting-text">Dear [Customer Name],</p>
+                
+                <div class="message-box">
+                    <h2>Season's Greetings &amp; Warm Wishes</h2>
+                    <p>During this festive season, we at Sapphire Broking want to express our heartfelt gratitude for your continued trust and partnership. As the year comes to a close, we celebrate the joy of Christmas and look forward to a prosperous New Year together.</p>
+                </div>
+                
+                <p class="quote">"May the magic of Christmas fill your heart with warmth and your portfolio with growth."</p>
+                
+                <div class="christmas-divider">🎄</div>
+                
+                <div class="wishes">
+                    <div class="wish-item">
+                        <div class="wish-icon">🎁</div>
+                        <div class="wish-text">Joy &amp; Happiness</div>
+                    </div>
+                    <div class="wish-item">
+                        <div class="wish-icon">⭐</div>
+                        <div class="wish-text">Peace &amp; Prosperity</div>
+                    </div>
+                    <div class="wish-item">
+                        <div class="wish-icon">🕯️</div>
+                        <div class="wish-text">Hope &amp; Faith</div>
+                    </div>
+                    <div class="wish-item">
+                        <div class="wish-icon">💰</div>
+                        <div class="wish-text">Wealth &amp; Success</div>
+                    </div>
+                </div>
+                
+                <p style="text-align: center;">As we reflect on the past year, we're grateful for the opportunity to serve you and help you navigate your financial journey. The spirit of Christmas reminds us of the importance of giving, sharing, and building meaningful relationships.</p>
+                
+                <p style="text-align: center;">Our offices will remain closed from [Date] to [Date] for the Christmas and New Year holidays. We will resume our regular services on [Date].</p>
+                
+                <p style="text-align: center; margin-top: 24px; font-weight: 600; color: var(--green);">Wishing you a wonderful holiday season and a prosperous New Year 2025!</p>
+                
+                <div class="signature">
+                    <p class="company-name">Sapphire Broking</p>
+                    <p class="company-slogan">Your Partner in Financial Success</p>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="email-footer">
+                <p><strong>Sapphire Broking</strong><br>
+                123 Financial District, Suite 789<br>
+                Mumbai, Maharashtra 400001<br>
+                Customer Support: +91 XXXX XXX XXX</p>
+                
+                <div class="social-links">
+                    <!-- Placeholder social icons -->
+                    <div class="social-icon">f</div>
+                    <div class="social-icon">t</div>
+                    <div class="social-icon">in</div>
+                    <div class="social-icon">ig</div>
+                </div>
+                
+                <p>© 2025 Sapphire Broking. All Rights Reserved.</p>
+                
+                <div class="disclaimer">
+                    <p>DISCLAIMER: Investments in securities market are subject to market risks. Read all the related documents carefully before investing. Registration granted by SEBI, membership of BSE, NSE, and MCX-SX, and registration of the DP with SEBI does not guarantee quality of services.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

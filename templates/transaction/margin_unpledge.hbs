@@ -1,0 +1,160 @@
+{{#> layout}}
+  <div class="confirmation-banner">
+    <div class="banner-icon">✓</div>
+    <h1 class="banner-title">Unpledge Request Confirmed</h1>
+    <p class="banner-subtitle">Your securities have been successfully released</p>
+  </div>
+  
+  <p>Dear <strong>{{clientName}}</strong>,</p>
+  
+  <p>This is to confirm that your request to unpledge securities has been successfully processed. The securities are now released from pledge and are freely available in your demat account.</p>
+  
+  <div class="unpledge-details">
+    <h3 class="detail-title">Unpledge Details</h3>
+    
+    <div class="detail-row">
+      <div class="detail-label">Client ID</div>
+      <div class="detail-value">{{clientId}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Unpledge Request ID</div>
+      <div class="detail-value">{{unpledgeRequestId}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Request Date</div>
+      <div class="detail-value">{{formatDate requestDate 'short'}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Confirmation Date</div>
+      <div class="detail-value">{{formatDate confirmationDate 'short'}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Total Securities Unpledged</div>
+      <div class="detail-value">{{totalSecuritiesUnpledged}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Total Value</div>
+      <div class="detail-value">{{formatCurrency totalValue 'INR'}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Status</div>
+      <div class="detail-value status-completed">Completed</div>
+    </div>
+  </div>
+  
+  <div class="unpledged-securities">
+    <h3 class="unpledged-securities-title">Securities Released from Pledge</h3>
+    
+    <table class="securities-table">
+      <thead>
+        <tr>
+          <th>Security</th>
+          <th>ISIN</th>
+          <th>Quantity</th>
+          <th>Value (₹)</th>
+          <th>Collateral Value (₹)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each securities}}
+          <tr>
+            <td>{{this.name}}</td>
+            <td>{{this.isin}}</td>
+            <td>{{this.quantity}}</td>
+            <td>{{formatCurrency this.value 'INR'}}</td>
+            <td>{{formatCurrency this.collateralValue 'INR'}}</td>
+          </tr>
+        {{/each}}
+        <tr class="table-total">
+          <td colspan="3"><strong>Total</strong></td>
+          <td><strong>{{formatCurrency totalSecuritiesValue 'INR'}}</strong></td>
+          <td><strong>{{formatCurrency totalCollateralValue 'INR'}}</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  
+  <div class="margin-impact">
+    <h3 class="margin-impact-title">Impact on Your Margin</h3>
+    
+    <div class="impact-summary">
+      <div class="impact-item">
+        <div class="impact-label">Previous Available Margin</div>
+        <div class="impact-value">{{formatCurrency previousAvailableMargin 'INR'}}</div>
+      </div>
+      
+      <div class="impact-item">
+        <div class="impact-label">New Available Margin</div>
+        <div class="impact-value decreased">{{formatCurrency newAvailableMargin 'INR'}}</div>
+      </div>
+      
+      <div class="impact-item">
+        <div class="impact-label">Margin Decrease</div>
+        <div class="impact-value decreased">{{formatCurrency marginDecrease 'INR'}}</div>
+      </div>
+      
+      <div class="impact-item">
+        <div class="impact-label">Percentage Change</div>
+        <div class="impact-value decreased">{{marginDecreasePercentage}}%</div>
+      </div>
+    </div>
+    
+    <p style="text-align: center; margin-bottom: 0;">Please ensure that your trading activities align with your revised available margin to avoid any margin shortfalls.</p>
+  </div>
+  
+  <div class="available-actions">
+    <h3 class="available-actions-title">What You Can Do Now</h3>
+    
+    <div class="action-item">
+      <div class="action-icon">1</div>
+      <div class="action-content">
+        <h4 class="action-title">Sell the Securities</h4>
+        <p>The unpledged securities are now freely available for selling if you wish to do so.</p>
+      </div>
+    </div>
+    
+    <div class="action-item">
+      <div class="action-icon">2</div>
+      <div class="action-content">
+        <h4 class="action-title">Re-pledge Securities</h4>
+        <p>If you need margin benefits again, you can re-pledge these or other securities through your trading dashboard.</p>
+      </div>
+    </div>
+    
+    <div class="action-item">
+      <div class="action-icon">3</div>
+      <div class="action-content">
+        <h4 class="action-title">Add Funds</h4>
+        <p>To maintain your previous margin levels, you can add funds to your trading account.</p>
+      </div>
+    </div>
+    
+    <div class="action-item">
+      <div class="action-icon">4</div>
+      <div class="action-content">
+        <h4 class="action-title">Adjust Trading Strategy</h4>
+        <p>Review your positions and strategy in light of the reduced available margin.</p>
+      </div>
+    </div>
+  </div>
+  
+  <div class="note-box">
+    <div class="note-icon">📝</div>
+    <div class="note-content">
+      <p style="margin-bottom: 8px;"><strong>Important Note:</strong></p>
+      <p style="margin-bottom: 0;">The decrease in available margin might affect your trading capacity. If you have active positions requiring substantial margin, please ensure you have sufficient margin to maintain these positions or consider adjusting your exposure.</p>
+    </div>
+  </div>
+  
+  <div class="cta-container">
+    <a href="{{pledgeSecuritiesUrl}}" class="button">PLEDGE SECURITIES</a>
+    <a href="{{viewMarginDetailsUrl}}" class="button">VIEW MARGIN DETAILS</a>
+  </div>
+  
+  <p>If you have any questions about your unpledged securities or need assistance with margin-related matters, please contact our support team.</p>
+  
+  <p>Thank you for choosing Sapphire Broking for your investment needs.</p>
+  
+  <p>Best Regards,<br>
+  The Sapphire Broking Team</p>
+{{/layout}}

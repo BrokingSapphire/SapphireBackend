@@ -1,0 +1,92 @@
+{{#> layout}}
+  <div class="icon-header">
+    <div class="icon-circle warning">⚠️</div>
+    <h1>Margin Shortfall Alert</h1>
+    <p>Immediate action required to avoid RMS square-off</p>
+  </div>
+
+  <p>Dear <strong>{{userName}}</strong>,</p>
+
+  <p>Your account margin is low, and you have a margin shortfall of {{formatCurrency marginShortfall 'INR'}}. Please add funds to avoid an RMS square-off.</p>
+
+  <div class="alert-box">
+    <h3 style="color: var(--danger); margin-bottom: 8px;">🚨 Margin Shortfall Detected</h3>
+    <div class="amount-display danger">{{formatCurrency marginShortfall 'INR'}}</div>
+    <p style="margin: 8px 0 0 0; color: var(--text-dark); font-weight: 600;">
+      Immediate Fund Addition Required
+    </p>
+  </div>
+
+  <div class="warning-box">
+    <div style="font-size: 18px; font-weight: 600; color: var(--primary); margin-bottom: 16px; display: flex; align-items: center;">
+      <span style="margin-right: 8px; color: var(--warning);">💡</span>
+      Action Required
+    </div>
+
+    <p style="margin-bottom: 16px; font-weight: 600; color: var(--text-dark);">
+      To prevent automatic square-off of your positions, please add funds immediately:
+    </p>
+
+    <div style="text-align: center; margin: 20px 0;">
+      <a href="https://terminal.sapphirebroking.com/funds" class="button" target="_blank">
+        Add Funds Now
+      </a>
+    </div>
+
+    <div style="background-color: var(--white); border-radius: 8px; padding: 16px; margin-top: 16px;">
+      <h4 style="color: var(--primary); margin-bottom: 12px;">Quick Fund Addition Options:</h4>
+      <ul style="margin: 0; padding-left: 20px; color: var(--text-medium);">
+        <li>UPI Transfer (Instant)</li>
+        <li>Net Banking (Within minutes)</li>
+        <li>NEFT/RTGS (2-4 hours)</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="alert-box">
+    <h4 style="color: var(--danger); margin-bottom: 12px; display: flex; align-items: center;">
+      <span style="margin-right: 8px;">⏱️</span>
+      What Happens if No Action is Taken?
+    </h4>
+    <div style="color: var(--text-dark); font-size: 14px; line-height: 1.6;">
+      <p style="margin-bottom: 8px;">• <strong>RMS Square-off:</strong> Risk Management System may automatically close your positions</p>
+      <p style="margin-bottom: 8px;">• <strong>Loss Crystallization:</strong> Potential losses may be realized at unfavorable prices</p>
+      <p style="margin-bottom: 8px;">• <strong>Additional Charges:</strong> Square-off charges and penalty fees may apply</p>
+      <p style="margin: 0;">• <strong>Trading Restrictions:</strong> Future trading may be restricted until funds are added</p>
+    </div>
+  </div>
+
+  <div class="primary-box">
+    <h4 style="color: var(--primary); margin-bottom: 12px;">
+      📊 Account Summary
+    </h4>
+    <div class="balance-row">
+      <span class="balance-label">Alert Time:</span>
+      <span class="balance-value">{{time}} on {{formatDate date 'short'}}</span>
+    </div>
+    <div class="balance-row">
+      <span class="balance-label">Account Email:</span>
+      <span class="balance-value">{{email}}</span>
+    </div>
+    <div class="balance-row">
+      <span class="balance-label">Shortfall Amount:</span>
+      <span class="balance-value" style="color: var(--danger); font-weight: 700;">{{formatCurrency marginShortfall 'INR'}}</span>
+    </div>
+  </div>
+
+  <div class="help-section">
+    <div class="help-icon">📞</div>
+    <div class="help-content">
+      <p style="margin-bottom: 8px"><strong>Need Immediate Assistance?</strong></p>
+      <p style="margin-bottom: 0">
+        Our risk management team is available to help you. Contact us immediately at 
+        <strong>support@sapphirebroking.com</strong> or call 
+        <strong>+91 98903 36989</strong>.
+      </p>
+    </div>
+  </div>
+
+  <p style="text-align: center; margin-top: 32px; font-style: italic; color: var(--danger); font-weight: 600;">
+    Time-sensitive alert. Please take immediate action to protect your investments.
+  </p>
+{{/layout}}

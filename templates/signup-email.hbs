@@ -1,0 +1,141 @@
+{{#> layout}}
+  <div class="icon-header">
+    <div class="icon-circle primary">🔐</div>
+    <h1>Your OTP for Account Signup</h1>
+    <p>Please use this code to complete your registration</p>
+  </div>
+
+  <p>Dear <strong>User</strong>,</p>
+
+  <p>Welcome to Sapphire! Your OTP for signup is provided below. Do not share this OTP with anyone. It is valid for 10 minutes.</p>
+
+  <div class="otp-container">
+    <p>Your verification code:</p>
+    <div class="otp-code">{{otp}}</div>
+    <div class="timer-box">
+      <span style="margin-right: 8px;">⏱️</span>
+      This code will expire in 10 minutes
+    </div>
+  </div>
+
+  <div class="detail-container">
+    <h3 style="text-align: center; margin-bottom: 16px; color: var(--primary); font-size: 18px; font-weight: 600;">Signup Details</h3>
+
+    <div class="detail-row">
+      <div class="detail-label">Email</div>
+      <div class="detail-value">{{email}}</div>
+    </div>
+
+    <div class="detail-row">
+      <div class="detail-label">Mobile</div>
+      <div class="detail-value">{{phone}}</div>
+    </div>
+
+    <div class="detail-row">
+      <div class="detail-label">Signup Date & Time</div>
+      <div class="detail-value">{{formatDate date 'short'}} at {{time}}</div>
+    </div>
+
+    <div class="detail-row">
+      <div class="detail-label">IP Address</div>
+      <div class="detail-value">{{ip}}</div>
+    </div>
+  </div>
+
+  <div class="success-box">
+    <h3 style="color: var(--success); margin-bottom: 16px; text-align: center;">Next Steps After Verification</h3>
+
+    <div style="display: flex; margin-bottom: 16px;">
+      <div style="flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; background-color: var(--success); color: var(--white); display: flex; align-items: center; justify-content: center; font-weight: 600; margin-right: 16px; margin-top: 4px; font-size: 14px;">1</div>
+      <div style="flex-grow: 1;">
+        <h4 style="font-weight: 600; color: var(--success); margin-bottom: 4px;">Complete Your Profile</h4>
+        <p style="font-size: 14px; color: var(--text-medium); margin: 0;">
+          Fill in your personal and contact information to help us know you better.
+        </p>
+      </div>
+    </div>
+
+    <div style="display: flex; margin-bottom: 16px;">
+      <div style="flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; background-color: var(--success); color: var(--white); display: flex; align-items: center; justify-content: center; font-weight: 600; margin-right: 16px; margin-top: 4px; font-size: 14px;">2</div>
+      <div style="flex-grow: 1;">
+        <h4 style="font-weight: 600; color: var(--success); margin-bottom: 4px;">Upload KYC Documents</h4>
+        <p style="font-size: 14px; color: var(--text-medium); margin: 0;">
+          Submit your identity and address proof documents for verification.
+        </p>
+      </div>
+    </div>
+
+    <div style="display: flex; margin-bottom: 16px;">
+      <div style="flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; background-color: var(--success); color: var(--white); display: flex; align-items: center; justify-content: center; font-weight: 600; margin-right: 16px; margin-top: 4px; font-size: 14px;">3</div>
+      <div style="flex-grow: 1;">
+        <h4 style="font-weight: 600; color: var(--success); margin-bottom: 4px;">Complete Risk Profiling</h4>
+        <p style="font-size: 14px; color: var(--text-medium); margin: 0;">
+          Answer a few questions to help us understand your investment preferences.
+        </p>
+      </div>
+    </div>
+
+    <div style="display: flex;">
+      <div style="flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; background-color: var(--success); color: var(--white); display: flex; align-items: center; justify-content: center; font-weight: 600; margin-right: 16px; margin-top: 4px; font-size: 14px;">4</div>
+      <div style="flex-grow: 1;">
+        <h4 style="font-weight: 600; color: var(--success); margin-bottom: 4px;">Account Activation</h4>
+        <p style="font-size: 14px; color: var(--text-medium); margin: 0;">
+          Once verified, your account will be activated for trading.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="security-tips">
+    <div style="font-size: 18px; font-weight: 600; color: var(--primary); margin-bottom: 16px; display: flex; align-items: center;">
+      <span style="margin-right: 8px; color: var(--primary);">🛡️</span>
+      Security Tips
+    </div>
+
+    <div class="security-tip-item">
+      <div class="tip-icon">✓</div>
+      <div class="tip-content">
+        Never share your OTP with anyone, including Sapphire Broking representatives.
+      </div>
+    </div>
+
+    <div class="security-tip-item">
+      <div class="tip-icon">✓</div>
+      <div class="tip-content">
+        Ensure you're on the official Sapphire Broking website before entering your OTP.
+      </div>
+    </div>
+
+    <div class="security-tip-item">
+      <div class="tip-icon">✓</div>
+      <div class="tip-content">
+        Create a strong password with a mix of letters, numbers, and special characters.
+      </div>
+    </div>
+
+    <div class="security-tip-item">
+      <div class="tip-icon">✓</div>
+      <div class="tip-content">
+        Enable two-factor authentication (2FA) once your account is created for added security.
+      </div>
+    </div>
+  </div>
+
+  <div class="help-section">
+    <div class="help-icon">❓</div>
+    <div class="help-content">
+      <p style="margin-bottom: 8px"><strong>Didn't Request This OTP?</strong></p>
+      <p style="margin-bottom: 0">
+        If you didn't initiate this account registration, please ignore this email or contact
+        our support team immediately at
+        <strong>support@sapphirebroking.com</strong>
+        or call
+        <strong>+91 98903 36989</strong>.
+      </p>
+    </div>
+  </div>
+
+  <p style="text-align: center; margin-top: 32px; font-style: italic">
+    This is an automated message. Please do not reply to this email.
+  </p>
+{{/layout}}

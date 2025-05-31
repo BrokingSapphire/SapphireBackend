@@ -1,0 +1,56 @@
+{{#> layout}}
+<div class="icon-header">
+    <div class="icon-circle">
+        <div class="icon">🎉</div>
+    </div>
+    <h1>Welcome to {{companyName}}!</h1>
+    <p>Your trading account is now active and ready to use</p>
+</div>
+
+<p>Dear <strong>{{userName}}</strong>,</p>
+
+<p>Your {{companyName}} account is now active! Start trading now: {{tradingTerminalUrl}}</p>
+
+<div class="welcome-message">
+    <h3 style="color: var(--success); margin-bottom: 16px;">🚀 Account Successfully Activated</h3>
+    <p style="margin-bottom: 16px; color: var(--text-dark);">
+        Congratulations! Your trading account has been successfully opened and is ready for trading.
+    </p>
+    <a href="{{tradingTerminalUrl}}" class="trading-link" target="_blank">
+        Start Trading Now
+    </a>
+    <p style="margin: 8px 0 0 0; font-size: 14px; color: var(--text-medium);">
+        Access your trading terminal at {{tradingTerminalDomain}}
+    </p>
+</div>
+
+<div class="next-steps">
+    <h3 class="next-steps-title">Get Started with Your Trading Journey</h3>
+
+    {{#each steps}}
+    <div class="step">
+        <div class="step-number">{{number}}</div>
+        <div class="step-content">
+            <h4 class="step-title">{{title}}</h4>
+            <p class="step-description">{{description}}</p>
+        </div>
+    </div>
+    {{/each}}
+</div>
+
+<div style="background-color: var(--accent-light); border-radius: 12px; padding: 16px; margin-top: 32px;">
+    <p style="margin-bottom: 8px; font-weight: 600; color: var(--text-dark);">
+        <span style="font-size: 20px; margin-right: 8px;">📞</span>
+        Need Help Getting Started?
+    </p>
+    <p style="margin-bottom: 0; font-size: 14px; color: var(--text-medium);">
+        Our support team is ready to assist you 24/7 at 
+        <strong>{{supportEmail}}</strong> or call 
+        <strong>{{supportPhone}}</strong>.
+    </p>
+</div>
+
+<p style="text-align: center; margin-top: 32px; font-style: italic">
+    Thank you for choosing {{companyName}}. Happy Trading!
+</p>
+{{/layout}}

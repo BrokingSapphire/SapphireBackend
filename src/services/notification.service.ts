@@ -4,6 +4,9 @@ import transporter from '@app/services/email.service';
 import Mail from 'nodemailer/lib/mailer';
 import * as fs from 'node:fs';
 
+import Handlebars from '@app/services/handlebars-helpers';
+import * as path from 'path';
+
 interface NotificationData {
     userName: string;
     email: string;
@@ -17,6 +20,28 @@ interface NotificationData {
     creditHours?: string;
     reason?: string;
     marginShortfall?: string;
+
+    // Account details
+    accountNumber?: string;
+    clientId?: string;
+    accountType?: string;
+
+    // Transaction details
+    transactionId?: string;
+    currency?: string;
+    transactionDate?: string;
+    transactionTime?: string;
+    transactionStatus?: string;
+
+    // Document details
+    documentType?: string;
+    documentStatus?: string;
+    submissionDate?: string;
+
+    // Support details
+    ticketId?: string;
+    ticketStatus?: string;
+    ticketSubject?: string;
 }
 
 type NotificationTemplate =
@@ -34,9 +59,21 @@ type NotificationTemplate =
     | 'funds-added'
     | 'account-suspension-notice';
 
+// Register partials
+const partialsDir = path.join(process.cwd(), 'templates', 'partials');
+if (fs.existsSync(partialsDir)) {
+    const partialFiles = fs.readdirSync(partialsDir).filter((file) => file.endsWith('.hbs'));
+    partialFiles.forEach((file) => {
+        const partialName = path.basename(file, '.hbs');
+        const partialContent = fs.readFileSync(path.join(partialsDir, file), 'utf-8');
+        Handlebars.registerPartial(partialName, partialContent);
+    });
+}
+
 class EmailNotificationService {
     private readonly email: string;
     private readonly template: NotificationTemplate;
+    private static readonly templateCache: Map<string, Handlebars.TemplateDelegate> = new Map();
 
     constructor(email: string, template: NotificationTemplate) {
         this.email = email;
@@ -49,19 +86,25 @@ class EmailNotificationService {
     public async sendNotification(data: NotificationData): Promise<void> {
         try {
             // Check if template file exists
-            const templatePath = `templates/${this.template}-email.html`;
-            if (!fs.existsSync(templatePath)) {
-                logger.error(`Template file not found: ${templatePath}`);
-                throw new Error(`Template file not found: ${this.template}-email.html`);
+            const templatePath = this.findTemplatePath();
+            if (!templatePath) {
+                logger.error(`Template file not found for: ${this.template}`);
+                throw new Error(`Template file not found for: ${this.template}`);
             }
 
-            const content = fs.readFileSync(templatePath, 'utf-8');
+            // Get compiled template from cache or compile it
+            let compiledTemplate = EmailNotificationService.templateCache.get(templatePath);
+            if (!compiledTemplate) {
+                const content = fs.readFileSync(templatePath, 'utf-8');
+                compiledTemplate = Handlebars.compile(content);
+                EmailNotificationService.templateCache.set(templatePath, compiledTemplate);
+            }
 
             const mailOptions: Mail.Options = {
                 from: env.email.from,
                 to: this.email,
                 subject: this.getSubject(),
-                html: this.formatNotificationHtml(content, data),
+                html: compiledTemplate(this.prepareTemplateData(data)),
             };
 
             await transporter.sendMail(mailOptions);
@@ -70,6 +113,42 @@ class EmailNotificationService {
             logger.error(`Failed to send ${this.template} notification to ${this.email}:`, error);
             throw error;
         }
+    }
+
+    /**
+     * Find the template path based on template type
+     * Checks both the original location and the new categorized structure
+     */
+    private findTemplatePath(): string | null {
+        // First check the original location
+        const originalPath = `templates/${this.template}-email.html`;
+        if (fs.existsSync(originalPath)) {
+            return originalPath;
+        }
+
+        // Check in the new categorized structure
+        const templateMap: Record<string, string> = {
+            'account-successfully-opened': 'templates/account-related/welcome_email.html',
+            'documents-received-confirmation': 'templates/account-related/kyc_submission.html',
+            'login-alert': 'templates/security-and-support/suspicious_login.html',
+            'margin-shortfall-alert': 'templates/transaction/margin_call.html',
+            'payout-rejected': 'templates/transaction/fund_withdrawal.html',
+            'withdrawal-processed': 'templates/transaction/fund_withdrawal.html',
+            'funds-added': 'templates/transaction/fund_deposit.html',
+            'password-change-confirmation': 'templates/security-and-support/password_reset.html',
+            'account-locked': 'templates/security-and-support/suspicious_login.html',
+            welcome: 'templates/account-related/welcome_email.html',
+            'documents-rejected-notification': 'templates/account-related/account_rejection.html',
+            'kyc-update-required': 'templates/account-related/kyc_submission.html',
+            'account-suspension-notice': 'templates/account-related/account_suspension.html',
+        };
+
+        const mappedPath = templateMap[this.template];
+        if (mappedPath && fs.existsSync(mappedPath)) {
+            return mappedPath;
+        }
+
+        return null;
     }
 
     /**
@@ -109,9 +188,9 @@ class EmailNotificationService {
     }
 
     /**
-     * Format HTML template with notification data
+     * Prepare data for template rendering
      */
-    private formatNotificationHtml(content: string, data: NotificationData): string {
+    private prepareTemplateData(data: NotificationData): Record<string, any> {
         const currentDate =
             data.date ||
             new Date().toLocaleDateString('en-IN', {
@@ -129,19 +208,103 @@ class EmailNotificationService {
                 hour12: true,
             });
 
-        return content
-            .replace(/{{ userName }}/g, data.userName)
-            .replace(/{{ email }}/g, data.email)
-            .replace(/{{ date }}/g, currentDate)
-            .replace(/{{ time }}/g, currentTime)
-            .replace(/{{ ip }}/g, data.ip || 'N/A')
-            .replace(/\[Device Type\]/g, data.deviceType || 'Unknown Device')
-            .replace(/\[Location\]/g, data.location || 'Unknown Location')
-            .replace(/{{ amount }}/g, data.amount || 'N/A')
-            .replace(/{{ availableBalance }}/g, data.availableBalance || 'N/A')
-            .replace(/{{ creditHours }}/g, data.creditHours || 'N/A')
-            .replace(/{{ reason }}/g, data.reason || 'N/A')
-            .replace(/{{ marginShortfall }}/g, data.marginShortfall || 'N/A');
+        return {
+            // Common template data
+            title: this.getTitle(),
+            brand: this.getBrand(),
+            logoUrl: 'https://www.sapphirebroking.com/logo-white.svg',
+            showBrandText: true,
+            year: new Date().getFullYear(),
+            disclaimer: this.getDisclaimer(),
+
+            // User data
+            userName: data.userName,
+            email: data.email,
+            date: currentDate,
+            time: currentTime,
+            ip: data.ip || 'N/A',
+            deviceType: data.deviceType || 'Unknown Device',
+            location: data.location || 'Unknown Location',
+            amount: data.amount || 'N/A',
+            availableBalance: data.availableBalance || 'N/A',
+            creditHours: data.creditHours || 'N/A',
+            reason: data.reason || 'N/A',
+            marginShortfall: data.marginShortfall || 'N/A',
+
+            // Account details
+            accountNumber: data.accountNumber || 'N/A',
+            clientId: data.clientId || 'N/A',
+            accountType: data.accountType || 'N/A',
+
+            // Transaction details
+            transactionId: data.transactionId || 'N/A',
+            currency: data.currency || 'INR',
+            transactionDate: data.transactionDate || currentDate,
+            transactionTime: data.transactionTime || currentTime,
+            transactionStatus: data.transactionStatus || 'N/A',
+
+            // Document details
+            documentType: data.documentType || 'N/A',
+            documentStatus: data.documentStatus || 'N/A',
+            submissionDate: data.submissionDate || currentDate,
+
+            // Support details
+            ticketId: data.ticketId || 'N/A',
+            ticketStatus: data.ticketStatus || 'N/A',
+            ticketSubject: data.ticketSubject || 'N/A',
+        };
+    }
+
+    /**
+     * Get the title for the email
+     */
+    private getTitle(): string {
+        switch (this.template) {
+            case 'password-change-confirmation':
+                return 'Password Changed Successfully';
+            case 'account-locked':
+                return 'Account Security Alert';
+            case 'login-alert':
+                return 'New Login Detected';
+            case 'welcome':
+                return 'Welcome';
+            case 'withdrawal-processed':
+                return 'Withdrawal Processed Successfully';
+            case 'account-successfully-opened':
+                return 'Welcome to Sapphire - Account Successfully Opened';
+            case 'documents-received-confirmation':
+                return 'Documents Received';
+            case 'margin-shortfall-alert':
+                return 'Margin Shortfall Alert';
+            case 'payout-rejected':
+                return 'Payout Request Rejected';
+            case 'documents-rejected-notification':
+                return 'Documents Rejected';
+            case 'kyc-update-required':
+                return 'KYC Update Required';
+            case 'funds-added':
+                return 'Funds Added Successfully';
+            case 'account-suspension-notice':
+                return 'Account Suspension Notice';
+            default:
+                return 'Notification';
+        }
+    }
+
+    /**
+     * Get the brand name
+     */
+    private getBrand(): string {
+        // You can customize this based on the template or other factors
+        return 'Broking';
+    }
+
+    /**
+     * Get the disclaimer text
+     */
+    private getDisclaimer(): string {
+        // You can customize this based on the template
+        return 'DISCLAIMER: Investments in securities market are subject to market risks. Read all the related documents carefully before investing. Registration granted by SEBI, membership of BSE, NSE, and MCX-SX, and registration of the DP with SEBI does not guarantee quality of services. Details of compliance officer: Name: Compliance Officer, Email: compliance@sapphirebroking.com, Phone: +91 XXXX XXX XXX';
     }
 }
 

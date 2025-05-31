@@ -1,0 +1,118 @@
+{{#> layout}}
+  <div class="section-header">
+    <h1 class="section-title">Contract Note</h1>
+    <p class="section-subtitle">Trade Date: {{formatDate tradeDate 'short'}}</p>
+  </div>
+
+  <p>Dear <strong>{{clientName}}</strong>,</p>
+
+  <p>Please find below the contract note for your trades executed on {{formatDate tradeDate 'short'}}. This document serves as an official record of your transactions.</p>
+
+  <div class="client-details">
+    <div class="detail-row">
+      <div class="detail-label">Client ID</div>
+      <div class="detail-value">{{clientId}}</div>
+    </div>
+    
+    <div class="detail-row">
+      <div class="detail-label">Trading Code</div>
+      <div class="detail-value">{{tradingCode}}</div>
+    </div>
+    
+    <div class="detail-row">
+      <div class="detail-label">PAN</div>
+      <div class="detail-value">{{panNumber}}</div>
+    </div>
+    
+    <div class="detail-row">
+      <div class="detail-label">Settlement No.</div>
+      <div class="detail-value">{{settlementNumber}}</div>
+    </div>
+    
+    <div class="detail-row">
+      <div class="detail-label">Contract Note No.</div>
+      <div class="detail-value">{{contractNoteNumber}}</div>
+    </div>
+  </div>
+
+  <div class="trade-summary">
+    <h3 class="trade-summary-title">Trade Summary</h3>
+    
+    <table class="trade-table">
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Type</th>
+          <th>Qty</th>
+          <th>Price</th>
+          <th>Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each trades}}
+        <tr>
+          <td>{{symbol}}</td>
+          <td>{{type}}</td>
+          <td>{{quantity}}</td>
+          <td>{{formatCurrency price 'INR'}}</td>
+          <td>{{formatCurrency value 'INR'}}</td>
+        </tr>
+        {{/each}}
+        <tr class="total-row">
+          <td colspan="4">Total</td>
+          <td>{{formatCurrency totalTradeValue 'INR'}}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="charges-box">
+    <h3 class="charges-title">Charges & Taxes</h3>
+    
+    <table class="charges-table">
+      {{#each charges}}
+      <tr>
+        <td>{{name}}</td>
+        <td>{{formatCurrency amount 'INR'}}</td>
+      </tr>
+      {{/each}}
+      <tr>
+        <td><strong>Total Charges</strong></td>
+        <td><strong>{{formatCurrency totalCharges 'INR'}}</strong></td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="net-amount">
+    <div class="net-title">Net Amount Payable</div>
+    <div class="net-value">{{formatCurrency netAmount 'INR'}}</div>
+  </div>
+
+  <div class="cta-container">
+    <a href="{{pdfDownloadUrl}}" class="button">DOWNLOAD PDF</a>
+  </div>
+
+  <div class="note-box">
+    <div class="note-icon">ℹ️</div>
+    <div class="note-content">
+      <p style="margin-bottom: 8px;"><strong>Note:</strong></p>
+      <p style="margin-bottom: 0;">{{noteContent}}</p>
+    </div>
+  </div>
+
+  <p><strong>{{companyName}}</strong><br>
+  {{companyAddress}}<br>
+  Customer Support: {{supportPhone}}</p>
+
+  <div class="social-links">
+    {{#each socialLinks}}
+    <div class="social-icon">{{icon}}</div>
+    {{/each}}
+  </div>
+
+  <p>© {{currentYear}} {{companyName}}. All Rights Reserved.</p>
+
+  <div class="disclaimer">
+    <p>{{disclaimer}}</p>
+  </div>
+{{/layout}}

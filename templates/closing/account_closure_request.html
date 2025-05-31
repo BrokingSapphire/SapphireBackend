@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no">
+    <title>Account Closure Request Received - Sapphire Broking</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        :root {
+            --primary: #064D51;
+            --primary-light: rgba(6, 77, 81, 0.1);
+            --accent: #FFD62D;
+            --accent-light: rgba(255, 214, 45, 0.2);
+            --background: #EAFBF0;
+            --white: #FFFFFF;
+            --text-dark: #1A2B2C;
+            --text-medium: #415657;
+            --text-light: #6E7878;
+            --border-light: #E5E7EB;
+            --success: #16A34A;
+            --success-light: rgba(22, 163, 74, 0.1);
+            --warning: #F59E0B;
+            --warning-light: rgba(245, 158, 11, 0.1);
+            --info: #0EA5E9;
+            --info-light: rgba(14, 165, 233, 0.1);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background);
+            color: var(--text-dark);
+            line-height: 1.6;
+            font-size: 16px;
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        .email-wrapper {
+            background-color: var(--white);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+        }
+        
+        .email-header {
+            background-color: var(--primary);
+            padding: 30px 40px;
+            text-align: center;
+            position: relative;
+        }
+        
+        .logo {
+            max-width: 150px;
+            height: auto;
+        }
+        
+        .header-accent {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 10% 20%, rgba(255, 214, 45, 0.3) 0%, transparent 30%);
+        }
+        
+        .email-body {
+            padding: 40px;
+        }
+        
+        .email-footer {
+            background-color: var(--primary-light);
+            padding: 30px;
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-medium);
+        }
+        
+        .social-links {
+            margin: 25px 0;
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+        }
+        
+        .social-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            background-color: var(--primary);
+            border-radius: 50%;
+            color: var(--white);
+            transition: all 0.2s ease;
+        }
+        
+        .disclaimer {
+            font-size: 11px;
+            color: var(--text-light);
+            margin-top: 25px;
+            padding-top: 25px;
+            border-top: 1px solid var(--border-light);
+        }
+        
+        .button {
+            display: inline-block;
+            padding: 14px 28px;
+            background-color: var(--primary);
+            color: var(--white) !important;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 15px;
+            transition: all 0.2s ease;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(6, 77, 81, 0.2);
+        }
+        
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(6, 77, 81, 0.25);
+        }
+        
+        .button-secondary {
+            background-color: var(--text-medium);
+        }
+        
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--primary);
+            margin-bottom: 16px;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+        
+        h1 {
+            font-size: 28px;
+            letter-spacing: -0.5px;
+        }
+        
+        h2 {
+            font-size: 24px;
+            letter-spacing: -0.3px;
+        }
+        
+        h3 {
+            font-size: 20px;
+        }
+        
+        p {
+            margin-bottom: 16px;
+            color: var(--text-medium);
+        }
+        
+        .notification-banner {
+            margin: 0 0 32px 0;
+            position: relative;
+            text-align: center;
+            background-color: var(--primary-light);
+            padding: 24px;
+            border-radius: 12px;
+        }
+        
+        .notification-icon {
+            font-size: 48px;
+            color: var(--primary);
+            margin-bottom: 16px;
+        }
+        
+        .notification-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--primary);
+            margin: 0 0 12px 0;
+            text-align: center;
+        }
+        
+        .notification-subtitle {
+            font-size: 18px;
+            color: var(--text-medium);
+            margin-bottom: 0;
+            text-align: center;
+        }
+        
+        .message-box {
+            background-color: var(--info-light);
+            border-radius: 12px;
+            padding: 32px;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 32px;
+        }
+        
+        .message-box:before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: var(--info);
+        }
+        
+        .message-content {
+            position: relative;
+            z-index: 1;
+        }
+        
+        .request-details {
+            background-color: var(--white);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+            border: 1px solid var(--border-light);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+        }
+        
+        .request-details-title {
+            text-align: center;
+            margin-bottom: 16px;
+            color: var(--primary);
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .detail-row {
+            display: flex;
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-light);
+        }
+        
+        .detail-row:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+        
+        .detail-label {
+            flex: 1;
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+        
+        .detail-value {
+            flex: 2;
+            text-align: right;
+        }
+        
+        .status-pending {
+            color: var(--warning);
+            font-weight: 600;
+        }
+        
+        .process-steps {
+            background-color: var(--white);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+            border: 1px solid var(--border-light);
+        }
+        
+        .process-steps-title {
+            margin-bottom: 16px;
+            color: var(--primary);
+            font-size: 18px;
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        .step {
+            display: flex;
+            margin-bottom: 16px;
+        }
+        
+        .step:last-child {
+            margin-bottom: 0;
+        }
+        
+        .step-number {
+            flex-shrink: 0;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background-color: var(--primary);
+            color: var(--white);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            margin-right: 16px;
+            margin-top: 4px;
+            font-size: 14px;
+        }
+        
+        .step-content {
+            flex-grow: 1;
+        }
+        
+        .step-title {
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 4px;
+        }
+        
+        .step-description {
+            font-size: 14px;
+            color: var(--text-medium);
+        }
+        
+        .considerations {
+            background-color: var(--warning-light);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+        }
+        
+        .considerations-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--warning);
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        
+        .consideration-item {
+            display: flex;
+            margin-bottom: 12px;
+        }
+        
+        .consideration-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .consideration-icon {
+            flex-shrink: 0;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background-color: var(--warning);
+            color: var(--white);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 16px;
+            margin-top: 4px;
+            font-size: 12px;
+        }
+        
+        .consideration-content {
+            flex-grow: 1;
+        }
+        
+        .timeline {
+            background-color: var(--white);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+            border: 1px solid var(--border-light);
+        }
+        
+        .timeline-title {
+            margin-bottom: 16px;
+            color: var(--primary);
+            font-size: 18px;
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        .timeline-item {
+            display: flex;
+            margin-bottom: 16px;
+            position: relative;
+        }
+        
+        .timeline-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .timeline-item:not(:last-child):after {
+            content: "";
+            position: absolute;
+            left: 12px;
+            top: 24px;
+            bottom: -8px;
+            width: 2px;
+            background-color: var(--border-light);
+        }
+        
+        .timeline-marker {
+            flex-shrink: 0;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background-color: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--white);
+            font-size: 12px;
+            margin-right: 16px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .timeline-content {
+            flex-grow: 1;
+            padding-bottom: 16px;
+        }
+        
+        .timeline-date {
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 4px;
+        }
+        
+        .timeline-description {
+            font-size: 14px;
+            color: var(--text-medium);
+        }
+        
+        .reconsider-section {
+            background-color: var(--accent-light);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 32px 0;
+            text-align: center;
+        }
+        
+        .reconsider-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 16px;
+        }
+        
+        .reconsider-description {
+            margin-bottom: 24px;
+        }
+        
+        .alternative-options {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .option-card {
+            background-color: var(--white);
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+            border: 1px solid var(--border-light);
+        }
+        
+        .option-icon {
+            font-size: 24px;
+            color: var(--primary);
+            margin-bottom: 8px;
+        }
+        
+        .option-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 8px;
+        }
+        
+        .option-description {
+            font-size: 13px;
+            color: var(--text-medium);
+        }
+        
+        .support-box {
+            background-color: var(--success-light);
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 32px;
+            display: flex;
+            align-items: flex-start;
+        }
+        
+        .support-icon {
+            flex-shrink: 0;
+            margin-right: 12px;
+            font-size: 24px;
+            color: var(--success);
+        }
+        
+        .support-content {
+            font-size: 14px;
+            color: var(--text-medium);
+        }
+        
+        .cta-container {
+            text-align: center;
+            margin: 32px 0;
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+        }
+        
+        /* Mobile Optimization */
+        @media (max-width: 550px) {
+            .email-body {
+                padding: 30px 24px;
+            }
+            
+            .notification-title {
+                font-size: 24px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+            
+            .message-box {
+                padding: 24px;
+            }
+            
+            .alternative-options {
+                grid-template-columns: 1fr;
+            }
+            
+            .cta-container {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="email-wrapper">
+            <!-- Header with Logo -->
+            <div class="email-header">
+                <div class="header-accent"></div>
+                <!-- In production, replace with your actual logo URL -->
+                <img src="/api/placeholder/150/50" alt="Sapphire Broking" class="logo" />
+            </div>
+            
+            <!-- Email Body -->
+            <div class="email-body">
+                <div class="notification-banner">
+                    <div class="notification-icon">📝</div>
+                    <h1 class="notification-title">Account Closure Request Received</h1>
+                    <p class="notification-subtitle">We're processing your request</p>
+                </div>
+                
+                <p>Dear <strong>[Client Name]</strong>,</p>
+                
+                <p>We have received your request to close your trading account with Sapphire Broking. This email confirms that your request has been recorded in our system and is currently being processed by our team.</p>
+                
+                <div class="message-box">
+                    <div class="message-content">
+                        <p>We value your relationship with us and are sorry to see you go. Your account closure request will be carefully processed to ensure all your holdings are properly settled and funds are transferred according to your instructions.</p>
+                        
+                        <p style="margin-bottom: 0;">Please review the details of your request and the closure process outlined below. If you have any questions or need any clarification, please don't hesitate to contact us.</p>
+                    </div>
+                </div>
+                
+                <div class="request-details">
+                    <h3 class="request-details-title">Closure Request Details</h3>
+                    
+                    <div class="detail-row">
+                        <div class="detail-label">Client ID</div>
+                        <div class="detail-value">[Client ID]</div>
+                    </div>
+                    
+                    <div class="detail-row">
+                        <div class="detail-label">Account Holder</div>
+                        <div class="detail-value">[Full Name]</div>
+                    </div>
+                    
+                    <div class="detail-row">
+                        <div class="detail-label">Request Date</div>
+                        <div class="detail-value">[Request Date]</div>
+                    </div>
+                    
+                    <div class="detail-row">
+                        <div class="detail-label">Request Reference No.</div>
+                        <div class="detail-value">[Reference Number]</div>
+                    </div>
+                    
+                    <div class="detail-row">
+                        <div class="detail-label">Reason for Closure</div>
+                        <div class="detail-value">[Closure Reason]</div>
+                    </div>
+                    
+                    <div class="detail-row">
+                        <div class="detail-label">Status</div>
+                        <div class="detail-value status-pending">In Process</div>
+                    </div>
+                </div>
+                
+                <div class="process-steps">
+                    <h3 class="process-steps-title">Account Closure Process</h3>
+                    
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h4 class="step-title">Initial Review</h4>
+                            <p class="step-description">Our team reviews your account for any open positions, pending settlements, or outstanding dues.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h4 class="step-title">Settlement Processing</h4>
+                            <p class="step-description">All open positions will be settled, and any securities in your demat account will be transferred as per your instructions.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h4 class="step-title">Fund Transfer</h4>
+                            <p class="step-description">Remaining funds will be transferred to your registered bank account after adjusting any applicable charges.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <h4 class="step-title">Account Deactivation</h4>
+                            <p class="step-description">Once all settlements are complete, your account will be officially closed and you'll receive a confirmation email.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="considerations">
+                    <h3 class="considerations-title">Important Considerations</h3>
+                    
+                    <div class="consideration-item">
+                        <div class="consideration-icon">!</div>
+                        <div class="consideration-content">
+                            <p><strong>Open Positions:</strong> Any open positions in your account must be closed before the account closure can be completed. If you prefer, our team can handle the closing of these positions for you.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="consideration-item">
+                        <div class="consideration-icon">!</div>
+                        <div class="consideration-content">
+                            <p><strong>Pending Corporate Actions:</strong> If there are any pending corporate actions (dividends, stock splits, etc.) for your holdings, these will be processed before account closure.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="consideration-item">
+                        <div class="consideration-icon">!</div>
+                        <div class="consideration-content">
+                            <p><strong>Tax Implications:</strong> Closing positions may have tax implications. We recommend consulting with a tax advisor before proceeding.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="consideration-item">
+                        <div class="consideration-icon">!</div>
+                        <div class="consideration-content">
+                            <p><strong>Account Statements:</strong> Final statements and tax-related documents will be sent to your registered email address after account closure.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="timeline">
+                    <h3 class="timeline-title">Expected Timeline</h3>
+                    
+                    <div class="timeline-item">
+                        <div class="timeline-marker">1</div>
+                        <div class="timeline-content">
+                            <div class="timeline-date">[Current Date]</div>
+                            <div class="timeline-description">Request acknowledgment and initial processing</div>
+                        </div>
+                    </div>
+                    
+                    <div class="timeline-item">
+                        <div class="timeline-marker">2</div>
+                        <div class="timeline-content">
+                            <div class="timeline-date">[Date + 2 Business Days]</div>
+                            <div class="timeline-description">Account review and settlement preparation</div>
+                        </div>
+                    </div>
+                    
+                    <div class="timeline-item">
+                        <div class="timeline-marker">3</div>
+                        <div class="timeline-content">
+                            <div class="timeline-date">[Date + 5 Business Days]</div>
+                            <div class="timeline-description">Final settlements and fund transfers</div>
+                        </div>
+                    </div>
+                    
+                    <div class="timeline-item">
+                        <div class="timeline-marker">4</div>
+                        <div class="timeline-content">
+                            <div class="timeline-date">[Date + 7 Business Days]</div>
+                            <div class="timeline-description">Account closure confirmation</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="reconsider-section">
+                    <h3 class="reconsider-title">Before You Go...</h3>
+                    <p class="reconsider-description">We would love to keep you as a valued client. Here are some alternatives that might better suit your needs:</p>
+                    
+                    <div class="alternative-options">
+                        <div class="option-card">
+                            <div class="option-icon">💰</div>
+                            <h4 class="option-title">Lower Brokerage Plan</h4>
+                            <p class="option-description">Switch to our economy plan with reduced charges tailored to your trading pattern.</p>
+                        </div>
+                        
+                        <div class="option-card">
+                            <div class="option-icon">🔄</div>
+                            <h4 class="option-title">Account Dormancy</h4>
+                            <p class="option-description">Temporarily freeze your account instead of closing it completely.</p>
+                        </div>
+                        
+                        <div class="option-card">
+                            <div class="option-icon">👨‍💼</div>
+                            <h4 class="option-title">Dedicated Relationship Manager</h4>
+                            <p class="option-description">Get personalized support from a dedicated manager to address your concerns.</p>
+                        </div>
+                        
+                        <div class="option-card">
+                            <div class="option-icon">📊</div>
+                            <h4 class="option-title">Premium Research Access</h4>
+                            <p class="option-description">Unlock exclusive research reports and market insights free for 3 months.</p>
+                        </div>
+                    </div>
+                    
+                    <p style="margin-bottom: 0; font-weight: 500;">Would you like to discuss these options before proceeding with your account closure?</p>
+                </div>
+                
+                <div class="cta-container">
+                    <a href="#" class="button">CONTINUE WITH CLOSURE</a>
+                    <a href="#" class="button button-secondary">EXPLORE ALTERNATIVES</a>
+                </div>
+                
+                <div class="support-box">
+                    <div class="support-icon">💬</div>
+                    <div class="support-content">
+                        <p style="margin-bottom: 8px;"><strong>Need Assistance?</strong></p>
+                        <p style="margin-bottom: 0;">If you have any questions or need help with your account closure request, our dedicated support team is available to assist you:</p>
+                        <p style="margin-top: 8px;">
+                        Email: <strong>closures@sapphirebroking.com</strong><br>
+                        Phone: <strong>+91 XXXX XXX XXX</strong><br>
+                        Hours: Monday to Friday, 9:00 AM to 6:00 PM</p>
+                    </div>
+                </div>
+                
+                <p style="text-align: center; margin-top: 32px;">Thank you for the opportunity to serve your investment needs. We hope to welcome you back in the future.</p>
+            </div>
+            
+            <!-- Footer -->
+            <div class="email-footer">
+                <p><strong>Sapphire Broking</strong><br>
+                123 Financial District, Suite 789<br>
+                Mumbai, Maharashtra 400001<br>
+                Customer Support: +91 XXXX XXX XXX</p>
+                
+                <div class="social-links">
+                    <!-- Placeholder social icons -->
+                    <div class="social-icon">f</div>
+                    <div class="social-icon">t</div>
+                    <div class="social-icon">in</div>
+                    <div class="social-icon">ig</div>
+                </div>
+                
+                <p>© 2025 Sapphire Broking. All Rights Reserved.</p>
+                
+                <div class="disclaimer">
+                    <p>DISCLAIMER: Investments in securities market are subject to market risks. Read all the related documents carefully before investing. Registration granted by SEBI, membership of BSE, NSE, and MCX-SX, and registration of the DP with SEBI does not guarantee quality of services. Details of compliance officer: Name: Compliance Officer, Email: compliance@sapphirebroking.com, Phone: +91 XXXX XXX XXX</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

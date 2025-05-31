@@ -1,0 +1,60 @@
+{{#> layout}}
+  <div class="icon-header">
+    <div class="icon-circle success">💰</div>
+    <h1>Withdrawal Processed Successfully</h1>
+    <p>Your withdrawal request has been completed</p>
+  </div>
+
+  <p>Dear <strong>{{userName}}</strong>,</p>
+
+  <p>Your withdrawal request of {{formatCurrency amount 'INR'}} has been processed. Expected credit within {{creditHours}} hours.</p>
+
+  <div class="success-box">
+    <h3 style="color: var(--success); margin-bottom: 8px;">Withdrawal Amount</h3>
+    <div class="amount-display success">{{formatCurrency amount 'INR'}}</div>
+    <p style="margin: 0; color: var(--text-dark);">Successfully processed and transferred</p>
+  </div>
+
+  <div class="info-box">
+    <div style="font-size: 18px; font-weight: 600; color: var(--primary); margin-bottom: 16px; display: flex; align-items: center;">
+      <span style="margin-right: 8px; color: var(--info);">⏰</span>
+      Processing Timeline
+    </div>
+
+    <div class="detail-row">
+      <div class="detail-label">Request Date</div>
+      <div class="detail-value">{{formatDate date 'short'}}</div>
+    </div>
+
+    <div class="detail-row">
+      <div class="detail-label">Processing Time</div>
+      <div class="detail-value">{{time}}</div>
+    </div>
+
+    <div class="detail-row">
+      <div class="detail-label">Expected Credit</div>
+      <div class="detail-value">Within {{creditHours}} hours</div>
+    </div>
+
+    <div class="detail-row">
+      <div class="detail-label">Account Email</div>
+      <div class="detail-value">{{email}}</div>
+    </div>
+  </div>
+
+  <div class="help-section">
+    <div class="help-icon">❓</div>
+    <div class="help-content">
+      <p style="margin-bottom: 8px"><strong>Need Assistance?</strong></p>
+      <p style="margin-bottom: 0">
+        If you have any questions about your withdrawal or need support, our customer service team is available
+        24/7 at <strong>support@sapphirebroking.com</strong> or call
+        <strong>+91 98903 36989</strong>.
+      </p>
+    </div>
+  </div>
+
+  <p style="text-align: center; margin-top: 32px; font-style: italic">
+    This is an automated message. Please do not reply to this email.
+  </p>
+{{/layout}}

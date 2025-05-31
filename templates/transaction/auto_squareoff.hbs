@@ -1,0 +1,140 @@
+{{#> layout}}
+  <div class="warning-banner">
+    <div class="banner-icon">⚠️</div>
+    <h1 class="banner-title">Auto Square-Off Notification</h1>
+    <p class="banner-subtitle">Your positions have been squared off due to margin shortfall</p>
+  </div>
+  
+  <p>Dear <strong>{{clientName}}</strong>,</p>
+  
+  <p>This is to inform you that some of your open positions have been automatically squared off due to insufficient margin in your trading account. This action was taken in accordance with exchange regulations and our risk management policies.</p>
+  
+  <div class="message-box">
+    <div class="message-content">
+      <p>As per SEBI guidelines and exchange regulations, we are required to ensure that all clients maintain adequate margins for their open positions at all times. When the available margin falls below the required threshold, we are obligated to reduce exposure by squaring off positions.</p>
+      
+      <p style="margin-bottom: 0;">Below are the details of the positions that were squared off and the current status of your margin.</p>
+    </div>
+  </div>
+  
+  <div class="squareoff-details">
+    <h3 class="detail-title">Square-Off Details</h3>
+    
+    <div class="detail-row">
+      <div class="detail-label">Client ID</div>
+      <div class="detail-value">{{clientId}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Square-Off Date & Time</div>
+      <div class="detail-value">{{squareOffDateTime}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Reason</div>
+      <div class="detail-value">Margin Shortfall</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Square-Off Type</div>
+      <div class="detail-value">Automated (System Generated)</div>
+    </div>
+    
+    <h4 style="margin-top: 20px;">Squared-Off Positions</h4>
+    
+    <table class="positions-table">
+      <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Type</th>
+          <th>Qty</th>
+          <th>Entry Price</th>
+          <th>Exit Price</th>
+          <th>P&L</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each positions}}
+          <tr>
+            <td>{{this.symbol}}</td>
+            <td>{{this.type}}</td>
+            <td>{{this.quantity}}</td>
+            <td>₹{{this.entryPrice}}</td>
+            <td>₹{{this.exitPrice}}</td>
+            <td class="{{this.profitLossClass}}">{{this.profitLoss}}</td>
+          </tr>
+        {{/each}}
+      </tbody>
+    </table>
+  </div>
+  
+  <div class="margin-status">
+    <h3 class="margin-status-title">Margin Status at Square-Off Time</h3>
+    
+    <div class="margin-status-details">
+      <div class="margin-item">
+        <div class="margin-label">Required Margin</div>
+        <div class="margin-value required-margin">{{formatCurrency requiredMargin 'INR'}}</div>
+      </div>
+      
+      <div class="margin-item">
+        <div class="margin-label">Available Margin</div>
+        <div class="margin-value available-margin">{{formatCurrency availableMargin 'INR'}}</div>
+      </div>
+      
+      <div class="margin-item">
+        <div class="margin-label">Margin Shortfall</div>
+        <div class="margin-value shortfall">{{formatCurrency marginShortfall 'INR'}}</div>
+      </div>
+    </div>
+    
+    <p style="text-align: center; margin-bottom: 0; font-size: 14px;">Your available margin was only <strong>{{marginPercentage}}%</strong> of the required margin at the time of square-off.</p>
+  </div>
+  
+  <div class="prevention-steps">
+    <h3 class="prevention-steps-title">How to Prevent Auto Square-Off in Future</h3>
+    
+    <div class="step-item">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <h4 class="step-title">Monitor Margin Requirements</h4>
+        <p class="step-description">Regularly check your margin requirements and available balance on your trading dashboard or mobile app.</p>
+      </div>
+    </div>
+    
+    <div class="step-item">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <h4 class="step-title">Maintain Adequate Funds</h4>
+        <p class="step-description">Always maintain a buffer of at least 50% above your required margin to account for market volatility.</p>
+      </div>
+    </div>
+    
+    <div class="step-item">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <h4 class="step-title">Set Up Margin Alerts</h4>
+        <p class="step-description">Configure alerts to notify you when your margin utilization crosses predefined thresholds.</p>
+      </div>
+    </div>
+    
+    <div class="step-item">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <h4 class="step-title">Add Funds Promptly</h4>
+        <p class="step-description">Use our instant fund transfer facility to quickly add funds to your trading account when needed.</p>
+      </div>
+    </div>
+  </div>
+  
+  <div class="cta-container">
+    <a href="{{addFundsUrl}}" class="button">ADD FUNDS TO YOUR ACCOUNT</a>
+  </div>
+  
+  <div class="support-box">
+    <div class="support-icon">💬</div>
+    <div class="support-content">
+      <p style="margin-bottom: 8px;"><strong>Need Assistance?</strong></p>
+      <p style="margin-bottom: 0;">If you have any questions regarding this square-off or need help understanding margin requirements, please contact our risk management team at <strong>{{supportEmail}}</strong> or call <strong>{{supportPhone}}</strong> ({{supportHours}}).</p>
+    </div>
+  </div>
+  
+  <p style="text-align: center; margin-top: 32px; font-style: italic;">This is an automated system-generated email. Please do not reply to this email.</p>
+{{/layout}}

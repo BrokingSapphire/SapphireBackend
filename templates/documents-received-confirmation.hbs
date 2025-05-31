@@ -1,0 +1,63 @@
+{{#> layout}}
+  <div class="icon-header">
+    <div class="icon-circle success">📄</div>
+    <h1>Documents Received Successfully</h1>
+    <p>Your account opening documents have been received</p>
+  </div>
+
+  <p>Dear <strong>{{userName}}</strong>,</p>
+
+  <p>
+    We have received your documents for account opening. Your account will be activated within 12-24 working hours.
+  </p>
+
+  <div class="confirmation-message">
+    <h3 style="color: var(--success); margin-bottom: 16px;">✅ Documents Successfully Received</h3>
+    <p style="margin-bottom: 8px; color: var(--text-dark);">
+      Thank you for submitting your KYC documents. Our team will now review and verify your information.
+    </p>
+    <p style="margin: 0; font-weight: 600; color: var(--primary);">
+      Expected Processing Time: 12-24 Working Hours
+    </p>
+  </div>
+
+  <div class="timeline-info">
+    <div class="timeline-title">
+      <span class="timeline-icon">⏰</span>
+      What Happens Next?
+    </div>
+
+    {{#each nextSteps}}
+      <div {{#unless @last}}style="margin-bottom: 16px;"{{/unless}}>
+        <h4 style="color: var(--primary); margin-bottom: 8px;">{{icon}} {{title}}</h4>
+        <p style="margin: 0; font-size: 14px;">{{description}}</p>
+      </div>
+    {{/each}}
+  </div>
+
+  <div class="primary-box">
+    <h4 style="color: var(--primary); margin-bottom: 12px;">
+      📧 Stay Updated
+    </h4>
+    <p style="margin: 0; font-size: 14px; color: var(--text-medium);">
+      We'll send you email notifications at each step of the verification process. Please ensure your email 
+      <strong>{{email}}</strong> is accessible to receive updates.
+    </p>
+  </div>
+
+  <div class="help-section">
+    <div class="help-icon">❓</div>
+    <div class="help-content">
+      <p style="margin-bottom: 8px"><strong>Questions About Your Application?</strong></p>
+      <p style="margin-bottom: 0">
+        Our customer support team is available to assist you 24/7 at 
+        <strong>{{supportEmail}}</strong> or call 
+        <strong>{{supportPhone}}</strong>.
+      </p>
+    </div>
+  </div>
+
+  <p style="text-align: center; margin-top: 32px; font-style: italic">
+    Thank you for choosing {{companyName}} for your investment journey.
+  </p>
+{{/layout}}

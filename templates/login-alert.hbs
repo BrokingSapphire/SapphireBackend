@@ -1,0 +1,61 @@
+{{#> layout}}
+  <div style="text-align: center; margin-bottom: 32px;">
+    <div style="width: 80px; height: 80px; background: rgba(14,165,233,0.1) !important; background-color: #f0f9ff !important; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 40px; color: #0ea5e9; border: 2px solid #0ea5e9;">🔐</div>
+    <h1>New Login Detected</h1>
+    <p>Someone just logged into your Sapphire Terminal account</p>
+  </div>
+
+  <p>Dear <strong>{{userName}}</strong>,</p>
+
+  <p>We detected a new login to your Sapphire Terminal account. If this was you, no action is needed. If you don't recognize this activity, please secure your account immediately.</p>
+
+  <div class="info-box">
+    <h3 style="color: #0ea5e9; margin-bottom: 8px;">🔐 Login Successful</h3>
+    <p style="margin: 8px 0 0 0; color: #1a2b2c; font-weight: 600;">
+      Your account was accessed successfully
+    </p>
+  </div>
+
+  <div class="login-details">
+    <h4 style="color: #064d51; margin-bottom: 16px; text-align: center;">📋 Login Details</h4>
+    
+    <div class="detail-row">
+      <span class="detail-label">Login Date</span>
+      <span class="detail-value">{{date}}</span>
+    </div>
+    
+    <div class="detail-row">
+      <span class="detail-label">Login Time</span>
+      <span class="detail-value">{{time}}</span>
+    </div>
+    
+    <div class="detail-row">
+      <span class="detail-label">Device</span>
+      <span class="detail-value">{{deviceType}}</span>
+    </div>
+    
+    <div class="detail-row">
+      <span class="detail-label">Location</span>
+      <span class="detail-value">{{location}}</span>
+    </div>
+    
+    <div class="detail-row">
+      <span class="detail-label">IP Address</span>
+      <span class="detail-value">{{ip}}</span>
+    </div>
+    
+    <div class="detail-row">
+      <span class="detail-label">Account Email</span>
+      <span class="detail-value">{{email}}</span>
+    </div>
+  </div>
+
+  {{> security_confirmation}}
+  {{> security_warning resetPasswordUrl=resetPasswordUrl}}
+  {{> security_practices}}
+  {{> help_section}}
+
+  <p style="text-align: center; margin-top: 32px; font-style: italic;">
+    This is an automated security notification. Please do not reply to this email.
+  </p>
+{{/layout}}

@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no">
+    <title>Happy Maharashtra Day - Sapphire Broking</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        :root {
+            --primary: #064D51;
+            --primary-light: rgba(6, 77, 81, 0.1);
+            --accent: #FFD62D;
+            --accent-light: rgba(255, 214, 45, 0.2);
+            --background: #EAFBF0;
+            --white: #FFFFFF;
+            --text-dark: #1A2B2C;
+            --text-medium: #415657;
+            --text-light: #6E7878;
+            --border-light: #E5E7EB;
+            
+            /* Maharashtra Day-specific colors */
+            --mh-orange: #FF9933;
+            --mh-blue: #000080;
+            --mh-light: rgba(255, 153, 51, 0.1);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background);
+            color: var(--text-dark);
+            line-height: 1.6;
+            font-size: 16px;
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        .email-wrapper {
+            background-color: var(--white);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+        }
+        
+        .email-header {
+            background: linear-gradient(135deg, var(--mh-orange) 0%, var(--mh-blue) 100%);
+            padding: 30px 40px;
+            text-align: center;
+            position: relative;
+        }
+        
+        .logo {
+            max-width: 150px;
+            height: auto;
+            margin-bottom: 20px;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 8px;
+            border-radius: 8px;
+        }
+        
+        .header-accent {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 60 60"><path d="M25,15 C35,25 35,35 25,45 C15,35 15,25 25,15 Z" fill="none" stroke="%23FFFFFF" stroke-width="1" opacity="0.2"/></svg>');
+            opacity: 0.2;
+        }
+        
+        .festival-banner {
+            width: 100%;
+            max-height: 200px;
+            object-fit: cover;
+            border-radius: 0;
+        }
+        
+        .email-body {
+            padding: 40px;
+            background-color: var(--white);
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><path d="M20,10 C25,15 25,25 20,30 C15,25 15,15 20,10 Z" fill="none" stroke="%23FF9933" stroke-width="0.5" opacity="0.1"/></svg>');
+            background-position: center;
+            background-size: 80px;
+        }
+        
+        .email-footer {
+            background-color: var(--primary-light);
+            padding: 30px;
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-medium);
+        }
+        
+        .social-links {
+            margin: 25px 0;
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+        }
+        
+        .social-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            background-color: var(--primary);
+            border-radius: 50%;
+            color: var(--white);
+            transition: all 0.2s ease;
+        }
+        
+        .disclaimer {
+            font-size: 11px;
+            color: var(--text-light);
+            margin-top: 25px;
+            padding-top: 25px;
+            border-top: 1px solid var(--border-light);
+        }
+        
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--mh-blue);
+            margin-bottom: 16px;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+        
+        h1 {
+            font-size: 28px;
+            letter-spacing: -0.5px;
+            text-align: center;
+            color: var(--white);
+            margin-bottom: 0;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        h2 {
+            font-size: 24px;
+            letter-spacing: -0.3px;
+            text-align: center;
+            margin: 32px 0 24px;
+        }
+        
+        h3 {
+            font-size: 20px;
+        }
+        
+        p {
+            margin-bottom: 16px;
+            color: var(--text-medium);
+        }
+        
+        .greeting-text {
+            font-size: 18px;
+            font-weight: 500;
+            text-align: center;
+            margin-bottom: 24px;
+            color: var(--text-dark);
+        }
+        
+        .message-box {
+            background-color: var(--mh-light);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 24px 0;
+            border: 1px solid rgba(255, 153, 51, 0.2);
+            text-align: center;
+        }
+        
+        .quote {
+            font-style: italic;
+            font-size: 16px;
+            color: var(--mh-orange);
+            margin: 16px 0;
+            text-align: center;
+            border-left: 3px solid var(--mh-orange);
+            padding-left: 16px;
+        }
+        
+        .divider {
+            text-align: center;
+            margin: 32px 0;
+            font-size: 24px;
+            color: var(--mh-orange);
+            position: relative;
+        }
+        
+        .divider::before,
+        .divider::after {
+            content: "";
+            position: absolute;
+            height: 1px;
+            background: linear-gradient(to right, transparent, var(--mh-light), transparent);
+            width: 40%;
+            top: 50%;
+        }
+        
+        .divider::before {
+            left: 0;
+        }
+        
+        .divider::after {
+            right: 0;
+        }
+        
+        .achievements {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 16px;
+            margin: 32px 0;
+        }
+        
+        .achievement-item {
+            background-color: var(--mh-light);
+            border-radius: 12px;
+            padding: 16px;
+            width: calc(50% - 8px);
+            text-align: center;
+            border: 1px solid rgba(255, 153, 51, 0.2);
+        }
+        
+        .achievement-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+        
+        .achievement-text {
+            font-size: 14px;
+            color: var(--text-dark);
+            font-weight: 500;
+        }
+        
+        .signature {
+            margin-top: 40px;
+            text-align: center;
+        }
+        
+        .company-name {
+            font-weight: 700;
+            color: var(--primary);
+            font-size: 18px;
+            margin-bottom: 4px;
+        }
+        
+        .company-slogan {
+            font-style: italic;
+            color: var(--text-light);
+            font-size: 14px;
+        }
+        
+        /* Mobile Optimization */
+        @media (max-width: 550px) {
+            .email-body {
+                padding: 30px 24px;
+            }
+            
+            h1 {
+                font-size: 24px;
+            }
+            
+            .achievements {
+                flex-direction: column;
+            }
+            
+            .achievement-item {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="email-wrapper">
+            <!-- Header with Festival Branding -->
+            <div class="email-header">
+                <div class="header-accent"></div>
+                <img src="/api/placeholder/150/50" alt="Sapphire Broking" class="logo" />
+                <h1>Happy Maharashtra Day</h1>
+            </div>
+            
+            <!-- Festival Banner -->
+            <img src="/api/placeholder/600/200" alt="Maharashtra Day Celebration" class="festival-banner" />
+            
+            <!-- Email Body -->
+            <div class="email-body">
+                <p class="greeting-text">Dear [Customer Name],</p>
+                
+                <div class="message-box">
+                    <h2>Celebrating the Spirit of Maharashtra</h2>
+                    <p>On this special occasion of Maharashtra Day, we at Sapphire Broking extend our heartfelt wishes to you and your family. As we commemorate the formation of our vibrant state, we celebrate the rich culture, heritage, and remarkable achievements of Maharashtra.</p>
+                </div>
+                
+                <p class="quote">"Maharashtra is not just a state; it's an emotion, a way of life, and the pride of its people."</p>
+                
+                <div class="divider">🏵️</div>
+                
+                <div class="achievements">
+                    <div class="achievement-item">
+                        <div class="achievement-icon">🏙️</div>
+                        <div class="achievement-text">Financial Capital</div>
+                    </div>
+                    <div class="achievement-item">
+                        <div class="achievement-icon">🏭</div>
+                        <div class="achievement-text">Industrial Hub</div>
+                    </div>
+                    <div class="achievement-item">
+                        <div class="achievement-icon">🎬</div>
+                        <div class="achievement-text">Cultural Center</div>
+                    </div>
+                    <div class="achievement-item">
+                        <div class="achievement-icon">💼</div>
+                        <div class="achievement-text">Entrepreneurial Spirit</div>
+                    </div>
+                </div>
+                
+                <p style="text-align: center;">Being headquartered in Mumbai, the financial capital of India, we are proud to be part of Maharashtra's growth story. We remain committed to contributing to the state's economic progress by helping our clients achieve their financial goals with trusted advisory services.</p>
+                
+                <p style="text-align: center;">Our offices will remain closed on [Date] for Maharashtra Day celebrations. We will resume our services on [Date].</p>
+                
+                <p style="text-align: center; margin-top: 24px; font-weight: 600; color: var(--mh-orange);">जय महाराष्ट्र! (Jai Maharashtra!)</p>
+                
+                <div class="signature">
+                    <p class="company-name">Sapphire Broking</p>
+                    <p class="company-slogan">Pride of Maharashtra in Financial Services</p>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="email-footer">
+                <p><strong>Sapphire Broking</strong><br>
+                123 Financial District, Suite 789<br>
+                Mumbai, Maharashtra 400001<br>
+                Customer Support: +91 XXXX XXX XXX</p>
+                
+                <div class="social-links">
+                    <!-- Placeholder social icons -->
+                    <div class="social-icon">f</div>
+                    <div class="social-icon">t</div>
+                    <div class="social-icon">in</div>
+                    <div class="social-icon">ig</div>
+                </div>
+                
+                <p>© 2025 Sapphire Broking. All Rights Reserved.</p>
+                
+                <div class="disclaimer">
+                    <p>DISCLAIMER: Investments in securities market are subject to market risks. Read all the related documents carefully before investing. Registration granted by SEBI, membership of BSE, NSE, and MCX-SX, and registration of the DP with SEBI does not guarantee quality of services.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

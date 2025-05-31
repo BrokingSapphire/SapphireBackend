@@ -1,0 +1,105 @@
+{{#> layout}}
+  <div class="icon-header">
+    <div class="icon-circle primary">🔒</div>
+    <h1>Login Verification Code</h1>
+    <p>Secure access to your Sapphire Terminal account</p>
+  </div>
+
+  <p>Dear <strong>{{userName}}</strong>,</p>
+
+  <p>Your OTP for Sapphire Terminal login is provided below. Do not share this OTP with anyone. It is valid for 10 minutes.</p>
+
+  <div class="otp-container">
+    <p>Your verification code:</p>
+    <div class="otp-code">{{otp}}</div>
+    <div class="timer-box">
+      <span style="margin-right: 8px;">⏱️</span> This code will expire in 10 minutes
+    </div>
+  </div>
+
+  <div class="detail-container">
+    <h3 class="detail-title">Login Attempt Details</h3>
+
+    <div class="detail-row">
+      <div class="detail-label">Date & Time</div>
+      <div class="detail-value">{{formatDate date 'short'}} at {{time}}</div>
+    </div>
+
+    <div class="detail-row">
+      <div class="detail-label">Device</div>
+      <div class="detail-value">{{deviceType}}</div>
+    </div>
+
+    <div class="detail-row">
+      <div class="detail-label">Location</div>
+      <div class="detail-value">{{location}}</div>
+    </div>
+
+    <div class="detail-row">
+      <div class="detail-label">IP Address</div>
+      <div class="detail-value">{{ip}}</div>
+    </div>
+  </div>
+
+  <div class="security-tips">
+    <div style="font-size: 18px; font-weight: 600; color: var(--primary); margin-bottom: 16px; display: flex; align-items: center;">
+      <span style="margin-right: 8px; color: var(--primary);">🛡️</span> Security Reminders
+    </div>
+
+    <div class="security-tip-item">
+      <div class="tip-icon">✓</div>
+      <div class="tip-content">
+        Never share your OTP with anyone, including Sapphire Terminal support staff.
+      </div>
+    </div>
+
+    <div class="security-tip-item">
+      <div class="tip-icon">✓</div>
+      <div class="tip-content">
+        Ensure you're on the official Sapphire Terminal website before entering your OTP.
+      </div>
+    </div>
+
+    <div class="security-tip-item">
+      <div class="tip-icon">✓</div>
+      <div class="tip-content">
+        Always log out after completing your session, especially on shared devices.
+      </div>
+    </div>
+
+    <div class="security-tip-item">
+      <div class="tip-icon">✓</div>
+      <div class="tip-content">
+        Regularly update your password and enable two-factor authentication (2FA) for enhanced security.
+      </div>
+    </div>
+  </div>
+
+  <div class="suspicious-alert">
+    <div class="suspicious-icon">⚠️</div>
+    <div class="suspicious-content">
+      <p style="margin-bottom: 8px"><strong>Didn't Try to Log In?</strong></p>
+      <p style="margin-bottom: 0">
+        If you didn't initiate this login request, please secure your account immediately by
+        changing your password and contact our security team at
+        <strong>support@sapphirebroking.com</strong> or call <strong>+91 98903 36989</strong>.
+      </p>
+    </div>
+  </div>
+
+  <div class="help-section">
+    <div class="help-icon">❓</div>
+    <div class="help-content">
+      <p style="margin-bottom: 8px"><strong>Need Assistance?</strong></p>
+      <p style="margin-bottom: 0">
+        If you're experiencing any issues with the login process, our support team is available
+        24/7 at <strong>support@sapphirebroking.com</strong> or call
+        <strong>+91 98903 36989</strong>.
+      </p>
+    </div>
+  </div>
+
+  <p style="text-align: center; margin-top: 32px; font-style: italic">
+    This is an automated message. Please do not reply to this email.
+  </p>
+{{/layout}}

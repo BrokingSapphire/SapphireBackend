@@ -1,0 +1,272 @@
+{{#> layout}}
+{{#*inline "customStyles"}}
+.alert-banner {
+    margin: 0 0 32px 0;
+    position: relative;
+    text-align: center;
+}
+
+.alert-icon {
+    font-size: 64px;
+    color: var(--warning);
+    margin-bottom: 16px;
+}
+
+.alert-title {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--warning);
+    margin: 0 0 12px 0;
+    text-align: center;
+}
+
+.alert-subtitle {
+    font-size: 18px;
+    color: var(--text-medium);
+    margin-bottom: 32px;
+    text-align: center;
+}
+
+.status-suspended {
+    color: var(--warning);
+    font-weight: 600;
+}
+
+.suspension-reason {
+    background-color: var(--warning-light);
+    border-radius: 12px;
+    padding: 24px;
+    margin: 32px 0;
+}
+
+.suspension-title {
+    text-align: center;
+    margin-bottom: 16px;
+    color: var(--warning);
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.reason-item {
+    display: flex;
+    margin-bottom: 16px;
+    align-items: flex-start;
+}
+
+.reason-item:last-child {
+    margin-bottom: 0;
+}
+
+.reason-icon {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    background-color: var(--warning);
+    border-radius: 50%;
+    color: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 16px;
+    margin-top: 4px;
+    font-size: 12px;
+}
+
+.reason-content {
+    flex-grow: 1;
+}
+
+.reactivation-steps {
+    background-color: var(--white);
+    border-radius: 12px;
+    padding: 24px;
+    margin: 32px 0;
+    border: 1px solid var(--border-light);
+}
+
+.reactivation-steps-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 16px;
+    text-align: center;
+}
+
+.deadline-box {
+    background-color: var(--warning-light);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    margin: 32px 0;
+}
+
+.deadline-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--warning);
+    margin-bottom: 8px;
+}
+
+.deadline-date {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--warning);
+}
+
+.holdings-info {
+    background-color: var(--accent-light);
+    border-radius: 12px;
+    padding: 20px;
+    margin: 32px 0;
+}
+
+.holdings-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 12px;
+    text-align: center;
+}
+
+.holdings-description {
+    font-size: 14px;
+    color: var(--text-medium);
+}
+
+.support-box {
+    background-color: var(--info-light);
+    border-radius: 12px;
+    padding: 16px;
+    margin-top: 32px;
+    display: flex;
+    align-items: flex-start;
+}
+
+.support-icon {
+    flex-shrink: 0;
+    margin-right: 12px;
+    font-size: 24px;
+    color: var(--primary);
+}
+
+.support-content {
+    font-size: 14px;
+    color: var(--text-medium);
+}
+{{/inline}}
+
+{{#*inline "body"}}
+<div class="alert-banner">
+    <div class="alert-icon">⚠️</div>
+    <h1 class="alert-title">Account Suspension Notice</h1>
+    <p class="alert-subtitle">Important information regarding your trading account</p>
+</div>
+
+<p>Dear <strong>{{userName}}</strong>,</p>
+
+<p>We regret to inform you that your Sapphire Broking trading account has been temporarily suspended. During this suspension period, you will not be able to place new trades or modify existing positions.</p>
+
+<div class="message-box">
+    <div class="message-content">
+        <p>We understand this may cause inconvenience, and we want to assure you that we are committed to working with you to resolve this matter as quickly as possible.</p>
+        
+        <p style="margin-bottom: 0;">Please review the information below for details about the suspension reason and the steps required to reactivate your account.</p>
+    </div>
+</div>
+
+<div class="account-details">
+    <h3 class="account-details-title">Account Information</h3>
+    
+    {{> detail-row label="Client ID" value=clientId}}
+    {{> detail-row label="Account Holder" value=userName}}
+    {{> detail-row label="Suspension Date" value=suspensionDate}}
+    {{> detail-row label="Account Status" value="Suspended" valueStyle="color: var(--warning); font-weight: 600;"}}
+</div>
+
+<div class="suspension-reason">
+    <h3 class="suspension-title">Reason for Suspension</h3>
+    
+    {{#each suspensionReasons}}
+    <div class="reason-item">
+        <div class="reason-icon">!</div>
+        <div class="reason-content">
+            <p><strong>{{this.title}}</strong> - {{this.description}}</p>
+        </div>
+    </div>
+    {{/each}}
+</div>
+
+<div class="reactivation-steps">
+    <h3 class="reactivation-steps-title">Steps to Reactivate Your Account</h3>
+    
+    <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+            <h4 class="step-title">Log in to Your Account</h4>
+            <p class="step-description">You can still log in to your account to view your holdings and account information.</p>
+        </div>
+    </div>
+    
+    <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+            <h4 class="step-title">Update Your KYC Documents</h4>
+            <p class="step-description">Upload the latest valid KYC documents through your account dashboard.</p>
+        </div>
+    </div>
+    
+    <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+            <h4 class="step-title">Complete E-Verification</h4>
+            <p class="step-description">Complete the electronic verification process to validate your updated documents.</p>
+        </div>
+    </div>
+    
+    <div class="step">
+        <div class="step-number">4</div>
+        <div class="step-content">
+            <h4 class="step-title">Confirmation</h4>
+            <p class="step-description">Once your documents are verified, your account will be automatically reactivated.</p>
+        </div>
+    </div>
+</div>
+
+<div class="deadline-box">
+    <div class="deadline-title">Reactivation Deadline</div>
+    <div class="deadline-date">{{deadlineDate}}</div>
+</div>
+
+<div class="holdings-info">
+    <h3 class="holdings-title">Information About Your Current Holdings</h3>
+    <div class="holdings-description">
+        <p>During the suspension period:</p>
+        <ul style="margin-bottom: 12px; padding-left: 20px;">
+            <li>Your existing holdings remain secure in your demat account</li>
+            <li>You can view all your positions and portfolio details</li>
+            <li>You cannot place new orders or modify existing positions</li>
+            <li>Automatic corporate actions (dividends, stock splits, etc.) will continue to be processed</li>
+        </ul>
+        <p style="margin-bottom: 0;">If you need to liquidate positions due to urgent financial needs during this suspension period, please contact our customer support team for assistance.</p>
+    </div>
+</div>
+
+<div class="cta-container">
+    <a href="{{kycUpdateUrl}}" class="button button-warning">UPDATE KYC DOCUMENTS</a>
+</div>
+
+<div class="support-box">
+    <div class="support-icon">💬</div>
+    <div class="support-content">
+        <p style="margin-bottom: 8px;"><strong>Need Assistance?</strong></p>
+        <p style="margin-bottom: 0;">If you have any questions or need help with the reactivation process, our dedicated support team is available to assist you:</p>
+        <p style="margin-top: 8px;">
+        Email: <strong>{{supportEmail}}</strong><br>
+        Phone: <strong>{{supportPhone}}</strong><br>
+        Hours: Monday to Friday, 9:00 AM to 6:00 PM</p>
+    </div>
+</div>
+
+<p style="text-align: center; margin-top: 32px;">We appreciate your prompt attention to this matter and look forward to continuing our services to you.</p>
+{{/inline}}
+{{/layout}}

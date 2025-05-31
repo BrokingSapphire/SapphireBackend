@@ -1,0 +1,157 @@
+{{#> layout}}
+  <div class="confirmation-banner">
+    <div class="banner-icon">✓</div>
+    <h1 class="banner-title">Margin Pledge Confirmed</h1>
+    <p class="banner-subtitle">Your securities have been successfully pledged</p>
+  </div>
+  
+  <p>Dear <strong>{{clientName}}</strong>,</p>
+  
+  <p>This is to confirm that your request to pledge securities for margin purposes has been successfully processed. The pledged securities will now be considered for margin benefits in your trading account.</p>
+  
+  <div class="pledge-details">
+    <h3 class="detail-title">Pledge Details</h3>
+    
+    <div class="detail-row">
+      <div class="detail-label">Client ID</div>
+      <div class="detail-value">{{clientId}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Pledge Request ID</div>
+      <div class="detail-value">{{pledgeRequestId}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Request Date</div>
+      <div class="detail-value">{{formatDate requestDate 'short'}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Confirmation Date</div>
+      <div class="detail-value">{{formatDate confirmationDate 'short'}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Total Securities Pledged</div>
+      <div class="detail-value">{{totalSecuritiesPledged}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Total Value</div>
+      <div class="detail-value">{{formatCurrency totalValue 'INR'}}</div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-label">Status</div>
+      <div class="detail-value status-completed">Completed</div>
+    </div>
+  </div>
+  
+  <div class="pledged-securities">
+    <h3 class="pledged-securities-title">Securities Pledged</h3>
+    
+    <table class="securities-table">
+      <thead>
+        <tr>
+          <th>Security</th>
+          <th>Quantity</th>
+          <th>Value (₹)</th>
+          <th>Haircut (%)</th>
+          <th>Collateral Value (₹)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each securities}}
+          <tr>
+            <td>{{this.name}}</td>
+            <td>{{this.quantity}}</td>
+            <td>{{formatCurrency this.value 'INR'}}</td>
+            <td>{{this.haircut}}</td>
+            <td>{{formatCurrency this.collateralValue 'INR'}}</td>
+          </tr>
+        {{/each}}
+        <tr class="table-total">
+          <td colspan="2"><strong>Total</strong></td>
+          <td><strong>{{formatCurrency totalSecuritiesValue 'INR'}}</strong></td>
+          <td>-</td>
+          <td><strong>{{formatCurrency totalCollateralValue 'INR'}}</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  
+  <div class="margin-benefit">
+    <h3 class="margin-benefit-title">Margin Benefits</h3>
+    
+    <div class="benefit-summary">
+      <div class="benefit-item">
+        <div class="benefit-label">Total Collateral Value</div>
+        <div class="benefit-value">{{formatCurrency totalCollateralValue 'INR'}}</div>
+      </div>
+      
+      <div class="benefit-item">
+        <div class="benefit-label">Previous Available Margin</div>
+        <div class="benefit-value">{{formatCurrency previousAvailableMargin 'INR'}}</div>
+      </div>
+      
+      <div class="benefit-item">
+        <div class="benefit-label">New Available Margin</div>
+        <div class="benefit-value">{{formatCurrency newAvailableMargin 'INR'}}</div>
+      </div>
+      
+      <div class="benefit-item">
+        <div class="benefit-label">Margin Increase</div>
+        <div class="benefit-value">{{marginIncreasePercentage}}%</div>
+      </div>
+    </div>
+    
+    <p style="text-align: center; margin-bottom: 0;">This additional margin will be available for trading across all segments as per your account configuration.</p>
+  </div>
+  
+  <div class="what-next">
+    <h3 class="what-next-title">What's Next?</h3>
+    
+    <div class="next-step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <h4 class="step-title">Start Trading with Enhanced Margin</h4>
+        <p>You can immediately start utilizing the additional margin for your trading activities.</p>
+      </div>
+    </div>
+    
+    <div class="next-step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <h4 class="step-title">Monitor Your Margin Utilization</h4>
+        <p>Keep track of your margin usage through the dashboard to ensure optimal utilization.</p>
+      </div>
+    </div>
+    
+    <div class="next-step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <h4 class="step-title">Manage Your Pledged Securities</h4>
+        <p>You can view, manage, or unpledge your securities at any time through your account dashboard.</p>
+      </div>
+    </div>
+  </div>
+  
+  <div class="note-box">
+    <div class="note-icon">📝</div>
+    <div class="note-content">
+      <p style="margin-bottom: 8px;"><strong>Important Information:</strong></p>
+      <ul style="margin-bottom: 0; padding-left: 20px;">
+        <li>Corporate actions (dividends, bonuses, etc.) on pledged securities will continue to be credited to your account.</li>
+        <li>You retain ownership of the pledged securities, but they cannot be sold until unpledged.</li>
+        <li>In case of margin shortfall, Sapphire Broking reserves the right to unpledge and sell the securities as per SEBI regulations.</li>
+        <li>To release your pledged securities, you can initiate an unpledge request through your trading dashboard.</li>
+      </ul>
+    </div>
+  </div>
+  
+  <div class="cta-container">
+    <a href="{{viewMarginDetailsUrl}}" class="button">VIEW MARGIN DETAILS</a>
+  </div>
+  
+  <p>If you have any questions about your pledged securities or need assistance with margin-related matters, please contact our support team.</p>
+  
+  <p>Thank you for choosing Sapphire Broking for your investment needs.</p>
+  
+  <p>Best Regards,<br>
+  The Sapphire Broking Team</p>
+{{/layout}}

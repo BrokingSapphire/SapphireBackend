@@ -1,0 +1,222 @@
+{{#> layout}}
+{{#*inline "customStyles"}}
+.welcome-banner {
+    margin: 0 0 32px 0;
+    position: relative;
+    text-align: center;
+}
+
+.welcome-image {
+    max-width: 100%;
+    height: auto;
+    border-radius: 12px;
+    margin-bottom: 24px;
+}
+
+.welcome-title {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--primary);
+    margin: 0 0 12px 0;
+    text-align: center;
+}
+
+.welcome-subtitle {
+    font-size: 18px;
+    color: var(--text-medium);
+    margin-bottom: 32px;
+    text-align: center;
+}
+
+.feature-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin: 24px 0;
+}
+
+.feature-card {
+    background-color: var(--primary-light);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+}
+
+.feature-icon {
+    font-size: 32px;
+    margin-bottom: 12px;
+}
+
+.feature-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--primary);
+}
+
+.feature-desc {
+    font-size: 14px;
+    color: var(--text-medium);
+    margin-bottom: 0;
+}
+
+.steps-container {
+    margin: 32px 0;
+}
+
+.step {
+    display: flex;
+    margin-bottom: 24px;
+    position: relative;
+    align-items: flex-start;
+}
+
+.step-number {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    background-color: var(--primary);
+    border-radius: 50%;
+    color: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    margin-right: 16px;
+    margin-top: 4px;
+}
+
+.step-content {
+    flex-grow: 1;
+}
+
+.step-title {
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--primary);
+}
+
+.signature {
+    text-align: center;
+    margin: 32px 0;
+}
+
+.signature-image {
+    max-width: 150px;
+    height: auto;
+    margin-bottom: 16px;
+}
+{{/inline}}
+
+{{#*inline "body"}}
+<div class="welcome-banner">
+    <!-- Replace with appropriate welcome image -->
+    <img src="/api/placeholder/520/220" alt="Welcome to Sapphire Broking" class="welcome-image" />
+    
+    <h1 class="welcome-title">Welcome to Sapphire Broking!</h1>
+    <p class="welcome-subtitle">Your journey to financial success begins now</p>
+</div>
+
+<div class="message-box">
+    <div class="pattern-bg">✦</div>
+    <div class="message-content">
+        <p>Dear <strong>{{userName}}</strong>,</p>
+        
+        <p>Thank you for choosing Sapphire Broking as your trusted partner for your investment journey. We are delighted to welcome you to our family of investors who believe in making informed financial decisions.</p>
+        
+        <p>Your trading account has been successfully created, and you can now start exploring the exciting world of financial markets with our state-of-the-art trading platform.</p>
+        
+        <p><strong>Client ID:</strong> {{clientId}}<br>
+        <strong>Account Status:</strong> Active</p>
+    </div>
+</div>
+
+<h2>What Makes Us Different</h2>
+
+<div class="feature-grid">
+    <div class="feature-card">
+        <div class="feature-icon">💰</div>
+        <h3 class="feature-title">Low Brokerage</h3>
+        <p class="feature-desc">Competitive rates to maximize your profits</p>
+    </div>
+    
+    <div class="feature-card">
+        <div class="feature-icon">📊</div>
+        <h3 class="feature-title">Advanced Analytics</h3>
+        <p class="feature-desc">Data-driven insights for better decisions</p>
+    </div>
+    
+    <div class="feature-card">
+        <div class="feature-icon">🛡️</div>
+        <h3 class="feature-title">Secure Platform</h3>
+        <p class="feature-desc">Bank-grade security for your investments</p>
+    </div>
+    
+    <div class="feature-card">
+        <div class="feature-icon">🧑‍💼</div>
+        <h3 class="feature-title">Expert Support</h3>
+        <p class="feature-desc">Personalized assistance when you need it</p>
+    </div>
+</div>
+
+<h2>Getting Started is Easy</h2>
+
+<div class="steps-container">
+    <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+            <h3 class="step-title">Log in to Your Account</h3>
+            <p>Use your registered email and the password you created during signup to access your dashboard.</p>
+        </div>
+    </div>
+    
+    <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+            <h3 class="step-title">Add Funds</h3>
+            <p>Deposit funds into your trading account using various payment methods available on our platform.</p>
+        </div>
+    </div>
+    
+    <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+            <h3 class="step-title">Explore Markets</h3>
+            <p>Browse through a wide range of investment options across equity, derivatives, mutual funds, and more.</p>
+        </div>
+    </div>
+    
+    <div class="step">
+        <div class="step-number">4</div>
+        <div class="step-content">
+            <h3 class="step-title">Start Trading</h3>
+            <p>Place your first trade and begin your investment journey with confidence.</p>
+        </div>
+    </div>
+</div>
+
+<div class="cta-container">
+    <a href="{{loginUrl}}" class="button">LOGIN TO YOUR ACCOUNT</a>
+</div>
+
+<div class="message-box" style="background-color: var(--success-light);">
+    <div class="message-content">
+        <h3 style="color: var(--success);">Need Help?</h3>
+        <p>Our dedicated support team is available Monday to Friday, 9:00 AM to 6:00 PM to assist you with any queries you may have.</p>
+        
+        <p>Contact us at:<br>
+        Email: <strong>{{supportEmail}}</strong><br>
+        Phone: <strong>{{supportPhone}}</strong></p>
+    </div>
+</div>
+
+<div class="signature">
+    <img src="/api/placeholder/150/60" alt="Signature" class="signature-image" />
+    <p><strong>{{relationshipManagerName}}</strong><br>
+    Relationship Manager<br>
+    Sapphire Broking</p>
+</div>
+
+<p style="text-align: center;">We're excited to have you on board and look forward to helping you achieve your financial goals!</p>
+{{/inline}}
+{{/layout}}
