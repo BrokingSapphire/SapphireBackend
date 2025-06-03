@@ -113,7 +113,7 @@ abstract class OtpVerification {
     }
 }
 
-type EmailTemplate = 'login' | 'signup' | 'forgot-password' | 'account-deletion';
+type EmailTemplate = 'login' | 'signup' | 'forgot-password' | 'account-deletion' | 'settlement-frequency-change';
 
 class EmailOtpVerification extends OtpVerification {
     private readonly template: EmailTemplate;
