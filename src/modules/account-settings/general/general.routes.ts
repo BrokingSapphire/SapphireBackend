@@ -9,7 +9,7 @@ import {
     updateUserPermissions,
     updateUserSettings,
     verifyAccountDeletionOtp,
-} from './accountController';
+} from './general.controller';
 
 const router = Router();
 
