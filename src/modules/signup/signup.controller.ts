@@ -653,6 +653,34 @@ const postCheckpoint = async (
         const parsedMismatchData = JSON.parse(mismatchData);
         const parserData = parsedMismatchData.parser_data;
 
+        let shouldSetDoubt = false;
+        const bankData = await db
+            .selectFrom('signup_checkpoints')
+            .innerJoin('bank_to_checkpoint', 'signup_checkpoints.id', 'bank_to_checkpoint.checkpoint_id')
+            .innerJoin('bank_account', 'bank_to_checkpoint.bank_account_id', 'bank_account.id')
+            .innerJoin('pan_detail', 'signup_checkpoints.pan_id', 'pan_detail.id')
+            .innerJoin('user_name', 'pan_detail.name', 'user_name.id')
+            .select(['user_name.full_name as bank_verified_name'])
+            .where('signup_checkpoints.email', '=', email)
+            .executeTakeFirst();
+
+        if (bankData && bankData.bank_verified_name) {
+            const normalizedUserName = full_name.trim().toLowerCase().replace(/\s+/g, ' ');
+            const normalizedBankName = bankData.bank_verified_name.trim().toLowerCase().replace(/\s+/g, ' ');
+
+            if (normalizedUserName !== normalizedBankName) {
+                shouldSetDoubt = true;
+                logger.warn(
+                    `Bank name mismatch for user ${email}: User provided: "${full_name}", Bank verified: "${bankData.bank_verified_name}"`,
+                );
+            } else {
+                logger.info(`Bank name verification successful for user ${email}: Names match`);
+            }
+        } else {
+            shouldSetDoubt = true;
+            logger.warn(`No bank verification data found for user ${email}, setting doubt flag`);
+        }
+
         await redisClient.del(mismatchKey);
 
         await db.transaction().execute(async (tx) => {
@@ -700,7 +728,7 @@ const postCheckpoint = async (
             const checkpoint = await updateCheckpoint(tx, email, phone, {
                 aadhaar_id: aadhaarId.id,
                 address_id: addressId,
-                doubt: true,
+                doubt: shouldSetDoubt,
                 user_provided_name: userProvidedNameId,
                 user_provided_dob: new Date(dob),
             })
@@ -717,11 +745,14 @@ const postCheckpoint = async (
                 .where('id', '=', checkpoint.id)
                 .execute();
         });
+        const responseMessage = shouldSetDoubt
+            ? 'Aadhaar verification completed with manual review required due to name verification failure'
+            : 'Aadhaar verification completed successfully';
 
         res.status(OK).json({
-            message: 'Aadhaar verification completed with manual review required',
+            message: responseMessage,
             data: {
-                requires_manual_review: true,
+                requires_manual_review: shouldSetDoubt,
             },
         });
     } else if (step === CheckpointStep.INVESTMENT_SEGMENT) {
