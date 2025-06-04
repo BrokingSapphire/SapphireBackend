@@ -18,4 +18,17 @@ const CheckpointIdParamSchema = Joi.object({
     checkpointId: Joi.number().integer().positive().required(),
 });
 
-export { GetVerificationDetailParamSchema, UpdateVerificationStatusSchema, CheckpointIdParamSchema };
+const AddDematAccountSchema = Joi.object({
+    depository: Joi.string().valid('CDSL', 'NSDL').required(),
+    dp_name: Joi.string().min(1).max(100).required(),
+    dp_id: Joi.string().min(1).max(20).required(),
+    bo_id: Joi.string().min(1).max(20).required(),
+    client_name: Joi.string().min(1).max(100).required(),
+});
+
+export {
+    GetVerificationDetailParamSchema,
+    AddDematAccountSchema,
+    UpdateVerificationStatusSchema,
+    CheckpointIdParamSchema,
+};

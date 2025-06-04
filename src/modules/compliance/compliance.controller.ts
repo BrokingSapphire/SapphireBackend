@@ -1,11 +1,19 @@
-import { Request, Response } from '@app/types.d';
+import { DefaultResponseData, Request, Response } from '@app/types.d';
 import { db } from '@app/database';
 import { OK } from '@app/utils/httpstatus';
-import { UpdateVerificationRequest, VerificationType, verificationTypeToFieldMap } from './compliance.types';
+import {
+    AddDematAccountRequest,
+    UpdateVerificationRequest,
+    VerificationType,
+    verificationTypeToFieldMap,
+} from './compliance.types';
 import { BadRequestError, ForbiddenError, UnauthorizedError } from '@app/apiError';
 import BankDetailsService, { BankDetails } from '@app/services/bank-details.service';
 import { SessionJwtType } from '../common.types';
 import { hashPassword } from '@app/utils/passwords';
+import { insertNameGetId } from '@app/database/transactions';
+import splitName from '@app/utils/split-name';
+import { ParamsDictionary } from 'express-serve-static-core';
 
 const assignOfficer = async (req: Request<SessionJwtType>, res: Response) => {
     const checkpointId = Number(req.params.checkpointId);
@@ -524,6 +532,71 @@ const getCheckpointDetails = async (req: Request, res: Response) => {
     });
 };
 
+const addDematNumber = async (
+    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, AddDematAccountRequest>,
+    res: Response,
+) => {
+    const checkpointId = Number(req.params.checkpointId);
+    const { depository, dp_name, dp_id, bo_id, client_name } = req.body;
+
+    const officer = await db
+        .selectFrom('compliance_processing')
+        .select('officer_id')
+        .where('checkpoint_id', '=', checkpointId)
+        .executeTakeFirstOrThrow();
+
+    if (officer.officer_id !== req.auth?.userId) {
+        throw new UnauthorizedError();
+    }
+
+    const existingDemat = await db
+        .selectFrom('signup_checkpoints')
+        .select('demat_account_id')
+        .where('id', '=', checkpointId)
+        .executeTakeFirst();
+
+    if (existingDemat?.demat_account_id) {
+        throw new BadRequestError('Demat account already exists for this client');
+    }
+
+    await db.transaction().execute(async (tx) => {
+        const nameId = await insertNameGetId(tx, splitName(client_name));
+
+        const dematAccount = await tx
+            .insertInto('demat_account')
+            .values({
+                depository,
+                dp_name,
+                dp_id,
+                bo_id,
+                client_name: nameId,
+            })
+            .returning('id')
+            .executeTakeFirstOrThrow();
+
+        await tx
+            .updateTable('signup_checkpoints')
+            .set({
+                demat_account_id: dematAccount.id,
+            })
+            .where('id', '=', checkpointId)
+            .execute();
+
+        await tx
+            .updateTable('signup_verification_status')
+            .set({
+                demat_status: 'verified',
+                updated_at: new Date(),
+            })
+            .where('id', '=', checkpointId)
+            .execute();
+    });
+
+    res.status(OK).json({
+        message: 'Demat account added and verified successfully',
+    });
+};
+
 /**
  * Controller to finalize verification and create user account
  * POST /finalize-verification/:checkpointId
@@ -575,6 +648,7 @@ const finalizeVerification = async (req: Request, res: Response) => {
                 is_politically_exposed: checkpoint.is_politically_exposed ?? false,
                 signature: checkpoint.signature!,
                 ipv: checkpoint.ipv!,
+                demat_account_id: checkpoint.demat_account_id,
                 created_at: new Date(),
                 updated_at: new Date(),
             })
@@ -758,6 +832,7 @@ const autoFinalVerification = async (req: Request, res: Response) => {
                 nominee_status: 'verified',
                 other_documents_status: 'verified',
                 esign_status: 'verified',
+                demat_status: 'verified',
                 updated_at: new Date(),
             })
             .where('id', '=', checkpointId)
@@ -792,6 +867,7 @@ const autoFinalVerification = async (req: Request, res: Response) => {
                 is_politically_exposed: checkpoint.is_politically_exposed ?? false,
                 signature: checkpoint.signature!,
                 ipv: checkpoint.ipv!,
+                demat_account_id: checkpoint.demat_account_id,
                 created_at: new Date(),
                 updated_at: new Date(),
             })
@@ -966,4 +1042,5 @@ export {
     getCheckpointDetails,
     finalizeVerification,
     autoFinalVerification,
+    addDematNumber,
 };
