@@ -10,6 +10,7 @@ export enum CheckpointStep {
     PAN = 'pan',
     AADHAAR_URI = 'aadhaar_uri',
     AADHAAR = 'aadhaar',
+    AADHAAR_MISMATCH_DETAILS = 'aadhaar_mismatch_details',
     INVESTMENT_SEGMENT = 'investment_segment',
     USER_DETAIL = 'user_detail',
     PERSONAL_DETAIL = 'personal_detail',
@@ -131,6 +132,11 @@ export type PostCheckpointType =
       }
     | {
           step: CheckpointStep.AADHAAR;
+      }
+    | {
+          step: CheckpointStep.AADHAAR_MISMATCH_DETAILS;
+          full_name: string;
+          dob: string;
       }
     | {
           step: CheckpointStep.INVESTMENT_SEGMENT;

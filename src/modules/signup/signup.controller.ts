@@ -536,6 +536,47 @@ const postCheckpoint = async (
         const parser = new AadhaarXMLParser(file.data);
         parser.load();
 
+        // check for aadhar and PAN-aadhar mismatch
+        const panAadhaarData = await db
+            .selectFrom('signup_checkpoints')
+            .innerJoin('pan_detail', 'signup_checkpoints.pan_id', 'pan_detail.id')
+            .select('pan_detail.masked_aadhaar')
+            .where('signup_checkpoints.email', '=', email)
+            .executeTakeFirst();
+
+        const digilockerMaskedAadhaar = parser.uid().substring(9, 12);
+        const panMaskedAadhaar = panAadhaarData?.masked_aadhaar;
+
+        if (panMaskedAadhaar && panMaskedAadhaar !== digilockerMaskedAadhaar) {
+            const mismatchKey = `aadhaar_mismatch:${email}`;
+            await redisClient.set(
+                mismatchKey,
+                JSON.stringify({
+                    parser_data: {
+                        uid: parser.uid(),
+                        name: parser.name(),
+                        dob: parser.dob(),
+                        co: parser.co(),
+                        address: parser.address(),
+                        postOffice: parser.postOffice(),
+                        gender: parser.gender(),
+                    },
+                    pan_masked_aadhaar: panMaskedAadhaar,
+                    digilocker_masked_aadhaar: digilockerMaskedAadhaar,
+                }),
+            );
+            await redisClient.expire(mismatchKey, 30 * 60);
+            res.status(OK).json({
+                message: 'Aadhaar verification requires additional details due to mismatch',
+                data: {
+                    requires_additional_verification: true,
+                    pan_masked_aadhaar: `XXXXXXXX${panMaskedAadhaar}`,
+                    digilocker_masked_aadhaar: `XXXXXXXX${digilockerMaskedAadhaar}`,
+                },
+            });
+            return;
+        }
+
         await db.transaction().execute(async (tx) => {
             const address = parser.address();
             parser.log();
@@ -598,6 +639,90 @@ const postCheckpoint = async (
 
         res.status(OK).json({
             message: 'Aadhaar verified',
+        });
+    } else if (step === CheckpointStep.AADHAAR_MISMATCH_DETAILS) {
+        const { full_name, dob } = req.body;
+        const mismatchKey = `aadhaar_mismatch:${email}`;
+        const mismatchData = await redisClient.get(mismatchKey);
+        if (!mismatchData) {
+            throw new UnauthorizedError(
+                'Aadhaar mismatch data not found or expired. Restart the Digilocker session again.',
+            );
+        }
+
+        const parsedMismatchData = JSON.parse(mismatchData);
+        const parserData = parsedMismatchData.parser_data;
+
+        await redisClient.del(mismatchKey);
+
+        await db.transaction().execute(async (tx) => {
+            const address = parserData.address;
+            const addressId = await insertAddressGetId(tx, address);
+
+            const nameId = await insertNameGetId(tx, splitName(parserData.name));
+
+            let co = parserData.co;
+            let coId = null;
+            if (co) {
+                if (co.startsWith('C/O')) co = co.substring(4).trim();
+                coId = await insertNameGetId(tx, splitName(co));
+            }
+
+            const exists = await tx
+                .selectFrom('signup_checkpoints')
+                .select('aadhaar_id')
+                .where('email', '=', email)
+                .executeTakeFirst();
+
+            if (exists && exists.aadhaar_id) {
+                await updateCheckpoint(tx, email, phone, {
+                    aadhaar_id: null,
+                }).execute();
+
+                await tx.deleteFrom('aadhaar_detail').where('address_id', '=', exists.aadhaar_id).execute();
+            }
+
+            const aadhaarId = await tx
+                .insertInto('aadhaar_detail')
+                .values({
+                    masked_aadhaar_no: parserData.uid.substring(9, 12),
+                    name: nameId,
+                    dob: new Date(parserData.dob),
+                    co: coId,
+                    address_id: addressId,
+                    post_office: parserData.postOffice === undefined ? null : parserData.postOffice,
+                    gender: parserData.gender,
+                })
+                .returning('id')
+                .executeTakeFirstOrThrow();
+            const userProvidedNameId = await insertNameGetId(tx, splitName(full_name));
+
+            const checkpoint = await updateCheckpoint(tx, email, phone, {
+                aadhaar_id: aadhaarId.id,
+                address_id: addressId,
+                doubt: true,
+                user_provided_name: userProvidedNameId,
+                user_provided_dob: new Date(dob),
+            })
+                .returning('id')
+                .executeTakeFirstOrThrow();
+
+            await tx
+                .updateTable('signup_verification_status')
+                .set({
+                    aadhaar_status: 'pending',
+                    address_status: 'pending',
+                    updated_at: new Date(),
+                })
+                .where('id', '=', checkpoint.id)
+                .execute();
+        });
+
+        res.status(OK).json({
+            message: 'Aadhaar verification completed with manual review required',
+            data: {
+                requires_manual_review: true,
+            },
         });
     } else if (step === CheckpointStep.INVESTMENT_SEGMENT) {
         const { segments } = req.body;

@@ -62,6 +62,14 @@ const CheckpointSchema = Joi.object({
         is: CheckpointStep.AADHAAR_URI,
         then: Joi.string().required(),
     }),
+    full_name: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.AADHAAR_MISMATCH_DETAILS,
+        then: Joi.string().required(),
+    }),
+    dob: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.AADHAAR_MISMATCH_DETAILS,
+        then: Joi.date().iso().required(),
+    }),
     segments: Joi.alternatives().conditional('step', {
         is: CheckpointStep.INVESTMENT_SEGMENT,
         then: Joi.array()
