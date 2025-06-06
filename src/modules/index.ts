@@ -3,6 +3,7 @@ import signupRouter from './signup';
 import loginRouter from './login';
 import fundsRouter from './funds';
 import webhookRouter from './webhooks';
+import pdfFillerRouter from './pdfFiller';
 import { db } from '@app/database';
 import { OK } from '@app/utils/httpstatus';
 import redisClient from '@app/services/redis.service';
@@ -19,6 +20,7 @@ router.use('/compliance', complianceRouter);
 router.use('/funds', jwtMiddleware, fundsRouter);
 router.use('/watchlist', jwtMiddleware, watchlistRouter);
 router.use('/webhook', webhookRouter);
+router.use('/pdfFiller', pdfFillerRouter);
 
 router.get('/healthcheck', async (_req, res) => {
     await sql`SELECT 1;`.execute(db);
