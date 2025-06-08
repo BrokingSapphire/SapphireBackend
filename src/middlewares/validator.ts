@@ -23,7 +23,7 @@ const validate = <
     ) => {
         const { value, error } = schema.validate(req[validationSelector], { abortEarly: false });
         if (error) throw new BadRequestError(error.message);
-        req.body = value;
+        req[validationSelector] = value;
         next();
     };
 };
