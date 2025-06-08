@@ -739,7 +739,7 @@ const finalizeVerification = async (req: Request, res: Response) => {
         await trx
             .insertInto('user_balance')
             .values({
-                user_id: checkpoint.client_id,
+                user_id: checkpoint.client_id!,
                 available_cash: 0,
                 blocked_cash: 0,
                 available_liq_margin: 0,
@@ -751,7 +751,7 @@ const finalizeVerification = async (req: Request, res: Response) => {
         const watchlist = await trx
             .insertInto('user_watchlist')
             .values({
-                user_id: checkpoint.client_id,
+                user_id: checkpoint.client_id!,
                 position_index: 0,
             })
             .returning('id')
@@ -958,7 +958,7 @@ const autoFinalVerification = async (req: Request, res: Response) => {
         await trx
             .insertInto('user_balance')
             .values({
-                user_id: checkpoint.client_id,
+                user_id: checkpoint.client_id!,
                 available_cash: 0,
                 blocked_cash: 0,
                 available_liq_margin: 0,
@@ -970,7 +970,7 @@ const autoFinalVerification = async (req: Request, res: Response) => {
         const watchlist = await trx
             .insertInto('user_watchlist')
             .values({
-                user_id: checkpoint.client_id,
+                user_id: checkpoint.client_id!,
                 position_index: 0,
             })
             .returning('id')
