@@ -78,10 +78,9 @@ const getAllWatchlists = async (req: Request<SessionJwtType>, res: Response) => 
         .selectFrom('user_watchlist')
         .leftJoin('watchlist', 'watchlist.id', 'user_watchlist.watchlist_id')
         .select([
-            'user_watchlist.id as userWatchlistId',
-            'user_watchlist.watchlist_id as watchlistId',
+            'user_watchlist.id as watchlistId',
             'watchlist.name',
-            'user_watchlist.position_index',
+            'user_watchlist.position_index as positionIndex',
         ])
         .where('user_watchlist.user_id', '=', userId)
         .orderBy('user_watchlist.position_index', 'asc')
@@ -104,8 +103,9 @@ const updateWatchlistName = async (
     const found = await db.transaction().execute(async (tx) => {
         let updated = await tx
             .updateTable('watchlist')
-            .innerJoin('user_watchlist', 'user_watchlist.watchlist_id', 'watchlist.id')
+            .from('user_watchlist')
             .set({ name })
+            .whereRef('user_watchlist.watchlist_id', '=', 'watchlist.id')
             .where('user_watchlist.id', '=', watchlistId)
             .where('user_watchlist.user_id', '=', userId)
             .where((eb) =>
@@ -199,31 +199,12 @@ const updateWatchlistPosition = async (
             .set((eb) => ({
                 position_index: eb
                     .case()
-                    .when('position_index', '=', eb.selectFrom('updatedIndex').select('position_index'))
+                    .when('id', '=', watchlistId)
                     .then(eb.selectFrom('position').select('at'))
-                    .when(
-                        eb.between(
-                            'position_index',
-                            eb.fn<number>('least', [
-                                eb.val(newPosition),
-                                eb.selectFrom('index').select('position_index'),
-                            ]),
-                            eb.fn<number>('greatest', [
-                                eb.val(newPosition),
-                                eb.selectFrom('index').select('position_index'),
-                            ]),
-                        ),
-                    )
-                    .then(
-                        eb
-                            .case()
-                            .when(eb.selectFrom('index').select('position_index'), '<', newPosition)
-                            .then(eb('position_index', '-', 1))
-                            .when(eb.selectFrom('index').select('position_index'), '<', newPosition)
-                            .then(eb('position_index', '+', 1))
-                            .else(eb.ref('position_index'))
-                            .endCase(),
-                    )
+                    .when(eb.selectFrom('index').select('position_index'), '<', eb.selectFrom('position').select('at'))
+                    .then(eb('position_index', '-', 1))
+                    .when(eb.selectFrom('index').select('position_index'), '>', eb.selectFrom('position').select('at'))
+                    .then(eb('position_index', '+', 1))
                     .else(eb.ref('position_index'))
                     .end(),
             }))
@@ -232,13 +213,16 @@ const updateWatchlistPosition = async (
                 eb.or([
                     eb.between(
                         'position_index',
-                        eb.fn<number>('least', [eb.val(newPosition), eb.selectFrom('index').select('position_index')]),
+                        eb.fn<number>('least', [
+                            eb.selectFrom('position').select('at'),
+                            eb.selectFrom('index').select('position_index'),
+                        ]),
                         eb.fn<number>('greatest', [
-                            eb.val(newPosition),
+                            eb.selectFrom('position').select('at'),
                             eb.selectFrom('index').select('position_index'),
                         ]),
                     ),
-                    eb('position_index', '=', eb.selectFrom('updatedIndex').select('position_index')),
+                    eb('id', '=', watchlistId),
                 ]),
             )
             .executeTakeFirst();
@@ -254,8 +238,9 @@ const deleteWatchlist = async (req: Request<SessionJwtType, WatchlistParam>, res
     await db.transaction().execute(async (tx) => {
         await tx
             .deleteFrom('user_watchlist_entry')
-            .innerJoin('watchlist_category_map', 'user_watchlist_entry.category_map_id', 'watchlist_category_map.id')
-            .innerJoin('user_watchlist', 'user_watchlist.id', 'watchlist_category_map.user_watchlist_id')
+            .using(['watchlist_category_map', 'user_watchlist'])
+            .whereRef('user_watchlist_entry.category_map_id', '=', 'watchlist_category_map.id')
+            .whereRef('user_watchlist.id', '=', 'watchlist_category_map.user_watchlist_id')
             .where('user_watchlist.id', '=', watchlistId)
             .where('user_watchlist.user_id', '=', userId)
             .execute();
@@ -263,7 +248,8 @@ const deleteWatchlist = async (req: Request<SessionJwtType, WatchlistParam>, res
         const categories = (
             await tx
                 .deleteFrom('watchlist_category_map')
-                .innerJoin('user_watchlist', 'user_watchlist.id', 'watchlist_category_map.user_watchlist_id')
+                .using('user_watchlist')
+                .whereRef('user_watchlist.id', '=', 'watchlist_category_map.user_watchlist_id')
                 .where('user_watchlist.id', '=', watchlistId)
                 .where('user_watchlist.user_id', '=', userId)
                 .returning('category_id')
@@ -424,11 +410,12 @@ const updateCategoryName = async (
     const found = await db.transaction().execute(async (tx) => {
         let updated = await tx
             .updateTable('watchlist_category')
-            .innerJoin('watchlist_category_map', 'watchlist_category_map.category_id', 'watchlist_category.id')
-            .innerJoin('user_watchlist', 'user_watchlist_id', 'watchlist_category_map.user_watchlist_id')
+            .from(['watchlist_category_map', 'user_watchlist'])
             .set({
                 category: categoryName,
             })
+            .whereRef('watchlist_category_map.category_id', '=', 'watchlist_category.id')
+            .whereRef('user_watchlist.id', '=', 'watchlist_category_map.user_watchlist_id')
             .where('user_watchlist.id', '=', watchlistId)
             .where('user_watchlist.user_id', '=', userId)
             .where('watchlist_category_map.id', '=', categoryId)
@@ -461,10 +448,11 @@ const updateCategoryName = async (
 
             updated = await tx
                 .updateTable('watchlist_category_map')
-                .innerJoin('user_watchlist', 'user_watchlist_id', 'watchlist_category_map.user_watchlist_id')
+                .from('user_watchlist')
                 .set({
                     category_id: id,
                 })
+                .whereRef('user_watchlist.id', '=', 'watchlist_category_map.user_watchlist_id')
                 .where('user_watchlist.id', '=', watchlistId)
                 .where('user_watchlist.user_id', '=', userId)
                 .where('watchlist_category_map.id', '=', categoryId)
@@ -514,7 +502,7 @@ const updateCategoryPosition = async (
             .with('updatedIndex', (qc) =>
                 qc
                     .updateTable('watchlist_category_map')
-                    .innerJoin('user_watchlist', 'user_watchlist.id', 'watchlist_category_map.user_watchlist_id')
+                    .from('user_watchlist')
                     .set((eb) => ({
                         position_index: eb
                             .selectFrom('watchlist_category_map')
@@ -527,65 +515,43 @@ const updateCategoryPosition = async (
                             .where('user_watchlist.id', '=', watchlistId)
                             .where('user_watchlist.user_id', '=', userId),
                     }))
+                    .whereRef('user_watchlist.id', '=', 'watchlist_category_map.user_watchlist_id')
                     .where('watchlist_category_map.id', '=', categoryId)
                     .where('user_watchlist.id', '=', watchlistId)
                     .where('user_watchlist.user_id', '=', userId)
                     .returning('watchlist_category_map.position_index'),
             )
             .updateTable('watchlist_category_map')
-            .innerJoin('user_watchlist', 'user_watchlist.id', 'watchlist_category_map.user_watchlist_id')
+            .from('user_watchlist')
             .set((eb) => ({
                 position_index: eb
                     .case()
-                    .when(
-                        'watchlist_category_map.position_index',
-                        '=',
-                        eb.selectFrom('updatedIndex').select('position_index'),
-                    )
+                    .when('watchlist_category_map.category_id', '=', categoryId)
                     .then(eb.selectFrom('position').select('at'))
-                    .when(
-                        eb.between(
-                            'watchlist_category_map.position_index',
-                            eb.fn<number>('least', [
-                                eb.val(newPosition),
-                                eb.selectFrom('index').select('position_index'),
-                            ]),
-                            eb.fn<number>('greatest', [
-                                eb.val(newPosition),
-                                eb.selectFrom('index').select('position_index'),
-                            ]),
-                        ),
-                    )
-                    .then(
-                        eb
-                            .case()
-                            .when(eb.selectFrom('index').select('position_index'), '<', newPosition)
-                            .then(eb('watchlist_category_map.position_index', '-', 1))
-                            .when(eb.selectFrom('index').select('position_index'), '<', newPosition)
-                            .then(eb('watchlist_category_map.position_index', '+', 1))
-                            .else(eb.ref('watchlist_category_map.position_index'))
-                            .endCase(),
-                    )
+                    .when(eb.selectFrom('index').select('position_index'), '<', eb.selectFrom('position').select('at'))
+                    .then(eb('watchlist_category_map.position_index', '-', 1))
+                    .when(eb.selectFrom('index').select('position_index'), '>', eb.selectFrom('position').select('at'))
+                    .then(eb('watchlist_category_map.position_index', '+', 1))
                     .else(eb.ref('watchlist_category_map.position_index'))
                     .end(),
             }))
+            .whereRef('user_watchlist.id', '=', 'watchlist_category_map.user_watchlist_id')
             .where('user_watchlist.id', '=', watchlistId)
             .where('user_watchlist.user_id', '=', userId)
             .where((eb) =>
                 eb.or([
                     eb.between(
                         'watchlist_category_map.position_index',
-                        eb.fn<number>('least', [eb.val(newPosition), eb.selectFrom('index').select('position_index')]),
+                        eb.fn<number>('least', [
+                            eb.selectFrom('position').select('at'),
+                            eb.selectFrom('index').select('position_index'),
+                        ]),
                         eb.fn<number>('greatest', [
-                            eb.val(newPosition),
+                            eb.selectFrom('position').select('at'),
                             eb.selectFrom('index').select('position_index'),
                         ]),
                     ),
-                    eb(
-                        'watchlist_category_map.position_index',
-                        '=',
-                        eb.selectFrom('updatedIndex').select('position_index'),
-                    ),
+                    eb('watchlist_category_map.category_id', '=', categoryId),
                 ]),
             )
             .executeTakeFirst();
@@ -615,15 +581,12 @@ const deleteCategory = async (
                         .where('category_id', 'is', null),
                 )
                 .updateTable('user_watchlist_entry')
-                .innerJoin(
-                    'watchlist_category_map',
-                    'user_watchlist_entry.category_map_id',
-                    'watchlist_category_map.id',
-                )
-                .innerJoin('user_watchlist', 'user_watchlist.id', 'watchlist_category_map.user_watchlist_id')
+                .from(['watchlist_category_map', 'user_watchlist'])
                 .set((eb) => ({
                     category_map_id: eb.selectFrom('cte').select('id'),
                 }))
+                .whereRef('user_watchlist_entry.category_map_id', '=', 'watchlist_category_map.id')
+                .whereRef('user_watchlist.id', '=', 'watchlist_category_map.user_watchlist_id')
                 .where('watchlist_category_map.id', '=', categoryId)
                 .where('user_watchlist.id', '=', watchlistId)
                 .where('user_watchlist.user_id', '=', userId)
@@ -632,8 +595,9 @@ const deleteCategory = async (
 
         await tx
             .deleteFrom('user_watchlist_entry')
-            .innerJoin('watchlist_category_map', 'user_watchlist_entry.category_map_id', 'watchlist_category_map.id')
-            .innerJoin('user_watchlist', 'user_watchlist.id', 'watchlist_category_map.user_watchlist_id')
+            .using(['watchlist_category_map', 'user_watchlist'])
+            .whereRef('user_watchlist_entry.category_map_id', '=', 'watchlist_category_map.id')
+            .whereRef('user_watchlist.id', '=', 'watchlist_category_map.user_watchlist_id')
             .where('watchlist_category_map.id', '=', categoryId)
             .where('user_watchlist.id', '=', watchlistId)
             .where('user_watchlist.user_id', '=', userId)
@@ -641,7 +605,8 @@ const deleteCategory = async (
 
         const { category_id, position_index } = await tx
             .deleteFrom('watchlist_category_map')
-            .innerJoin('user_watchlist', 'user_watchlist.id', 'watchlist_category_map.user_watchlist_id')
+            .using('user_watchlist')
+            .whereRef('user_watchlist.id', '=', 'watchlist_category_map.user_watchlist_id')
             .where('watchlist_category_map.id', '=', categoryId)
             .where('user_watchlist.id', '=', watchlistId)
             .where('user_watchlist.user_id', '=', userId)
@@ -650,11 +615,12 @@ const deleteCategory = async (
 
         await tx
             .updateTable('user_watchlist_entry')
-            .innerJoin('watchlist_category_map', 'user_watchlist_entry.category_map_id', 'watchlist_category_map.id')
-            .innerJoin('user_watchlist', 'user_watchlist.id', 'watchlist_category_map.user_watchlist_id')
+            .from(['watchlist_category_map', 'user_watchlist'])
             .set((eb) => ({
                 position_index: eb('user_watchlist_entry.position_index', '-', 1),
             }))
+            .whereRef('user_watchlist_entry.category_map_id', '=', 'watchlist_category_map.id')
+            .whereRef('user_watchlist.id', '=', 'watchlist_category_map.user_watchlist_id')
             .where('user_watchlist.id', '=', watchlistId)
             .where('user_watchlist.user_id', '=', userId)
             .where('user_watchlist_entry.position_index', '>', position_index)
@@ -744,15 +710,12 @@ const addWatchlistEntries = async (
 
             await tx
                 .updateTable('user_watchlist_entry')
-                .innerJoin(
-                    'watchlist_category_map',
-                    'user_watchlist_entry.category_map_id',
-                    'watchlist_category_map.id',
-                )
-                .innerJoin('user_watchlist', 'user_watchlist.id', 'watchlist_category_map.user_watchlist_id')
+                .from(['watchlist_category_map', 'user_watchlist'])
                 .set((eb) => ({
                     position_index: createIndexedCases(eb),
                 }))
+                .whereRef('user_watchlist_entry.category_map_id', '=', 'watchlist_category_map.id')
+                .whereRef('user_watchlist.id', '=', 'watchlist_category_map.user_watchlist_id')
                 .where('user_watchlist.user_id', '=', userId)
                 .where('user_watchlist.id', '=', watchlistId)
                 .where('watchlist_category_map.id', '=', categoryId)
@@ -856,12 +819,7 @@ const updateEntryPosition = async (
             .with('updatedIndex', (qc) =>
                 qc
                     .updateTable('user_watchlist_entry')
-                    .innerJoin(
-                        'watchlist_category_map',
-                        'user_watchlist_entry.category_map_id',
-                        'watchlist_category_map.id',
-                    )
-                    .innerJoin('user_watchlist', 'user_watchlist.id', 'watchlist_category_map.user_watchlist_id')
+                    .from(['watchlist_category_map', 'user_watchlist'])
                     .set((eb) => ({
                         position_index: eb
                             .selectFrom('user_watchlist_entry')
@@ -880,6 +838,8 @@ const updateEntryPosition = async (
                             .where('user_watchlist.id', '=', watchlistId)
                             .where('user_watchlist.user_id', '=', userId),
                     }))
+                    .whereRef('user_watchlist_entry.category_map_id', '=', 'watchlist_category_map.id')
+                    .whereRef('user_watchlist.id', '=', 'watchlist_category_map.user_watchlist_id')
                     .where('user_watchlist_entry.isin', '=', isin)
                     .where('user_watchlist_entry.exchange', '=', exchange)
                     .where('watchlist_category_map.id', '=', categoryId)
@@ -888,43 +848,26 @@ const updateEntryPosition = async (
                     .returning('user_watchlist_entry.position_index'),
             )
             .updateTable('user_watchlist_entry')
-            .innerJoin('watchlist_category_map', 'user_watchlist_entry.category_map_id', 'watchlist_category_map.id')
-            .innerJoin('user_watchlist', 'user_watchlist.id', 'watchlist_category_map.user_watchlist_id')
+            .from(['watchlist_category_map', 'user_watchlist'])
             .set((eb) => ({
                 position_index: eb
                     .case()
                     .when(
-                        'user_watchlist_entry.position_index',
-                        '=',
-                        eb.selectFrom('updatedIndex').select('position_index'),
+                        eb.and([
+                            eb('user_watchlist_entry.isin', '=', isin),
+                            eb('user_watchlist_entry.exchange', '=', exchange),
+                        ]),
                     )
                     .then(eb.selectFrom('position').select('at'))
-                    .when(
-                        eb.between(
-                            'user_watchlist_entry.position_index',
-                            eb.fn<number>('least', [
-                                eb.val(newPosition),
-                                eb.selectFrom('index').select('position_index'),
-                            ]),
-                            eb.fn<number>('greatest', [
-                                eb.val(newPosition),
-                                eb.selectFrom('index').select('position_index'),
-                            ]),
-                        ),
-                    )
-                    .then(
-                        eb
-                            .case()
-                            .when(eb.selectFrom('index').select('position_index'), '<', newPosition)
-                            .then(eb('user_watchlist_entry.position_index', '-', 1))
-                            .when(eb.selectFrom('index').select('position_index'), '<', newPosition)
-                            .then(eb('user_watchlist_entry.position_index', '+', 1))
-                            .else(eb.ref('user_watchlist_entry.position_index'))
-                            .endCase(),
-                    )
+                    .when(eb.selectFrom('index').select('position_index'), '<', eb.selectFrom('position').select('at'))
+                    .then(eb('user_watchlist_entry.position_index', '-', 1))
+                    .when(eb.selectFrom('index').select('position_index'), '>', eb.selectFrom('position').select('at'))
+                    .then(eb('user_watchlist_entry.position_index', '+', 1))
                     .else(eb.ref('user_watchlist_entry.position_index'))
                     .end(),
             }))
+            .whereRef('user_watchlist_entry.category_map_id', '=', 'watchlist_category_map.id')
+            .whereRef('user_watchlist.id', '=', 'watchlist_category_map.user_watchlist_id')
             .where('watchlist_category_map.id', '=', categoryId)
             .where('user_watchlist.id', '=', watchlistId)
             .where('user_watchlist.user_id', '=', userId)
@@ -932,17 +875,19 @@ const updateEntryPosition = async (
                 eb.or([
                     eb.between(
                         'user_watchlist_entry.position_index',
-                        eb.fn<number>('least', [eb.val(newPosition), eb.selectFrom('index').select('position_index')]),
+                        eb.fn<number>('least', [
+                            eb.selectFrom('position').select('at'),
+                            eb.selectFrom('index').select('position_index'),
+                        ]),
                         eb.fn<number>('greatest', [
-                            eb.val(newPosition),
+                            eb.selectFrom('position').select('at'),
                             eb.selectFrom('index').select('position_index'),
                         ]),
                     ),
-                    eb(
-                        'user_watchlist_entry.position_index',
-                        '=',
-                        eb.selectFrom('updatedIndex').select('position_index'),
-                    ),
+                    eb.and([
+                        eb('user_watchlist_entry.isin', '=', isin),
+                        eb('user_watchlist_entry.exchange', '=', exchange),
+                    ]),
                 ]),
             )
             .executeTakeFirst();
@@ -985,8 +930,7 @@ const moveEntry = async (
                     ),
             )
             .updateTable('user_watchlist_entry')
-            .innerJoin('watchlist_category_map', 'user_watchlist_entry.category_map_id', 'watchlist_category_map.id')
-            .innerJoin('user_watchlist', 'user_watchlist.id', 'watchlist_category_map.user_watchlist_id')
+            .from(['watchlist_category_map', 'user_watchlist'])
             .set((eb) => ({
                 category_map_id: eb
                     .case()
@@ -1008,13 +952,15 @@ const moveEntry = async (
                             .when('user_watchlist_entry.position_index', '>', eb.selectFrom('oldPosition').select('at'))
                             .then(eb('user_watchlist_entry.position_index', '-', 1))
                             .else(eb.selectFrom('newPosition').select('at'))
-                            .endCase(),
+                            .end(),
                     )
                     .when('watchlist_category_map.id', '=', targetCategoryId)
                     .then(eb('user_watchlist_entry.position_index', '+', 1))
                     .else(eb.ref('user_watchlist_entry.position_index'))
                     .end(),
             }))
+            .whereRef('user_watchlist_entry.category_map_id', '=', 'watchlist_category_map.id')
+            .whereRef('user_watchlist.id', '=', 'watchlist_category_map.user_watchlist_id')
             .where('user_watchlist.id', '=', watchlistId)
             .where('user_watchlist.user_id', '=', userId)
             .where((eb) =>
@@ -1046,8 +992,9 @@ const removeEntry = async (
     await db.transaction().execute(async (tx) => {
         const deleted = await tx
             .deleteFrom('user_watchlist_entry')
-            .innerJoin('watchlist_category_map', 'user_watchlist_entry.category_map_id', 'watchlist_category_map.id')
-            .innerJoin('user_watchlist', 'user_watchlist.id', 'watchlist_category_map.user_watchlist_id')
+            .using(['watchlist_category_map', 'user_watchlist'])
+            .whereRef('user_watchlist_entry.category_map_id', '=', 'watchlist_category_map.id')
+            .whereRef('user_watchlist.id', '=', 'watchlist_category_map.user_watchlist_id')
             .where('user_watchlist_entry.isin', '=', isin)
             .where('user_watchlist_entry.exchange', '=', exchange)
             .where('watchlist_category_map.id', '=', categoryId)
@@ -1058,11 +1005,12 @@ const removeEntry = async (
 
         await tx
             .updateTable('user_watchlist_entry')
-            .innerJoin('watchlist_category_map', 'user_watchlist_entry.category_map_id', 'watchlist_category_map.id')
-            .innerJoin('user_watchlist', 'user_watchlist.id', 'watchlist_category_map.user_watchlist_id')
+            .from(['watchlist_category_map', 'user_watchlist'])
             .set((eb) => ({
                 position_index: eb('user_watchlist_entry.position_index', '-', 1),
             }))
+            .whereRef('user_watchlist_entry.category_map_id', '=', 'watchlist_category_map.id')
+            .whereRef('user_watchlist.id', '=', 'watchlist_category_map.user_watchlist_id')
             .where('watchlist_category_map.id', '=', categoryId)
             .where('user_watchlist.id', '=', watchlistId)
             .where('user_watchlist.user_id', '=', userId)
