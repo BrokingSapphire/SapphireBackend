@@ -9,6 +9,10 @@ import {
     ForgotPasswordResetSchema,
     ResendLoginOtpSchema,
     ResendForgotPasswordOtpSchema,
+    Setup2FASchema,
+    Verify2FASetupSchema,
+    Verify2FASchema,
+    Disable2FASchema,
 } from './login.validator';
 import {
     login,
@@ -19,6 +23,10 @@ import {
     forgotPasswordReset,
     resendLoginOtp,
     resendForgotPasswordOtp,
+    setup2FA,
+    verify2FASetup,
+    verify2FA,
+    disable2FA,
 } from './login.controller';
 import { jwtMiddleware } from '@app/utils/jwt';
 
@@ -352,5 +360,97 @@ router.post('/forgot-password/verify-otp', validate(ForgotOTPVerifySchema), forg
  *         description: OTP not verified or session expired
  */
 router.post('/forgot-password/reset', validate(ForgotPasswordResetSchema), forgotPasswordReset);
+
+/**
+ * @swagger
+ * /login/setup-2fa:
+ *   post:
+ *     tags: [Login]
+ *     summary: Setup 2FA (Two-Factor Authentication)
+ *     description: Enable 2FA for added security
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/Setup2FASchema'
+ *     responses:
+ *       200:
+ *         description: 2FA setup successful
+ *       400:
+ *         description: Invalid request
+ *       401:
+ *         description: Unauthorized
+ */
+router.post('/setup-2fa', [jwtMiddleware, validate(Setup2FASchema)], setup2FA);
+
+/**
+ * @swagger
+ * /login/verify-2fa-setup:
+ *   post:
+ *     tags: [Login]
+ *     summary: Verify 2FA setup
+ *     description: Verify the 2FA setup with the provided code
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/Verify2FASetupSchema'
+ *     responses:
+ *       200:
+ *         description: 2FA setup verified successfully
+ *       400:
+ *         description: Invalid request
+ *       401:
+ *         description: Unauthorized
+ */
+router.post('/verify-2fa-setup', [jwtMiddleware, validate(Verify2FASetupSchema)], verify2FASetup);
+
+/**
+ * @swagger
+ * /login/verify-2fa:
+ *   post:
+ *     tags: [Login]
+ *     summary: Verify 2FA code
+ *     description: Verify the 2FA code during login
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/Verify2FASchema'
+ *     responses:
+ *       200:
+ *         description: 2FA code verified successfully
+ *       400:
+ *         description: Invalid request
+ *       401:
+ *         description: Invalid or expired 2FA code
+ */
+router.post('/verify-2fa', validate(Verify2FASchema), verify2FA);
+
+/**
+ * @swagger
+ * /login/disable-2fa:
+ *   post:
+ *     tags: [Login]
+ *     summary: Disable 2FA
+ *     description: Disable Two-Factor Authentication
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/Disable2FASchema'
+ *     responses:
+ *       200:
+ *         description: 2FA disabled successfully
+ *       400:
+ *         description: Invalid request
+ *       401:
+ *         description: Unauthorized
+ */
+router.post('/disable-2fa', [jwtMiddleware, validate(Disable2FASchema)], disable2FA);
 
 export default router;

@@ -71,3 +71,29 @@ export type NewMpinRequestType = {
     requestId: string;
     newMpin: string;
 };
+
+// 2FA Types
+export type Setup2FARequestType = {
+    password: string;
+};
+
+export type Setup2FAResponseType = DefaultResponseData<{
+    secret: string;
+    qrCodeUrl: string;
+    manualEntryKey: string;
+}>;
+
+export type Verify2FASetupRequestType = {
+    secret: string;
+    token: string;
+};
+
+export type Verify2FARequestType = {
+    sessionId: string;
+    token: string;
+};
+
+export type Disable2FARequestType = {
+    password: string;
+    token: string;
+};

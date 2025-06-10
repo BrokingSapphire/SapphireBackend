@@ -71,3 +71,44 @@ export const ForgotPasswordResetSchema = Joi.object({
         'any.only': 'Confirm password must match new password',
     }),
 });
+
+// 2FA Validation Schemas
+export const Setup2FASchema = Joi.object({
+    password: Joi.string().required(),
+});
+
+export const Verify2FASetupSchema = Joi.object({
+    secret: Joi.string().required(),
+    token: Joi.string()
+        .length(6)
+        .pattern(/^[0-9]{6}$/)
+        .required()
+        .messages({
+            'string.pattern.base': '2FA token must be a 6-digit number',
+            'string.length': '2FA token must be exactly 6 digits',
+        }),
+});
+
+export const Verify2FASchema = Joi.object({
+    sessionId: Joi.string().required(),
+    token: Joi.string()
+        .length(6)
+        .pattern(/^[0-9]{6}$/)
+        .required()
+        .messages({
+            'string.pattern.base': '2FA token must be a 6-digit number',
+            'string.length': '2FA token must be exactly 6 digits',
+        }),
+});
+
+export const Disable2FASchema = Joi.object({
+    password: Joi.string().required(),
+    token: Joi.string()
+        .length(6)
+        .pattern(/^[0-9]{6}$/)
+        .required()
+        .messages({
+            'string.pattern.base': '2FA token must be a 6-digit number',
+            'string.length': '2FA token must be exactly 6 digits',
+        }),
+});
