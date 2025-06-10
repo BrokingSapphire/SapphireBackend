@@ -24,6 +24,7 @@ interface NotificationData {
 
 type NotificationTemplate =
     | 'password-change-confirmation'
+    | 'mpin-change-confirmation'
     | 'account-locked'
     | 'login-alert'
     | 'welcome'
@@ -82,6 +83,8 @@ class EmailNotificationService {
         switch (this.template) {
             case 'password-change-confirmation':
                 return 'Password Changed Successfully - Sapphire Broking';
+            case 'mpin-change-confirmation':
+                return 'MPIN Changed Successfully - Sapphire Broking';
             case 'account-locked':
                 return 'Account Security Alert - Sapphire Broking';
             case 'login-alert':
@@ -153,6 +156,14 @@ class EmailNotificationService {
  */
 export async function sendPasswordChangeConfirmation(email: string, userData: NotificationData): Promise<void> {
     const notificationService = new EmailNotificationService(email, 'password-change-confirmation');
+    await notificationService.sendNotification(userData);
+}
+
+/**
+ * Helper function to send MPIN change confirmation
+ */
+export async function sendMpinChangeConfirmation(email: string, userData: NotificationData): Promise<void> {
+    const notificationService = new EmailNotificationService(email, 'mpin-change-confirmation');
     await notificationService.sendNotification(userData);
 }
 

@@ -50,3 +50,24 @@ export type NewPasswordRequestType = {
     newPassword: string;
     confirmPassword: string;
 };
+
+export type MpinVerifyRequestType = {
+    sessionId: string;
+    mpin: string;
+};
+
+export type ForgotMpinRequestType = EmailOrClientId;
+
+export type ForgotMpinOtpVerifyRequestType = {
+    requestId: string;
+    emailOtp: string;
+};
+
+export type ResendForgotMpinOtpRequestType = {
+    requestId: string;
+};
+
+export type NewMpinRequestType = {
+    requestId: string;
+    newMpin: string;
+};
