@@ -1,14 +1,13 @@
 import axios from 'axios';
 import { decrypt, encrypt, generateSignature } from '@app/utils/atom-crypto';
-import logger from '@app/logger';
 import { env } from '@app/env';
 import {
     CustomerDetails,
     PaymentRequest,
     PaymentResponse,
     PayModeSpecificData,
-    TransactionStatus,
 } from '@app/services/types/ntt-payment.types';
+import * as querystring from 'node:querystring';
 
 const PAYMENT_URL = 'https://paynetzuat.atomtech.in/ots/payment/txn';
 
@@ -20,16 +19,38 @@ export class PaymentService {
     ) {}
 
     async createPaymentRequest(
-        amount: number,
+        amount: string,
         merchTxnId: string,
         clientId: string,
-        customerDetails: CustomerDetails,
+        customerDetails: Omit<CustomerDetails, 'billingInfo'>,
         payMode: 'UP' | 'NB',
     ) {
         const payModeSpecificData: PayModeSpecificData =
             payMode === 'UP'
-                ? { subChannel: ['UP'], bankDetails: { payeeVPA: env.ntt.uatVpa } }
-                : { subChannel: ['NB'], bankDetails: { otsBankId: env.ntt.uatBankId } };
+                ? {
+                      subChannel: ['UP'],
+                      bankDetails: { payeeVPA: env.ntt.uatVpa },
+                      emiDetails: null,
+                      multiProdDetails: null,
+                      cardDetails: null,
+                  }
+                : {
+                      subChannel: ['NB'],
+                      bankDetails: { otsBankId: env.ntt.uatBankId },
+                      emiDetails: null,
+                      multiProdDetails: null,
+                      cardDetails: null,
+                  };
+
+        const signature = generateSignature(env.ntt.hashRequestKey, [
+            env.ntt.userId,
+            env.ntt.transactionPassword,
+            merchTxnId,
+            'SL',
+            amount,
+            'INR',
+            '1',
+        ]);
 
         const paymentRequest: PaymentRequest = {
             payInstrument: {
@@ -43,35 +64,42 @@ export class PaymentService {
                 },
                 merchDetails: {
                     merchId: Number(env.ntt.userId),
+                    userId: '',
                     password: env.ntt.transactionPassword,
                     merchTxnId,
-                    merchType: 'MEMBER',
+                    merchType: 'M',
                     mccCode: Number(env.ntt.mccCode),
                     merchTxnDate: new Date().toISOString().replace('T', ' ').substring(0, 19),
                 },
                 payDetails: {
                     prodDetails: [{ prodName: env.ntt.productId, prodAmount: amount }],
                     amount,
+                    surchargeAmount: '0.00',
                     totalAmount: amount,
+                    custAccNo: null,
+                    custAccIfsc: null,
                     txnCurrency: 'INR',
                     clientCode: clientId,
-                    signature: generateSignature(env.ntt.hashRequestKey, [
-                        env.ntt.userId,
-                        env.ntt.transactionPassword,
-                        merchTxnId,
-                        'SL',
-                        amount.toString(),
-                        'INR',
-                        '1',
-                    ]),
+                    remarks: null,
+                    signature,
                 },
                 responseUrls: {
                     returnUrl: this.returnUrl,
-                    cancelUrl: this.cancelUrl ?? undefined,
-                    notificationUrl: this.notificationUrl ?? undefined,
+                    cancelUrl: this.cancelUrl ?? null,
+                    notificationUrl: this.notificationUrl ?? null,
                 },
                 payModeSpecificData,
-                custDetails: customerDetails,
+                extras: {
+                    udf1: null,
+                    udf2: null,
+                    udf3: null,
+                    udf4: null,
+                    udf5: null,
+                },
+                custDetails: {
+                    ...customerDetails,
+                    billingInfo: null,
+                },
             },
         };
 
@@ -81,17 +109,27 @@ export class PaymentService {
     private async processPaymentRequest(paymentRequest: PaymentRequest) {
         try {
             const encryptedRequest = {
-                merchId: Number(env.ntt.userId),
+                merchId: env.ntt.userId,
                 encData: encrypt(JSON.stringify(paymentRequest), env.ntt.aesRequestKey),
             };
 
             return await axios(PAYMENT_URL, {
-                method: 'POST',
+                method: 'GET',
                 params: encryptedRequest,
             });
         } catch (error) {
             throw new Error(`Payment request failed: ${error instanceof Error ? error.message : String(error)}`);
         }
+    }
+
+    processResponse(data: string): [PaymentResponse, boolean] {
+        const formData = querystring.parse(data);
+
+        if (formData.merchId !== env.ntt.userId) {
+            throw new Error(`${formData.merchId} is invalid.`);
+        }
+
+        return this.decryptAndValidateResponse(formData.encData as string);
     }
 
     decryptAndValidateResponse(encData: string): [PaymentResponse, boolean] {
@@ -103,34 +141,18 @@ export class PaymentService {
     private validateResponseSignature(response: PaymentResponse): boolean {
         const { merchDetails, payDetails, payModeSpecificData, responseDetails } = response.payInstrument;
 
-        if (!payDetails.signature || !payDetails.atomTxnId) return true;
+        if (!payDetails.signature || !payDetails.atomTxnId) return false;
 
-        const isValid =
-            generateSignature(env.ntt.aesResponseKey, [
-                merchDetails.merchId.toString(),
-                payDetails.atomTxnId.toString(),
-                merchDetails.merchTxnId,
-                payDetails.amount.toString(),
-                responseDetails.statusCode,
-                payModeSpecificData.subChannel[0],
-                payModeSpecificData.bankDetails?.bankTxnId || '',
-            ]) === payDetails.signature;
+        const expectedSignature = generateSignature(env.ntt.hashResponseKey, [
+            merchDetails.merchId.toString(),
+            payDetails.atomTxnId.toString(),
+            merchDetails.merchTxnId,
+            payDetails.totalAmount.toString(),
+            responseDetails.statusCode,
+            payModeSpecificData.subChannel[0],
+            payModeSpecificData.bankDetails?.bankTxnId || '',
+        ]);
 
-        return isValid;
-    }
-
-    getStatusDescription(statusCode: string) {
-        const statusMap: Record<string, string> = {
-            OTS0000: 'TRANSACTION IS SUCCESSFUL',
-            OTS0101: 'TRANSACTION IS CANCELLED BY USER ON PAYMENT PAGE',
-            OTS0201: 'TRANSACTION IS TIMEOUT',
-            OTS0401: 'NO DATA',
-            OTS0451: 'INVALID DATA',
-            OTS0501: 'INVALID DATA',
-            OTS0600: 'TRANSACTION IS FAILED',
-            OTS0301: 'TRANSACTION IS INITIALIZED',
-            OTS0351: 'TRANSACTION IS INITIATED',
-        };
-        return statusMap[statusCode] || 'Unknown status code';
+        return expectedSignature === payDetails.signature;
     }
 }

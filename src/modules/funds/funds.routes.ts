@@ -68,7 +68,7 @@ router.get('/', getUserFunds);
  *       401:
  *         description: Unauthorized
  */
-router.post('/desposit', validate(DepositRequestSchema), depositFunds);
+router.post('/deposit', validate(DepositRequestSchema), depositFunds);
 
 /**
  * @swagger

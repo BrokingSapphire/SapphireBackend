@@ -57,11 +57,13 @@ const getBankAccounts = async (req: Request<SessionJwtType>, res: Response): Pro
  * Add funds to user account
  */
 const depositFunds = async (req: Request<SessionJwtType>, res: Response): Promise<void> => {
-    const { userId } = req.auth!!;
+    const { userId } = req.auth!;
     const { amount, mode } = req.body;
 
     const merchantTxnId = generateReferenceNo(userId);
-    const paymentService = new PaymentService(`${req.protocol}://${req.host}${env.apiPath}/webhook/deposit/callback`);
+    const paymentService = new PaymentService(
+        `${req.protocol}://${req.hostname}${env.apiPath}/webhook/deposit/callback`,
+    );
 
     const details = await db
         .selectFrom('user')
@@ -71,18 +73,16 @@ const depositFunds = async (req: Request<SessionJwtType>, res: Response): Promis
         .where('user.id', '=', userId)
         .executeTakeFirstOrThrow();
 
-    const customerDetails = {
-        custId: userId,
-        custName: details.full_name,
-        custEmail: details.email,
-        custPhone: details.phone,
-    };
-
     const paymentResponse = await paymentService.createPaymentRequest(
-        amount,
+        amount.toFixed(2),
         merchantTxnId,
         userId,
-        customerDetails,
+        {
+            custFirstName: details.first_name,
+            custLastName: null,
+            custEmail: details.email,
+            custMobile: details.phone,
+        },
         mode === 'UPI' ? 'UP' : 'NB',
     );
 
@@ -91,9 +91,19 @@ const depositFunds = async (req: Request<SessionJwtType>, res: Response): Promis
         throw new InternalServerError('Error with payment response: Returned non 200 response.');
     }
 
-    logger.info(paymentResponse);
+    const [data, isValid] = paymentService.processResponse(paymentResponse.data);
+    logger.debug(JSON.stringify(data));
+    // if (!isValid) {
+    //     logger.error(data);
+    //     throw new InternalServerError('Invalid payment response received.');
+    // }
+
     res.status(OK).json({
         message: 'Deposit request sent successfully',
+        data: {
+            data,
+            valid: isValid,
+        },
     });
 };
 

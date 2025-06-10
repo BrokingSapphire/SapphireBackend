@@ -1,34 +1,34 @@
 export interface ProductDetail {
     prodName: string;
-    prodAmount: number;
+    prodAmount: string;
 }
 
 export interface PaymentDetails {
     prodDetails: ProductDetail[];
-    amount: number;
-    surchargeAmount?: number;
-    totalAmount: number;
-    custAccNo?: string;
-    custAccIfsc?: string;
-    clientCode?: string;
+    amount: string;
+    surchargeAmount: string;
+    totalAmount: string;
+    custAccNo: string | null;
+    custAccIfsc: string | null;
+    clientCode: string | null;
     txnCurrency: string;
-    remarks?: string;
-    signature?: string;
+    remarks: string | null;
+    signature: string | null;
 }
 
 export interface CustomerDetails {
-    custFirstName?: string;
-    custLastName?: string;
+    custFirstName: string | null;
+    custLastName: string | null;
     custEmail: string;
-    custMobile?: string;
-    billingInfo?: {
-        custAddr1?: string;
-        custAddr2?: string;
-        custCity?: string;
-        custState?: string;
-        custCountry?: string;
-        custZipCode?: string;
-    };
+    custMobile: string | null;
+    billingInfo: {
+        custAddr1: string | null;
+        custAddr2: string | null;
+        custCity: string | null;
+        custState: string | null;
+        custCountry: string | null;
+        custZipCode: string | null;
+    } | null;
 }
 
 export interface BankDetails {
@@ -38,10 +38,10 @@ export interface BankDetails {
 
 export interface PayModeSpecificData {
     subChannel: string[];
-    bankDetails?: BankDetails;
-    emiDetails?: any;
-    multiProdDetails?: any;
-    cardDetails?: any;
+    bankDetails: BankDetails | null;
+    emiDetails: any | null;
+    multiProdDetails: any | null;
+    cardDetails: any | null;
 }
 
 export interface PaymentRequest {
@@ -56,39 +56,29 @@ export interface PaymentRequest {
         };
         merchDetails: {
             merchId: number;
-            userId?: string;
+            userId: string;
             password: string;
             merchTxnId: string;
-            merchType?: string;
-            mccCode?: number;
-            merchTxnDate?: string;
+            merchType: string | null;
+            mccCode: number | null;
+            merchTxnDate: string | null;
         };
         payDetails: PaymentDetails;
         responseUrls: {
             returnUrl: string;
-            cancelUrl?: string;
-            notificationUrl?: string;
+            cancelUrl: string | null;
+            notificationUrl: string | null;
         };
         payModeSpecificData: PayModeSpecificData;
-        extras?: {
-            udf1?: string;
-            udf2?: string;
-            udf3?: string;
-            udf4?: string;
-            udf5?: string;
-        };
+        extras: {
+            udf1: string | null;
+            udf2: string | null;
+            udf3: string | null;
+            udf4: string | null;
+            udf5: string | null;
+        } | null;
         custDetails: CustomerDetails;
     };
-}
-
-export interface EncryptedRequest {
-    merchId: number;
-    encData: string;
-}
-
-export interface EncryptedResponse {
-    merchId: number;
-    encData: string;
 }
 
 export interface PaymentResponse {
@@ -128,21 +118,3 @@ export interface PaymentResponse {
         };
     };
 }
-
-export interface TransactionStatus {
-    statusCode: string;
-    message: string;
-    description: string;
-}
-
-export const StatusCodes = {
-    SUCCESS: 'OTS0000',
-    CANCEL: 'OTS0101',
-    TIMEOUT: 'OTS0201',
-    NODATA: 'OTS0401',
-    INVALIDDATA: 'OTS0451',
-    INVALIDDATA2: 'OTS0501',
-    FAILED: 'OTS0600',
-    INITIALIZED: 'OTS0301',
-    INITIATED: 'OTS0351',
-};
