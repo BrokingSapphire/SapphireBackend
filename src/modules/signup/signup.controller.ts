@@ -1,6 +1,7 @@
 import { ParamsDictionary } from 'express-serve-static-core';
 import { Response, DefaultResponseData, Request } from '@app/types.d';
 import redisClient from '@app/services/redis.service';
+import { hashPassword } from '@app/utils/passwords';
 import { EmailOtpVerification, PhoneOtpVerification } from '@app/services/otp.service';
 import {
     BadRequestError,
@@ -1159,6 +1160,59 @@ const postCheckpoint = async (
         });
 
         res.status(CREATED).json({ message: 'Nominees added.' });
+    } else if (step === CheckpointStep.MPIN) {
+        const { mpin } = req.body;
+
+        const userCheckpoint = await db
+            .selectFrom('signup_checkpoints')
+            .select(['client_id', 'id'])
+            .where('email', '=', email)
+            .executeTakeFirstOrThrow();
+
+        if (!userCheckpoint.client_id) {
+            throw new ForbiddenError('Please complete signup process first');
+        }
+
+        const existingMpin = await db
+            .selectFrom('user_mpin')
+            .select('id')
+            .where('client_id', '=', userCheckpoint.client_id)
+            .executeTakeFirst();
+
+        if (existingMpin) {
+            throw new BadRequestError('MPIN already set for this user');
+        }
+
+        const hashedMpin = await hashPassword(mpin, 'bcrypt');
+
+        const hashAlgoRecord = await db
+            .selectFrom('hashing_algorithm')
+            .select('id')
+            .where('name', '=', hashedMpin.hashAlgo)
+            .executeTakeFirstOrThrow();
+
+        await db.transaction().execute(async (tx) => {
+            if (!userCheckpoint.client_id) {
+                throw new ForbiddenError('Please complete signup process first');
+            }
+            await tx
+                .insertInto('user_mpin')
+                .values({
+                    client_id: userCheckpoint.client_id,
+                    mpin_hash: hashedMpin.hashedPassword,
+                    mpin_salt: hashedMpin.salt,
+                    hash_algo_id: hashAlgoRecord.id,
+                    created_at: new Date(),
+                    updated_at: new Date(),
+                    is_active: true,
+                    failed_attempts: 0,
+                })
+                .execute();
+        });
+
+        res.status(CREATED).json({
+            message: 'MPIN set successfully',
+        });
     }
 };
 

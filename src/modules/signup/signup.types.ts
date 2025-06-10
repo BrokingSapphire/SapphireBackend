@@ -22,6 +22,7 @@ export enum CheckpointStep {
     IPV = 'ipv',
     ADD_NOMINEES = 'add_nominees',
     INCOME_PROOF = 'income_proof',
+    MPIN = 'mpin',
 }
 
 export enum InvestmentSegment {
@@ -90,6 +91,14 @@ export enum NomineeRelation {
     SPOUSE = 'Spouse',
     OTHER = 'Other',
 }
+
+export type SetMpinType = {
+    mpin: string;
+};
+
+export type VerifyMpinType = {
+    mpin: string;
+};
 
 export type RequestOtpType =
     | {
@@ -194,6 +203,10 @@ export type PostCheckpointType =
               relation: NomineeRelation;
               share: number;
           }[];
+      }
+    | {
+          step: CheckpointStep.MPIN;
+          mpin: string;
       };
 
 export type UIDParams = {

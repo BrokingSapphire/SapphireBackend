@@ -159,6 +159,17 @@ const CheckpointSchema = Joi.object({
             }),
         ),
     }),
+
+    mpin: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.MPIN,
+        then: Joi.string()
+            .pattern(/^[0-9]{4}$/)
+            .required()
+            .messages({
+                'string.pattern.base': 'MPIN must be 4 digits',
+                'any.required': 'MPIN is required',
+            }),
+    }),
 });
 
 export { RequestOtpSchema, ResendOtpSchema, VerifyOtpSchema, CheckpointSchema };
