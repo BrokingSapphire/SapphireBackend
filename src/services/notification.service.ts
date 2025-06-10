@@ -3,10 +3,13 @@ import { env } from '@app/env';
 import transporter from '@app/services/email.service';
 import Mail from 'nodemailer/lib/mailer';
 import * as fs from 'node:fs';
+import smsService from './sms.service';
+import { SmsTemplateType } from './sms-templates/sms.types';
 
 interface NotificationData {
     userName: string;
     email: string;
+    phoneNumber?: string;
     date?: string;
     time?: string;
     ip?: string;
@@ -191,6 +194,17 @@ export async function sendWithdrawalProcessed(email: string, userData: Notificat
 export async function sendAccountSuccessfullyOpened(email: string, userData: NotificationData): Promise<void> {
     const notificationService = new EmailNotificationService(email, 'account-successfully-opened');
     await notificationService.sendNotification(userData);
+
+    if (userData.phoneNumber) {
+        try {
+            await smsService.sendTemplatedSms(userData.phoneNumber, SmsTemplateType.ACCOUNT_SUCCESSFULLY_OPENED, [
+                userData.userName,
+            ]);
+            logger.info(`Account successfully opened SMS sent to ${userData.phoneNumber}`);
+        } catch (error) {
+            logger.error(`Failed to send account successfully opened SMS: ${error}`);
+        }
+    }
 }
 
 /**
@@ -199,6 +213,18 @@ export async function sendAccountSuccessfullyOpened(email: string, userData: Not
 export async function sendDocumentsReceivedConfirmation(email: string, userData: NotificationData): Promise<void> {
     const notificationService = new EmailNotificationService(email, 'documents-received-confirmation');
     await notificationService.sendNotification(userData);
+
+    if (userData.phoneNumber) {
+        try {
+            await smsService.sendTemplatedSms(userData.phoneNumber, SmsTemplateType.DOCUMENTS_RECEIVED_CONFIRMATION, [
+                userData.userName,
+            ]);
+            logger.info(`Documents received confirmation SMS sent to ${userData.phoneNumber}`);
+        } catch (error) {
+            // Log but don't throw - if SMS fails, email was still sent
+            logger.error(`Failed to send documents received SMS: ${error}`);
+        }
+    }
 }
 
 /**
@@ -239,6 +265,20 @@ export async function sendKycUpdateRequired(email: string, userData: Notificatio
 export async function sendFundsAdded(email: string, userData: NotificationData): Promise<void> {
     const notificationService = new EmailNotificationService(email, 'funds-added');
     await notificationService.sendNotification(userData);
+
+    if (userData.phoneNumber && userData.amount && userData.availableBalance) {
+        try {
+            await smsService.sendTemplatedSms(userData.phoneNumber, SmsTemplateType.FUNDS_ADDED, [
+                userData.userName,
+                userData.amount,
+                userData.availableBalance,
+            ]);
+            logger.info(`Funds added SMS sent to ${userData.phoneNumber}`);
+        } catch (error) {
+            // Log but don't throw - if SMS fails, email was still sent
+            logger.error(`Failed to send funds added SMS: ${error}`);
+        }
+    }
 }
 
 /**

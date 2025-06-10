@@ -5,6 +5,7 @@ import { env } from '@app/env';
 import transporter from '@app/services/email.service';
 import Mail from 'nodemailer/lib/mailer';
 import * as fs from 'node:fs';
+import smsService from '@app/services/sms.service';
 
 export const DEFAULT_OTP_LENGTH = 6;
 export const DEFAULT_OTP_EXPIRY = 10 * 60; // 10 minutes in seconds
@@ -200,6 +201,19 @@ class PhoneOtpVerification extends OtpVerification {
         };
 
         await transporter.sendMail(mailOptions);
+
+        // SMS
+        try {
+            await smsService.sendOtpSms(
+                this.id, // Phone number
+                otp,
+                this.template, // Context (signup, login, etc.)
+            );
+
+            logger.debug(`SMS OTP sent to ${this.id} for ${this.template}`);
+        } catch (error) {
+            logger.error(`Failed to send SMS OTP: ${error}`);
+        }
     }
 }
 
