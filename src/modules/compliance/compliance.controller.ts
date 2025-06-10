@@ -128,13 +128,17 @@ const fetchPanVerificationData = async (checkpointId: number) => {
         .selectFrom('signup_checkpoints')
         .innerJoin('pan_detail', 'pan_detail.id', 'signup_checkpoints.pan_id')
         .innerJoin('user_name', 'user_name.id', 'pan_detail.name')
-        .innerJoin('user_name as father_name_details', 'father_name_details.id', 'signup_checkpoints.father_name')
+        .innerJoin(
+            'user_name as father_spouse_name_details',
+            'father_spouse_name_details.id',
+            'signup_checkpoints.father_spouse_name',
+        )
         .innerJoin('profile_pictures', 'profile_pictures.user_id', 'signup_checkpoints.id')
         .select([
             'pan_detail.pan_number',
             'pan_detail.dob',
             'user_name.full_name',
-            'father_name_details.full_name as father_name',
+            'father_spouse_name_details.full_name as father_spouse_name',
             'profile_pictures.data as pan_image',
         ])
         .where('signup_checkpoints.id', '=', checkpointId)
@@ -144,7 +148,7 @@ const fetchPanVerificationData = async (checkpointId: number) => {
         pan_number: result.pan_number,
         full_name: result.full_name,
         dob: result.dob,
-        father_name: result.father_name,
+        father_spouse_name: result.father_spouse_name,
         pan_image: result.pan_image,
     };
 };
@@ -166,9 +170,9 @@ const fetchAadhaarVerificationData = async (checkpointId: number) => {
             'aadhaar_detail.masked_aadhaar_no',
             'aadhaar_detail.dob',
             'user_name.full_name',
-            'address.address1',
-            'address.address2',
-            'address.street_name',
+            'address.line_1',
+            'address.line_2',
+            'address.line_3',
             'city.name as city_name',
             'state.name as state_name',
             'postal_code.postal_code',
@@ -182,9 +186,9 @@ const fetchAadhaarVerificationData = async (checkpointId: number) => {
         name: aadhaarDetails.full_name,
         dob: aadhaarDetails.dob,
         address: {
-            address1: aadhaarDetails.address1,
-            address2: aadhaarDetails.address2,
-            street: aadhaarDetails.street_name,
+            line_1: aadhaarDetails.line_1,
+            line_2: aadhaarDetails.line_2,
+            line_3: aadhaarDetails.line_3,
             city: aadhaarDetails.city_name,
             state: aadhaarDetails.state_name,
             postalCode: aadhaarDetails.postal_code,
@@ -244,16 +248,16 @@ const fetchBankVerificationData = async (checkpointId: number) => {
 const fetchAddressVerificationData = async (checkpointId: number) => {
     const addressDetails = await db
         .selectFrom('signup_checkpoints')
-        .innerJoin('address', 'address.id', 'signup_checkpoints.address_id')
+        .innerJoin('address', 'address.id', 'signup_checkpoints.permanent_address_id')
         .innerJoin('city', 'city.id', 'address.city_id')
         .innerJoin('state', 'state.id', 'address.state_id')
         .innerJoin('postal_code', 'postal_code.id', 'address.postal_id')
         .innerJoin('country', 'country.iso', 'address.country_id')
         .leftJoin('profile_pictures', 'profile_pictures.user_id', 'signup_checkpoints.id')
         .select([
-            'address.address1',
-            'address.address2',
-            'address.street_name',
+            'address.line_1',
+            'address.line_2',
+            'address.line_3',
             'city.name as city',
             'state.name as state',
             'postal_code.postal_code',
@@ -263,9 +267,9 @@ const fetchAddressVerificationData = async (checkpointId: number) => {
         .executeTakeFirstOrThrow();
 
     return {
-        address1: addressDetails.address1,
-        address2: addressDetails.address2,
-        street: addressDetails.street_name,
+        line_1: addressDetails.line_1,
+        line_2: addressDetails.line_2,
+        line_3: addressDetails.line_3,
         city: addressDetails.city,
         state: addressDetails.state,
         postalCode: addressDetails.postal_code,
@@ -637,9 +641,11 @@ const finalizeVerification = async (req: Request, res: Response) => {
                 phone: checkpoint.phone_id,
                 pan_id: checkpoint.pan_id!,
                 aadhaar_id: checkpoint.aadhaar_id!,
-                address_id: checkpoint.address_id!,
-                father_name: checkpoint.father_name!,
+                permanent_address_id: checkpoint.permanent_address_id!,
+                correspondence_address_id: checkpoint.correspondence_address_id!,
+                father_spouse_name: checkpoint.father_spouse_name!,
                 mother_name: checkpoint.mother_name!,
+                maiden_name: checkpoint.maiden_name,
                 marital_status: checkpoint.marital_status!,
                 annual_income: checkpoint.annual_income!,
                 occupation: checkpoint.occupation!,
@@ -649,6 +655,26 @@ const finalizeVerification = async (req: Request, res: Response) => {
                 signature: checkpoint.signature!,
                 ipv: checkpoint.ipv!,
                 demat_account_id: checkpoint.demat_account_id,
+                // adding default values for new user
+                user_account_type: 'Individual',
+                nationality: 'INDIAN',
+                residential_status: 'Resident Individual',
+                country_of_citizenship: 'INDIA',
+                country_of_residence: 'INDIA',
+                email_declaration: 'Self',
+                mobile_declaration: 'Self',
+                annual_report_type: 'Electronic',
+                contract_note_type: 'Electronic',
+                dp_account_settlement: 'As per SEBI regulations',
+                bsda_facility: 'NO',
+                dis_facility: 'NO',
+                internet_trading_facility: 'YES',
+                margin_trading_facility: 'NO',
+                email_with_registrar: 'YES',
+                business_categorization: 'D2C',
+                client_category_commercial_non_commercial: 'Other',
+                is_us_person: 'NO',
+                past_actions: 'NO',
                 created_at: new Date(),
                 updated_at: new Date(),
             })
@@ -856,9 +882,10 @@ const autoFinalVerification = async (req: Request, res: Response) => {
                 phone: checkpoint.phone_id,
                 pan_id: checkpoint.pan_id!,
                 aadhaar_id: checkpoint.aadhaar_id!,
-                address_id: checkpoint.address_id!,
-                father_name: checkpoint.father_name!,
+                permanent_address_id: checkpoint.permanent_address_id!,
+                father_spouse_name: checkpoint.father_spouse_name!,
                 mother_name: checkpoint.mother_name!,
+                maiden_name: checkpoint.maiden_name,
                 marital_status: checkpoint.marital_status!,
                 annual_income: checkpoint.annual_income!,
                 occupation: checkpoint.occupation!,
@@ -868,6 +895,25 @@ const autoFinalVerification = async (req: Request, res: Response) => {
                 signature: checkpoint.signature!,
                 ipv: checkpoint.ipv!,
                 demat_account_id: checkpoint.demat_account_id,
+                user_account_type: 'Individual',
+                nationality: 'INDIAN',
+                residential_status: 'Resident Individual',
+                country_of_citizenship: 'INDIA',
+                country_of_residence: 'INDIA',
+                email_declaration: 'Self',
+                mobile_declaration: 'Self',
+                annual_report_type: 'Electronic',
+                contract_note_type: 'Electronic',
+                dp_account_settlement: 'As per SEBI regulations',
+                bsda_facility: 'NO',
+                dis_facility: 'NO',
+                internet_trading_facility: 'YES',
+                margin_trading_facility: 'NO',
+                email_with_registrar: 'YES',
+                business_categorization: 'D2C',
+                client_category_commercial_non_commercial: 'Other',
+                is_us_person: 'NO',
+                past_actions: 'NO',
                 created_at: new Date(),
                 updated_at: new Date(),
             })

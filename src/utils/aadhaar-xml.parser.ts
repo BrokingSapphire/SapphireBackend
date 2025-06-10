@@ -1,4 +1,4 @@
-import { Address } from '@app/database/transactions';
+import { AddressInput } from '@app/database/transactions';
 import { XMLParser } from 'fast-xml-parser';
 import logger from '@app/logger';
 
@@ -46,12 +46,12 @@ class AadhaarXMLParser {
         return this.loadedData.Certificate.CertificateData.KycRes.UidData.Poa.__co;
     }
 
-    address(): Address {
+    address(): AddressInput {
         const poa = this.loadedData.Certificate.CertificateData.KycRes.UidData.Poa;
         return {
-            address1: poa.__house,
-            address2: poa.__lm + ', ' + poa.__dist,
-            streetName: poa.__street,
+            line_1: poa.__house,
+            line_2: poa.__lm + ', ' + poa.__dist,
+            line_3: poa.__street,
             city: poa.__vtc,
             state: poa.__state,
             country: poa.__country,

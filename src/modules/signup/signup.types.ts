@@ -144,8 +144,9 @@ export type PostCheckpointType =
       }
     | {
           step: CheckpointStep.USER_DETAIL;
-          father_name: string;
+          father_spouse_name: string;
           mother_name: string;
+          maiden_name?: string;
       }
     | {
           step: CheckpointStep.PERSONAL_DETAIL;

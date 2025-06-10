@@ -287,17 +287,25 @@ const getCheckpoint = async (req: Request<JwtType, GetCheckpointType>, res: Resp
             message: 'Investment segment fetched',
         });
     } else if (step === CheckpointStep.USER_DETAIL) {
-        const { father_name, mother_name } = await db
+        const { father_spouse_name, mother_name, maiden_name } = await db
             .selectFrom('signup_checkpoints')
-            .innerJoin('user_name as father', 'signup_checkpoints.father_name', 'father.id')
+            .innerJoin('user_name as father_spouse', 'signup_checkpoints.father_spouse_name', 'father_spouse.id')
             .innerJoin('user_name as mother', 'signup_checkpoints.mother_name', 'mother.id')
-            .select(['father.full_name as father_name', 'mother.full_name as mother_name'])
+            .leftJoin('user_name as maiden', 'signup_checkpoints.maiden_name', 'maiden.id')
+            .select([
+                'father_spouse.full_name as father_spouse_name',
+                'mother.full_name as mother_name',
+                'maiden.full_name as maiden_name',
+            ])
             .where('email', '=', email)
-            .where('father_name', 'is not', null)
+            .where('father_spouse_name', 'is not', null)
             .where('mother_name', 'is not', null)
             .executeTakeFirstOrThrow();
 
-        res.status(OK).json({ data: { father_name, mother_name }, message: 'User details fetched' });
+        res.status(OK).json({
+            data: { father_spouse_name, mother_name, maiden_name: maiden_name || null },
+            message: 'User details fetched',
+        });
     } else if (step === CheckpointStep.PERSONAL_DETAIL) {
         const { marital_status, annual_income, trading_exp, account_settlement } = await db
             .selectFrom('signup_checkpoints')
@@ -426,10 +434,10 @@ const postCheckpoint = async (
             const nameId = await insertNameGetId(tx, splitName(panResponse.data.data.full_name));
 
             const address = panResponse.data.data.address;
-            const addressId = await insertAddressGetId(tx, {
-                address1: address.line_1,
-                address2: address.line_2,
-                streetName: address.street_name,
+            const permanentAddressId = await insertAddressGetId(tx, {
+                line_1: address.line_1,
+                line_2: address.line_2,
+                line_3: address.street_name,
                 city: address.city,
                 state: address.state,
                 country: address.country === '' ? 'India' : address.country,
@@ -442,7 +450,7 @@ const postCheckpoint = async (
                     pan_number: panResponse.data.data.pan_number,
                     name: nameId,
                     masked_aadhaar: panResponse.data.data.masked_aadhaar.substring(9, 12),
-                    address_id: addressId,
+                    address_id: permanentAddressId,
                     dob: new Date(panResponse.data.data.dob),
                     gender: panResponse.data.data.gender,
                     aadhaar_linked: panResponse.data.data.aadhaar_linked,
@@ -458,6 +466,8 @@ const postCheckpoint = async (
                 name: nameId,
                 dob: new Date(panResponse.data.data.dob),
                 pan_id: panId.id,
+                permanent_address_id: permanentAddressId,
+                correspondence_address_id: permanentAddressId,
             })
                 .returning('id')
                 .executeTakeFirstOrThrow();
@@ -580,7 +590,15 @@ const postCheckpoint = async (
         await db.transaction().execute(async (tx) => {
             const address = parser.address();
             parser.log();
-            const addressId = await insertAddressGetId(tx, address);
+            const permanentAddressId = await insertAddressGetId(tx, {
+                line_1: address.line_1 || null,
+                line_2: address.line_2 || null,
+                line_3: address.line_3 || null,
+                city: address.city,
+                state: address.state,
+                country: address.country,
+                postalCode: address.postalCode,
+            });
 
             const nameId = await insertNameGetId(tx, splitName(parser.name()));
 
@@ -612,7 +630,7 @@ const postCheckpoint = async (
                     name: nameId,
                     dob: parser.dob(),
                     co: coId,
-                    address_id: addressId,
+                    address_id: permanentAddressId,
                     post_office: parser.postOffice() === undefined ? null : parser.postOffice(),
                     gender: parser.gender(),
                 })
@@ -621,7 +639,8 @@ const postCheckpoint = async (
 
             const checkpoint = await updateCheckpoint(tx, email, phone, {
                 aadhaar_id: aadhaarId.id,
-                address_id: addressId,
+                permanent_address_id: permanentAddressId,
+                correspondence_address_id: permanentAddressId,
             })
                 .returning('id')
                 .executeTakeFirstOrThrow();
@@ -685,7 +704,15 @@ const postCheckpoint = async (
 
         await db.transaction().execute(async (tx) => {
             const address = parserData.address;
-            const addressId = await insertAddressGetId(tx, address);
+            const permanentAddressId = await insertAddressGetId(tx, {
+                line_1: address.line_1 || null,
+                line_2: address.line_2 || null,
+                line_3: address.line_3 || null,
+                city: address.city,
+                state: address.state,
+                country: address.country,
+                postalCode: address.postalCode,
+            });
 
             const nameId = await insertNameGetId(tx, splitName(parserData.name));
 
@@ -717,7 +744,7 @@ const postCheckpoint = async (
                     name: nameId,
                     dob: new Date(parserData.dob),
                     co: coId,
-                    address_id: addressId,
+                    address_id: permanentAddressId,
                     post_office: parserData.postOffice === undefined ? null : parserData.postOffice,
                     gender: parserData.gender,
                 })
@@ -727,7 +754,8 @@ const postCheckpoint = async (
 
             const checkpoint = await updateCheckpoint(tx, email, phone, {
                 aadhaar_id: aadhaarId.id,
-                address_id: addressId,
+                permanent_address_id: permanentAddressId,
+                correspondence_address_id: permanentAddressId,
                 doubt: shouldSetDoubt,
                 user_provided_name: userProvidedNameId,
                 user_provided_dob: new Date(dob),
@@ -794,15 +822,21 @@ const postCheckpoint = async (
             },
         });
     } else if (step === CheckpointStep.USER_DETAIL) {
-        const { father_name, mother_name } = req.body;
+        const { father_spouse_name, mother_name, maiden_name } = req.body;
 
         await db.transaction().execute(async (tx) => {
-            const fatherNameId = await insertNameGetId(tx, splitName(father_name));
+            const fatherSpouseNameId = await insertNameGetId(tx, splitName(father_spouse_name));
             const motherNameId = await insertNameGetId(tx, splitName(mother_name));
 
+            let maidenNameId = null;
+            if (maiden_name && maiden_name.trim()) {
+                maidenNameId = await insertNameGetId(tx, splitName(maiden_name.trim()));
+            }
+
             await updateCheckpoint(tx, email, phone, {
-                father_name: fatherNameId,
+                father_spouse_name: fatherSpouseNameId,
                 mother_name: motherNameId,
+                maiden_name: maidenNameId,
             }).execute();
         });
 
