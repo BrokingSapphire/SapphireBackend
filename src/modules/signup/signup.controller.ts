@@ -25,6 +25,7 @@ import {
 } from './signup.types';
 import { CredentialsType, ResponseWithToken } from '@app/modules/common.types';
 import DigiLockerService from '@app/services/surepass/digilocker.service';
+import ESignService from '@app/services/surepass/esign.service';
 import AadhaarXMLParser from '@app/utils/aadhaar-xml.parser';
 import { sign } from '@app/utils/jwt';
 import axios from 'axios';
@@ -1160,6 +1161,94 @@ const postCheckpoint = async (
         });
 
         res.status(CREATED).json({ message: 'Nominees added.' });
+    } else if (step === CheckpointStep.ESIGN_INITIALIZE) {
+        const { redirect_url, file_id } = req.body;
+
+        const checkpointData = await db
+            .selectFrom('signup_checkpoints')
+            .leftJoin('pan_detail', 'signup_checkpoints.pan_id', 'pan_detail.id')
+            .leftJoin('user_name', 'pan_detail.name', 'user_name.id')
+            .select(['signup_checkpoints.id', 'user_name.full_name'])
+            .where('signup_checkpoints.email', '=', email)
+            .executeTakeFirstOrThrow();
+
+        const esignResponse = await ESignService.initialize({
+            file_id,
+            pdf_pre_uploaded: true,
+            callback_url: redirect_url,
+            config: {
+                accept_selfie: false,
+                allow_selfie_upload: false,
+                accept_virtual_sign: false,
+                track_location: false,
+                auth_mode: '1',
+                reason: 'KYC-Document',
+                positions: {
+                    '1': [
+                        {
+                            x: 100,
+                            y: 600,
+                        },
+                    ],
+                },
+            },
+            prefill_options: {
+                full_name: checkpointData.full_name || email.split('@')[0],
+                mobile_number: phone,
+                user_email: email,
+            },
+        });
+
+        const key = `esign:${email}`;
+        await redisClient.set(key, esignResponse.data.data.client_id);
+        await redisClient.expire(key, 10 * 60);
+
+        res.status(OK).json({
+            data: {
+                uri: esignResponse.data.data.url,
+                client_id: esignResponse.data.data.client_id,
+                token: esignResponse.data.data.token,
+            },
+            message: 'eSign session initialized',
+        });
+    } else if (step === CheckpointStep.ESIGN_COMPLETE) {
+        const clientId = await redisClient.get(`esign:${email}`);
+        if (!clientId) throw new UnauthorizedError('eSign not authorized or expired.');
+
+        const statusResponse = await ESignService.getStatus(clientId);
+        if (!statusResponse.data.data.completed) {
+            throw new UnauthorizedError('eSign process not completed');
+        }
+
+        await redisClient.del(`esign:${email}`);
+
+        const downloadResponse = await ESignService.downloadSignedDocument(clientId);
+
+        await db.transaction().execute(async (tx) => {
+            const checkpoint = await tx
+                .selectFrom('signup_checkpoints')
+                .select('id')
+                .where('email', '=', email)
+                .executeTakeFirstOrThrow();
+
+            await tx
+                .updateTable('signup_verification_status')
+                .set({
+                    esign_status: 'verified',
+                    updated_at: new Date(),
+                })
+                .where('id', '=', checkpoint.id)
+                .execute();
+        });
+
+        res.status(OK).json({
+            message: 'eSign completed successfully',
+            data: {
+                download_url: downloadResponse.data.data.download_url,
+                file_name: downloadResponse.data.data.file_name,
+                mime_type: downloadResponse.data.data.mime_type,
+            },
+        });
     } else if (step === CheckpointStep.MPIN) {
         const { mpin } = req.body;
 

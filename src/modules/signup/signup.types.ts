@@ -21,6 +21,8 @@ export enum CheckpointStep {
     SIGNATURE = 'signature',
     IPV = 'ipv',
     ADD_NOMINEES = 'add_nominees',
+    ESIGN_INITIALIZE = 'esign_initialize',
+    ESIGN_COMPLETE = 'esign_complete',
     INCOME_PROOF = 'income_proof',
     MPIN = 'mpin',
 }
@@ -203,6 +205,14 @@ export type PostCheckpointType =
               relation: NomineeRelation;
               share: number;
           }[];
+      }
+    | {
+          step: CheckpointStep.ESIGN_INITIALIZE;
+          redirect_url: string;
+          file_id: string;
+      }
+    | {
+          step: CheckpointStep.ESIGN_COMPLETE;
       }
     | {
           step: CheckpointStep.MPIN;
