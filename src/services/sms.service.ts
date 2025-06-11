@@ -4,7 +4,7 @@ import { InternalServerError } from '@app/apiError';
 import templateContentMap, { SmsTemplateType } from './sms-templates/sms.types';
 import logger from '@app/logger';
 
-const BASE_URL = 'http://mobiglitz.com/vb';
+const BASE_URL = 'https://mobiglitz.com/vb'; // changed from http to https
 export const PHONE_REGEX: RegExp = /^\d{10}$/;
 
 /**
@@ -17,25 +17,63 @@ export class SmsService {
     constructor() {
         this.apiKey = env.sms.apiKey;
         this.senderId = env.sms.senderId.substring(0, 6).toUpperCase();
+
+        logger.info(`SMS Service initialized with sender ID: ${this.senderId}`);
+
+        // Log configuration (without exposing sensitive data)
+        if (!this.apiKey) {
+            logger.warn('SMS API key not configured');
+        }
     }
 
     /**
      * Send SMS
      */
     public async sendSms(mobile: string, message: string) {
-        const url = `${BASE_URL}/apikey.php`;
-        const response = await axios.get(url, {
-            params: {
-                apikey: this.apiKey,
-                senderid: this.senderId,
-                number: mobile,
-                message,
-            },
-        });
+        if (!PHONE_REGEX.test(mobile)) {
+            logger.error(`Invalid phone number format: ${mobile}`);
+            throw new InternalServerError('Invalid phone number format');
+        }
 
-        const data = response.data;
-        if (data.error) {
-            throw new InternalServerError(data.error);
+        const url = `${BASE_URL}/apikey.php`;
+
+        try {
+            logger.debug(`Making SMS API request to: ${url}`);
+
+            const response = await axios.get(url, {
+                params: {
+                    apikey: this.apiKey,
+                    senderid: this.senderId,
+                    number: mobile,
+                    message,
+                },
+            });
+
+            const data = response.data;
+
+            logger.info(`Complete SMS API response for ${mobile}:`, {
+                status: response.status,
+                data,
+                messageId: data.data?.messageid,
+                description: data.description,
+            });
+
+            logger.info(`SMS sent successfully to: ${mobile} - MessageID: ${data.data?.messageid || 'N/A'}`);
+            return data;
+        } catch (error: any) {
+            if (error.code === 'ECONNABORTED') {
+                logger.error(`SMS API timeout for ${mobile}`);
+                throw new InternalServerError('SMS service timeout');
+            } else if (error.response) {
+                logger.error(`SMS API HTTP error for ${mobile}:`, {
+                    status: error.response.status,
+                    data: error.response.data,
+                });
+                throw new InternalServerError(`SMS service error: ${error.response.status}`);
+            } else {
+                logger.error(`SMS API network error for ${mobile}:`, error.message);
+                throw new InternalServerError('SMS service unavailable');
+            }
         }
     }
 
@@ -45,24 +83,32 @@ export class SmsService {
      * @param templateType Template type to use
      * @param variables Variables to replace in the template
      */
-
     public async sendTemplatedSms(
         phoneNumber: string,
         templateType: SmsTemplateType,
         variables: string[],
     ): Promise<boolean> {
         if (!PHONE_REGEX.test(phoneNumber)) {
+            logger.error(`Invalid phone number format for templated SMS: ${phoneNumber}`);
             throw new InternalServerError('Invalid phone number format');
         }
+
         const templateContent = templateContentMap[templateType];
         if (!templateContent) {
+            logger.error(`Template not found: ${templateType}`);
             return false;
         }
 
         const message = this.replaceTemplateVariables(templateContent, variables);
 
-        await this.sendSms(phoneNumber, message);
-        return true;
+        try {
+            await this.sendSms(phoneNumber, message);
+            logger.info(`Templated SMS sent successfully to: ${phoneNumber}`);
+            return true;
+        } catch (error) {
+            logger.error(`Failed to send templated SMS to ${phoneNumber}:`, error);
+            throw error;
+        }
     }
 
     /**
@@ -72,15 +118,26 @@ export class SmsService {
      * @param template Template type (signup, login, etc.)
      * @returns boolean indicating success
      */
-
     public async sendOtpSms(phoneNumber: string, otp: string, template: string): Promise<boolean> {
+        logger.info(`Sending OTP SMS to: ${phoneNumber}, template context: ${template}`);
+        logger.debug(`OTP value: ${otp}`);
+
         const templateType = this.getTemplateTypeForOtp(template);
         if (!templateType) {
             logger.warn(`No matching SMS template found for context: ${template}`);
             return false;
         }
 
-        return await this.sendTemplatedSms(phoneNumber, templateType, [otp]);
+        logger.debug(`Mapped template context '${template}' to SMS template: ${templateType}`);
+
+        try {
+            const result = await this.sendTemplatedSms(phoneNumber, templateType, [otp]);
+            logger.info(`OTP SMS ${result ? 'sent successfully' : 'failed'} to: ${phoneNumber}`);
+            return result;
+        } catch (error) {
+            logger.error(`Failed to send OTP SMS to ${phoneNumber}:`, error);
+            throw error;
+        }
     }
 
     private getTemplateTypeForOtp(context: string): SmsTemplateType | null {
