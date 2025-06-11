@@ -12,8 +12,8 @@ import { Readable } from 'stream';
 import { UploadOptions, UploadResult, FileInfo } from './types/s3.types';
 
 class S3Service {
-    private s3Client: S3Client;
-    private bucket: string;
+    private readonly s3Client: S3Client;
+    private readonly bucket: string;
 
     constructor() {
         this.s3Client = new S3Client({
