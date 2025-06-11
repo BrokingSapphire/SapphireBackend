@@ -811,7 +811,7 @@ const verify2FASetup = async (
 
     // Save 2FA secret to database
     await db.transaction().execute(async (tx) => {
-        await db
+        await tx
             .insertInto('user_2fa')
             .values({
                 user_id: userId,
@@ -960,8 +960,8 @@ const disable2FA = async (
     }
 
     // Disable 2FA
-    db.transaction().execute(async (tx) => {
-        await db.deleteFrom('user_2fa').where('user_id', '=', userId).execute();
+    await db.transaction().execute(async (tx) => {
+        await tx.deleteFrom('user_2fa').where('user_id', '=', userId).execute();
     });
 
     res.status(OK).json({
