@@ -160,8 +160,22 @@ const CheckpointSchema = Joi.object({
         ),
     }),
 
+    password_setup: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.PASSWORD_SETUP,
+        then: Joi.object({
+            password: Joi.string().min(8).max(64).required().messages({
+                'string.min': 'Password must be at least 8 characters',
+                'string.max': 'Password must not exceed 64 characters',
+                'any.required': 'Password is required',
+            }),
+            confirm_password: Joi.string().valid(Joi.ref('password')).required().messages({
+                'any.only': 'Passwords do not match',
+                'any.required': 'Confirm password is required',
+            }),
+        }),
+    }),
     mpin: Joi.alternatives().conditional('step', {
-        is: CheckpointStep.MPIN,
+        is: CheckpointStep.MPIN_SETUP,
         then: Joi.string()
             .pattern(/^[0-9]{4}$/)
             .required()

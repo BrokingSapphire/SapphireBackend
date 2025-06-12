@@ -24,7 +24,8 @@ export enum CheckpointStep {
     ESIGN_INITIALIZE = 'esign_initialize',
     ESIGN_COMPLETE = 'esign_complete',
     INCOME_PROOF = 'income_proof',
-    MPIN = 'mpin',
+    PASSWORD_SETUP = 'PASSWORD_SETUP',
+    MPIN_SETUP = 'MPIN_SETUP',
 }
 
 export enum InvestmentSegment {
@@ -93,14 +94,6 @@ export enum NomineeRelation {
     SPOUSE = 'Spouse',
     OTHER = 'Other',
 }
-
-export type SetMpinType = {
-    mpin: string;
-};
-
-export type VerifyMpinType = {
-    mpin: string;
-};
 
 export type RequestOtpType =
     | {
@@ -215,8 +208,14 @@ export type PostCheckpointType =
           step: CheckpointStep.ESIGN_COMPLETE;
       }
     | {
-          step: CheckpointStep.MPIN;
+          step: CheckpointStep.PASSWORD_SETUP;
+          password: string;
+          confirm_password: string;
+      }
+    | {
+          step: CheckpointStep.MPIN_SETUP;
           mpin: string;
+          confirm_mpin: string;
       };
 
 export type UIDParams = {

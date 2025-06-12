@@ -1383,8 +1383,60 @@ const postCheckpoint = async (
                 signed_at: new Date().toISOString(),
             },
         });
-    } else if (step === CheckpointStep.MPIN) {
-        const { mpin } = req.body;
+    } else if (step === CheckpointStep.PASSWORD_SETUP) {
+        const { password, confirm_password } = req.body;
+
+        if (password !== confirm_password) {
+            throw new BadRequestError('Passwords do not match');
+        }
+        const userCheckpoint = await db
+            .selectFrom('signup_checkpoints')
+            .select(['client_id', 'id'])
+            .where('email', '=', email)
+            .executeTakeFirstOrThrow();
+
+        if (!userCheckpoint.client_id) {
+            throw new ForbiddenError('Please complete KYC process first');
+        }
+        const existingPassword = await db
+            .selectFrom('user_password_details')
+            .select('user_id')
+            .where('user_id', '=', userCheckpoint.client_id)
+            .executeTakeFirst();
+
+        if (existingPassword) {
+            throw new BadRequestError('Password already set for this user');
+        }
+
+        const hashedPassword = await hashPassword(password, 'bcrypt');
+
+        const hashAlgoRecord = await db
+            .selectFrom('hashing_algorithm')
+            .select('id')
+            .where('name', '=', hashedPassword.hashAlgo)
+            .executeTakeFirstOrThrow();
+
+        await db.transaction().execute(async (tx) => {
+            await tx
+                .insertInto('user_password_details')
+                .values({
+                    user_id: userCheckpoint.client_id!,
+                    password_hash: hashedPassword.hashedPassword,
+                    password_salt: hashedPassword.salt,
+                    hash_algo_id: hashAlgoRecord.id,
+                })
+                .execute();
+        });
+
+        res.status(CREATED).json({
+            message: 'Password set successfully. Please set your MPIN.',
+        });
+    } else if (step === CheckpointStep.MPIN_SETUP) {
+        const { mpin, confirm_mpin } = req.body;
+
+        if (mpin !== confirm_mpin) {
+            throw new BadRequestError('MPINs do not match');
+        }
 
         const userCheckpoint = await db
             .selectFrom('signup_checkpoints')

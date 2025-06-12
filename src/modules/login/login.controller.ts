@@ -55,7 +55,6 @@ const login = async (
             'hashing_algorithm.name as hashAlgo',
             'user_password_details.password_salt as salt',
             'user_password_details.password_hash as hashedPassword',
-            'user_password_details.is_first_login',
         ])
         .$call((qb) => {
             if ('clientId' in req.body) {
@@ -378,7 +377,6 @@ const forgotPasswordReset = async (
             .set({
                 password_hash: hashed.hashedPassword,
                 password_salt: hashed.salt,
-                is_first_login: false,
             })
             .where('user_id', '=', session.userId)
             .execute();
@@ -514,13 +512,6 @@ const verifyMpin = async (
     session.isUsed = true;
     await redisClient.set(redisKey, JSON.stringify(session));
 
-    const user = await db
-        .selectFrom('user')
-        .innerJoin('user_password_details', 'user_password_details.user_id', 'user.id')
-        .select(['user.id', 'user.email', 'user_password_details.is_first_login'])
-        .where('user.id', '=', session.userId)
-        .executeTakeFirstOrThrow();
-
     // Generate token
     const token = sign<SessionJwtType>({
         userId: session.userId,
@@ -537,9 +528,6 @@ const verifyMpin = async (
     res.status(OK).json({
         message: 'MPIN verification successful. Login complete.',
         token,
-        data: {
-            isFirstLogin: user.is_first_login,
-        },
     });
 };
 
@@ -886,13 +874,6 @@ const verify2FA = async (
     session.twoFactorVerified = true;
     await redisClient.set(redisKey, JSON.stringify(session));
 
-    const user = await db
-        .selectFrom('user')
-        .innerJoin('user_password_details', 'user_password_details.user_id', 'user.id')
-        .select(['user.id', 'user.email', 'user_password_details.is_first_login'])
-        .where('user.id', '=', session.userId)
-        .executeTakeFirstOrThrow();
-
     const jwtToken = sign<SessionJwtType>({ userId: session.userId });
 
     // Send login notification
@@ -907,9 +888,6 @@ const verify2FA = async (
     res.status(OK).json({
         message: 'Login successful',
         token: jwtToken,
-        data: {
-            isFirstLogin: user.is_first_login,
-        },
     });
 };
 

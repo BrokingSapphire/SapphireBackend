@@ -1,10 +1,10 @@
 import { DefaultResponseData, Pretty } from '@app/types';
 
-export type LoginResponseWithToken = DefaultResponseData<{
-    isFirstLogin: boolean;
-}> & {
-    token: string;
-};
+// export type LoginResponseWithToken = DefaultResponseData<{
+//     isFirstLogin: boolean;
+// }> & {
+//     token: string;
+// };
 
 export type EmailOrClientId =
     | {
