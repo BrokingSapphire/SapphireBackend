@@ -523,7 +523,6 @@ const postCheckpoint = async (
         res.status(OK).json({
             data: {
                 uri: digiResponse.data.data.url,
-                masked_aadhaar: checkpointData.masked_aadhaar ? `XXXXXXXX${checkpointData.masked_aadhaar}` : null,
             },
             message: 'Digilocker URI generated',
         });
@@ -871,17 +870,15 @@ const postCheckpoint = async (
                 .execute();
         });
 
-        const requiresIncomeProof = segments.some(
+        const segmentsRequiringProof = segments.filter(
             (segment: string) => segment === 'Currency' || segment === 'Commodity' || segment === 'F&O',
         );
 
         res.status(CREATED).json({
             message: 'Investment segment saved',
             data: {
-                requiresIncomeProof,
-                segmentsRequiringProof: segments.filter(
-                    (segment: string) => segment === 'Currency' || segment === 'Commodity' || segment === 'F&O',
-                ),
+                requiresIncomeProof: segmentsRequiringProof.length > 0,
+                segmentsRequiringProof,
             },
         });
     } else if (step === CheckpointStep.USER_DETAIL) {
