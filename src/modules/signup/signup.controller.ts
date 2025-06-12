@@ -39,6 +39,7 @@ import { imageUpload, pdfUpload, wrappedMulterHandler } from '@app/services/mult
 import logger from '@app/logger';
 import IdGenerator from '@app/services/id-generator';
 import { sendDocumentsReceivedConfirmation } from '@app/services/notification.service';
+import s3Service from '@app/services/s3.service';
 
 const requestOtp = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, RequestOtpType>,
@@ -1224,11 +1225,72 @@ const postCheckpoint = async (
 
         const downloadResponse = await ESignService.downloadSignedDocument(clientId);
 
+        let s3UploadResult = null;
+        let pdfBuffer = null;
+
+        try {
+            logger.info(
+                `Downloading eSign document for user ${email} from: ${downloadResponse.data.data.download_url}`,
+            );
+
+            const pdfResponse = await axios.get(downloadResponse.data.data.download_url, {
+                responseType: 'arraybuffer',
+                timeout: 60000,
+                maxContentLength: 50 * 1024 * 1024,
+                headers: {
+                    'User-Agent': 'Terminal/1.0',
+                    Accept: 'application/pdf, application/octet-stream, */*',
+                },
+            });
+
+            // Convert to buffer
+            pdfBuffer = Buffer.from(pdfResponse.data);
+
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const sanitizedEmail = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '_');
+            const filename = `esign_${sanitizedEmail}_${timestamp}.pdf`;
+
+            s3UploadResult = await s3Service.uploadFromBuffer(pdfBuffer, filename, {
+                folder: `esign-documents/${new Date().getFullYear()}/${(new Date().getMonth() + 1).toString().padStart(2, '0')}`,
+                contentType: 'application/pdf',
+                metadata: {
+                    'user-email': email,
+                    'client-id': clientId,
+                    'original-filename': downloadResponse.data.data.file_name,
+                    'document-type': 'esign-kyc',
+                    'signed-date': new Date().toISOString(),
+                    'file-size': pdfBuffer.length.toString(),
+                },
+                cacheControl: 'private, max-age=31536000', // 1 year cache
+            });
+            logger.info(`eSign document successfully uploaded to S3: ${s3UploadResult.key} for user: ${email}`);
+        } catch (error: any) {
+            logger.error(`Failed to download/upload eSign document for user ${email}:`, error);
+
+            if (error.response) {
+                logger.error(`HTTP Error: ${error.response.status} - ${error.response.statusText}`);
+            } else if (error.code) {
+                logger.error(`Network Error: ${error.code} - ${error.message}`);
+            }
+
+            // Fail the eSign process if document storage fails
+            throw new Error('Failed to store eSign document. Please try the eSign process again.');
+        }
+
+        // Only proceed if S3 upload was successful
+        if (!s3UploadResult) {
+            throw new Error('Failed to store eSign document. Please try again.');
+        }
         await db.transaction().execute(async (tx) => {
-            const checkpoint = await tx
-                .selectFrom('signup_checkpoints')
-                .select('id')
-                .where('email', '=', email)
+            const checkpoint = await updateCheckpoint(tx, email, phone, {
+                esign_s3_key: s3UploadResult.key,
+                esign_s3_url: s3UploadResult.url,
+                esign_filename: downloadResponse.data.data.file_name,
+                esign_mime_type: downloadResponse.data.data.mime_type,
+                esign_completed_at: new Date(),
+                esign_file_size: pdfBuffer.length,
+            })
+                .returning('id')
                 .executeTakeFirstOrThrow();
 
             await tx
@@ -1240,13 +1302,16 @@ const postCheckpoint = async (
                 .where('id', '=', checkpoint.id)
                 .execute();
         });
+        const downloadUrl = s3Service.getPublicDownloadUrl(s3UploadResult.key);
 
         res.status(OK).json({
             message: 'eSign completed successfully',
             data: {
-                download_url: downloadResponse.data.data.download_url,
+                document_stored: true,
                 file_name: downloadResponse.data.data.file_name,
-                mime_type: downloadResponse.data.data.mime_type,
+                storage_location: 's3',
+                download_url: downloadUrl,
+                signed_at: new Date().toISOString(),
             },
         });
     } else if (step === CheckpointStep.MPIN) {
