@@ -3,10 +3,10 @@ import { DB } from './db';
 import { UpdateObjectExpression } from 'kysely/dist/cjs/parser/update-set-parser';
 import countries from '@app/services/i18n-countries';
 
-export interface Address {
-    address1: string | null;
-    address2: string | null;
-    streetName: string | null;
+export interface AddressInput {
+    line_1: string | null;
+    line_2: string | null;
+    line_3: string | null;
     city: string;
     state: string;
     country: string;
@@ -69,7 +69,7 @@ export async function insertNameGetId<T extends Kysely<DB>>(tx: T, name: Name | 
     }
 }
 
-export async function insertAddressGetId<T extends Kysely<DB>>(tx: T, address: Address): Promise<number> {
+export async function insertAddressGetId<T extends Kysely<DB>>(tx: T, address: AddressInput): Promise<number> {
     const iso = countries.alpha2ToNumeric(countries.getAlpha2Code(address.country, 'en')!!)!!;
     await tx
         .insertInto('country')
@@ -125,17 +125,18 @@ export async function insertAddressGetId<T extends Kysely<DB>>(tx: T, address: A
     const addressId = await tx
         .insertInto('address')
         .values({
-            address1: address.address1,
-            address2: address.address2,
-            street_name: address.streetName,
+            line_1: address.line_1,
+            line_2: address.line_2,
+            line_3: address.line_3,
             city_id: cityId.id,
             state_id: stateId.id,
             country_id: iso,
             postal_id: postalId.id,
+            address_type: 'Residential',
         })
         .onConflict((oc) =>
             oc.constraint('uq_address').doUpdateSet((eb) => ({
-                address1: eb.ref('excluded.address1'),
+                line_1: eb.ref('excluded.line_1'),
             })),
         )
         .returning('id')

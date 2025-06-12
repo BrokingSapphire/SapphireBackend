@@ -33,6 +33,22 @@ const checkpointSchemaDestructed = {
         },
         required: ['step'],
     },
+    [CheckpointStep.AADHAAR_MISMATCH_DETAILS]: {
+        type: 'object',
+        properties: {
+            step: { type: 'string', enum: [CheckpointStep.AADHAAR_MISMATCH_DETAILS] },
+            full_name: {
+                type: 'string',
+                description: 'Full name provided by user during aadhaar mismatch resolution',
+            },
+            dob: {
+                type: 'string',
+                format: 'date',
+                description: 'Date of birth provided by user during aadhaar mismatch resolution',
+            },
+        },
+        required: ['step', 'full_name', 'dob'],
+    },
     [CheckpointStep.INVESTMENT_SEGMENT]: {
         type: 'object',
         properties: {
@@ -321,6 +337,24 @@ const swaggerDocument = {
                                                 uri: { type: 'string' },
                                                 payment_link: { type: 'string' },
                                                 uid: { type: 'string', format: 'uuid' },
+                                                requires_additional_verification: {
+                                                    type: 'boolean',
+                                                    description:
+                                                        'Indicates if aadhaar verification requires additional details',
+                                                },
+                                                pan_masked_aadhaar: {
+                                                    type: 'string',
+                                                    description: 'Masked aadhaar from PAN verification',
+                                                },
+                                                digilocker_masked_aadhaar: {
+                                                    type: 'string',
+                                                    description: 'Masked aadhaar from DigiLocker verification',
+                                                },
+                                                requires_manual_review: {
+                                                    type: 'boolean',
+                                                    description:
+                                                        'Indicates if manual review is required for doubtful users',
+                                                },
                                                 ios_links: {
                                                     type: 'object',
                                                     properties: {
@@ -358,6 +392,7 @@ const swaggerDocument = {
                             enum: [
                                 CheckpointStep.PAN,
                                 CheckpointStep.AADHAAR,
+                                CheckpointStep.AADHAAR_MISMATCH_DETAILS,
                                 CheckpointStep.INVESTMENT_SEGMENT,
                                 CheckpointStep.USER_DETAIL,
                                 CheckpointStep.PERSONAL_DETAIL,
@@ -381,6 +416,32 @@ const swaggerDocument = {
                                             type: 'object',
                                             properties: {
                                                 pan_number: { type: 'string' },
+                                                requires_additional_verification: {
+                                                    type: 'boolean',
+                                                    description:
+                                                        'Indicates if aadhaar mismatch requires additional details',
+                                                },
+                                                pan_masked_aadhaar: {
+                                                    type: 'string',
+                                                    description: 'Masked aadhaar from PAN verification',
+                                                },
+                                                digilocker_masked_aadhaar: {
+                                                    type: 'string',
+                                                    description: 'Masked aadhaar from DigiLocker verification',
+                                                },
+                                                full_name: {
+                                                    type: 'string',
+                                                    description: 'User provided name for aadhaar mismatch',
+                                                },
+                                                dob: {
+                                                    type: 'string',
+                                                    format: 'date',
+                                                    description: 'User provided DOB for aadhaar mismatch',
+                                                },
+                                                doubt: {
+                                                    type: 'boolean',
+                                                    description: 'Indicates if user is marked as doubtful',
+                                                },
                                                 segments: {
                                                     type: 'array',
                                                     items: { type: 'string' },

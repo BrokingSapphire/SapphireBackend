@@ -10,6 +10,7 @@ export enum CheckpointStep {
     PAN = 'pan',
     AADHAAR_URI = 'aadhaar_uri',
     AADHAAR = 'aadhaar',
+    AADHAAR_MISMATCH_DETAILS = 'aadhaar_mismatch_details',
     INVESTMENT_SEGMENT = 'investment_segment',
     USER_DETAIL = 'user_detail',
     PERSONAL_DETAIL = 'personal_detail',
@@ -20,7 +21,11 @@ export enum CheckpointStep {
     SIGNATURE = 'signature',
     IPV = 'ipv',
     ADD_NOMINEES = 'add_nominees',
+    ESIGN_INITIALIZE = 'esign_initialize',
+    ESIGN_COMPLETE = 'esign_complete',
     INCOME_PROOF = 'income_proof',
+    PASSWORD_SETUP = 'PASSWORD_SETUP',
+    MPIN_SETUP = 'MPIN_SETUP',
 }
 
 export enum InvestmentSegment {
@@ -133,13 +138,19 @@ export type PostCheckpointType =
           step: CheckpointStep.AADHAAR;
       }
     | {
+          step: CheckpointStep.AADHAAR_MISMATCH_DETAILS;
+          full_name: string;
+          dob: string;
+      }
+    | {
           step: CheckpointStep.INVESTMENT_SEGMENT;
           segments: InvestmentSegment[];
       }
     | {
           step: CheckpointStep.USER_DETAIL;
-          father_name: string;
+          father_spouse_name: string;
           mother_name: string;
+          maiden_name?: string;
       }
     | {
           step: CheckpointStep.PERSONAL_DETAIL;
@@ -187,6 +198,24 @@ export type PostCheckpointType =
               relation: NomineeRelation;
               share: number;
           }[];
+      }
+    | {
+          step: CheckpointStep.ESIGN_INITIALIZE;
+          redirect_url: string;
+          file_id: string;
+      }
+    | {
+          step: CheckpointStep.ESIGN_COMPLETE;
+      }
+    | {
+          step: CheckpointStep.PASSWORD_SETUP;
+          password: string;
+          confirm_password: string;
+      }
+    | {
+          step: CheckpointStep.MPIN_SETUP;
+          mpin: string;
+          confirm_mpin: string;
       };
 
 export type UIDParams = {

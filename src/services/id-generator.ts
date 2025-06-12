@@ -1,29 +1,22 @@
 import { sql } from 'kysely';
 import { db } from '@app/database';
 
-const PREFIXES = {
-    user_id: 'CLI',
-} as const;
+const ID_TYPES = ['user_id'] as const;
 
-export type IdSequences = keyof typeof PREFIXES;
+export type IdSequences = (typeof ID_TYPES)[number];
 
 export default class IdGenerator {
     constructor(private readonly sequence: IdSequences) {}
 
     async nextValue(): Promise<string> {
-        const seq = `${this.sequence}_seq`;
-        const id = await sql<{ id: number }>`SELECT NEXTVAL('${sql.raw(seq)}') AS id;`.execute(db);
+        const id = await sql<{ id: string }>`SELECT generate_next_${sql.raw(this.sequence)}() AS id;`.execute(db);
 
-        return this.modifyId(id.rows[0].id);
+        return id.rows[0].id;
     }
 
-    private modifyId(id: number): string {
-        let modified: string = '';
-        switch (this.sequence) {
-            case 'user_id':
-                modified = id.toString().padStart(7, '0');
-                break;
-        }
-        return PREFIXES[this.sequence] + modified;
+    async peekValue(): Promise<string> {
+        const id = await sql<{ id: string }>`SELECT peek_next_${sql.raw(this.sequence)}() AS id;`.execute(db);
+
+        return id.rows[0].id;
     }
 }

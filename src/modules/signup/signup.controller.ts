@@ -1,6 +1,7 @@
 import { ParamsDictionary } from 'express-serve-static-core';
 import { Response, DefaultResponseData, Request } from '@app/types.d';
 import redisClient from '@app/services/redis.service';
+import { hashPassword } from '@app/utils/passwords';
 import { EmailOtpVerification, PhoneOtpVerification } from '@app/services/otp.service';
 import {
     BadRequestError,
@@ -24,6 +25,7 @@ import {
 } from './signup.types';
 import { CredentialsType, ResponseWithToken } from '@app/modules/common.types';
 import DigiLockerService from '@app/services/surepass/digilocker.service';
+import ESignService from '@app/services/surepass/esign.service';
 import AadhaarXMLParser from '@app/utils/aadhaar-xml.parser';
 import { sign } from '@app/utils/jwt';
 import axios from 'axios';
@@ -37,6 +39,9 @@ import { imageUpload, pdfUpload, wrappedMulterHandler } from '@app/services/mult
 import logger from '@app/logger';
 import IdGenerator from '@app/services/id-generator';
 import { sendDocumentsReceivedConfirmation } from '@app/services/notification.service';
+import s3Service from '@app/services/s3.service';
+import { SmsTemplateType } from '@app/services/sms-templates/sms.types';
+import smsService from '@app/services/sms.service';
 
 const requestOtp = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, RequestOtpType>,
@@ -287,17 +292,25 @@ const getCheckpoint = async (req: Request<JwtType, GetCheckpointType>, res: Resp
             message: 'Investment segment fetched',
         });
     } else if (step === CheckpointStep.USER_DETAIL) {
-        const { father_name, mother_name } = await db
+        const { father_spouse_name, mother_name, maiden_name } = await db
             .selectFrom('signup_checkpoints')
-            .innerJoin('user_name as father', 'signup_checkpoints.father_name', 'father.id')
+            .innerJoin('user_name as father_spouse', 'signup_checkpoints.father_spouse_name', 'father_spouse.id')
             .innerJoin('user_name as mother', 'signup_checkpoints.mother_name', 'mother.id')
-            .select(['father.full_name as father_name', 'mother.full_name as mother_name'])
+            .leftJoin('user_name as maiden', 'signup_checkpoints.maiden_name', 'maiden.id')
+            .select([
+                'father_spouse.full_name as father_spouse_name',
+                'mother.full_name as mother_name',
+                'maiden.full_name as maiden_name',
+            ])
             .where('email', '=', email)
-            .where('father_name', 'is not', null)
+            .where('father_spouse_name', 'is not', null)
             .where('mother_name', 'is not', null)
             .executeTakeFirstOrThrow();
 
-        res.status(OK).json({ data: { father_name, mother_name }, message: 'User details fetched' });
+        res.status(OK).json({
+            data: { father_spouse_name, mother_name, maiden_name: maiden_name || null },
+            message: 'User details fetched',
+        });
     } else if (step === CheckpointStep.PERSONAL_DETAIL) {
         const { marital_status, annual_income, trading_exp, account_settlement } = await db
             .selectFrom('signup_checkpoints')
@@ -426,10 +439,10 @@ const postCheckpoint = async (
             const nameId = await insertNameGetId(tx, splitName(panResponse.data.data.full_name));
 
             const address = panResponse.data.data.address;
-            const addressId = await insertAddressGetId(tx, {
-                address1: address.line_1,
-                address2: address.line_2,
-                streetName: address.street_name,
+            const permanentAddressId = await insertAddressGetId(tx, {
+                line_1: address.line_1,
+                line_2: address.line_2,
+                line_3: address.street_name,
                 city: address.city,
                 state: address.state,
                 country: address.country === '' ? 'India' : address.country,
@@ -442,7 +455,7 @@ const postCheckpoint = async (
                     pan_number: panResponse.data.data.pan_number,
                     name: nameId,
                     masked_aadhaar: panResponse.data.data.masked_aadhaar.substring(9, 12),
-                    address_id: addressId,
+                    address_id: permanentAddressId,
                     dob: new Date(panResponse.data.data.dob),
                     gender: panResponse.data.data.gender,
                     aadhaar_linked: panResponse.data.data.aadhaar_linked,
@@ -458,6 +471,8 @@ const postCheckpoint = async (
                 name: nameId,
                 dob: new Date(panResponse.data.data.dob),
                 pan_id: panId.id,
+                permanent_address_id: permanentAddressId,
+                correspondence_address_id: permanentAddressId,
             })
                 .returning('id')
                 .executeTakeFirstOrThrow();
@@ -525,6 +540,7 @@ const postCheckpoint = async (
 
         const documents = await digilocker.listDocuments(clientId);
         const aadhaar = documents.data.data.documents.find((d: any) => d.doc_type === 'ADHAR');
+        const panDocument = documents.data.data.documents.find((d: any) => d.doc_type === 'PANCR');
 
         if (!aadhaar) throw new UnprocessableEntityError("User doesn't have aadhaar linked to his digilocker.");
 
@@ -536,10 +552,110 @@ const postCheckpoint = async (
         const parser = new AadhaarXMLParser(file.data);
         parser.load();
 
+        // PAN-verification-record
+        let panDocumentData = null;
+
+        if (panDocument) {
+            try {
+                logger.info(`Found PAN document in DigiLocker for user ${email}, downloading...`);
+
+                const panDownloadLink = await digilocker.downloadDocument(clientId, panDocument.file_id);
+                const panResponse = await axios.get(panDownloadLink.data.data.download_url, {
+                    responseType: 'arraybuffer',
+                    timeout: 60000,
+                    maxContentLength: 50 * 1024 * 1024,
+                });
+
+                const panDocumentBuffer = Buffer.from(panResponse.data);
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const sanitizedEmail = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '_');
+                const filename = `pan_verification_${sanitizedEmail}_${timestamp}.pdf`;
+
+                const panS3UploadResult = await s3Service.uploadFromBuffer(panDocumentBuffer, filename, {
+                    folder: `pan-documents/${new Date().getFullYear()}/${(new Date().getMonth() + 1).toString().padStart(2, '0')}`,
+                    contentType: panDownloadLink.data.data.mime_type,
+                    metadata: {
+                        'user-email': email,
+                        'client-id': clientId,
+                        'document-type': 'pan-verification-record',
+                        source: 'digilocker',
+                        'downloaded-date': new Date().toISOString(),
+                        'file-size': panDocumentBuffer.length.toString(),
+                        'original-name': panDocument.name,
+                        issuer: panDocument.issuer || 'Income Tax Department',
+                    },
+                    cacheControl: 'private, max-age=31536000',
+                });
+
+                logger.info(`PAN document stored successfully: ${panS3UploadResult.key} for user: ${email}`);
+
+                panDocumentData = {
+                    s3_key: panS3UploadResult.key,
+                    s3_url: panS3UploadResult.url,
+                    filename: panDocument.name,
+                    mime_type: panDownloadLink.data.data.mime_type,
+                    file_size: panDocumentBuffer.length,
+                    issuer: panDocument.issuer,
+                };
+            } catch (error: any) {
+                logger.error(`Failed to download/store PAN document for user ${email}:`, error);
+            }
+        }
+
+        // check for aadhar and PAN-aadhar mismatch
+        const panAadhaarData = await db
+            .selectFrom('signup_checkpoints')
+            .innerJoin('pan_detail', 'signup_checkpoints.pan_id', 'pan_detail.id')
+            .select('pan_detail.masked_aadhaar')
+            .where('signup_checkpoints.email', '=', email)
+            .executeTakeFirst();
+
+        const digilockerMaskedAadhaar = parser.uid().substring(9, 12);
+        const panMaskedAadhaar = panAadhaarData?.masked_aadhaar;
+
+        if (panMaskedAadhaar && panMaskedAadhaar !== digilockerMaskedAadhaar) {
+            const mismatchKey = `aadhaar_mismatch:${email}`;
+            await redisClient.set(
+                mismatchKey,
+                JSON.stringify({
+                    parser_data: {
+                        uid: parser.uid(),
+                        name: parser.name(),
+                        dob: parser.dob(),
+                        co: parser.co(),
+                        address: parser.address(),
+                        postOffice: parser.postOffice(),
+                        gender: parser.gender(),
+                    },
+                    pan_masked_aadhaar: panMaskedAadhaar,
+                    digilocker_masked_aadhaar: digilockerMaskedAadhaar,
+                }),
+            );
+            await redisClient.expire(mismatchKey, 30 * 60);
+            res.status(OK).json({
+                message: 'Aadhaar verification requires additional details due to mismatch',
+                data: {
+                    requires_additional_verification: true,
+                    pan_masked_aadhaar: `XXXXXXXX${panMaskedAadhaar}`,
+                    digilocker_masked_aadhaar: `XXXXXXXX${digilockerMaskedAadhaar}`,
+                    pan_document_stored: !!panDocumentData,
+                },
+            });
+            return;
+        }
+
         await db.transaction().execute(async (tx) => {
             const address = parser.address();
             parser.log();
-            const addressId = await insertAddressGetId(tx, address);
+            const permanentAddressId = await insertAddressGetId(tx, {
+                line_1: address.line_1 || null,
+                line_2: address.line_2 || null,
+                line_3: address.line_3 || null,
+                city: address.city,
+                state: address.state,
+                country: address.country,
+                postalCode: address.postalCode,
+            });
 
             const nameId = await insertNameGetId(tx, splitName(parser.name()));
 
@@ -571,16 +687,152 @@ const postCheckpoint = async (
                     name: nameId,
                     dob: parser.dob(),
                     co: coId,
-                    address_id: addressId,
+                    address_id: permanentAddressId,
                     post_office: parser.postOffice() === undefined ? null : parser.postOffice(),
                     gender: parser.gender(),
                 })
                 .returning('id')
                 .executeTakeFirstOrThrow();
 
+            const checkpointData = {
+                aadhaar_id: aadhaarId.id,
+                permanent_address_id: permanentAddressId,
+                correspondence_address_id: permanentAddressId,
+                ...(panDocumentData
+                    ? {
+                          pan_document_s3_key: panDocumentData.s3_key,
+                          pan_document_s3_url: panDocumentData.s3_url,
+                          pan_document_filename: panDocumentData.filename,
+                          pan_document_mime_type: panDocumentData.mime_type,
+                          pan_document_completed_at: new Date(),
+                          pan_document_file_size: panDocumentData.file_size,
+                          pan_document_issuer: panDocumentData.issuer,
+                      }
+                    : {}),
+            };
+            const checkpoint = await updateCheckpoint(tx, email, phone, checkpointData)
+                .returning('id')
+                .executeTakeFirstOrThrow();
+
+            const statusUpdate = {
+                aadhaar_status: 'pending' as const,
+                address_status: 'pending' as const,
+                updated_at: new Date(),
+                ...(panDocumentData && {
+                    pan_document_status: 'verified' as const,
+                }),
+            };
+
+            await tx
+                .updateTable('signup_verification_status')
+                .set(statusUpdate)
+                .where('id', '=', checkpoint.id)
+                .execute();
+        });
+
+        res.status(OK).json({
+            message: 'Aadhaar verified',
+        });
+    } else if (step === CheckpointStep.AADHAAR_MISMATCH_DETAILS) {
+        const { full_name, dob } = req.body;
+        const mismatchKey = `aadhaar_mismatch:${email}`;
+        const mismatchData = await redisClient.get(mismatchKey);
+        if (!mismatchData) {
+            throw new UnauthorizedError(
+                'Aadhaar mismatch data not found or expired. Restart the Digilocker session again.',
+            );
+        }
+
+        const parsedMismatchData = JSON.parse(mismatchData);
+        const parserData = parsedMismatchData.parser_data;
+
+        let shouldSetDoubt = false;
+        const bankData = await db
+            .selectFrom('signup_checkpoints')
+            .innerJoin('bank_to_checkpoint', 'signup_checkpoints.id', 'bank_to_checkpoint.checkpoint_id')
+            .innerJoin('bank_account', 'bank_to_checkpoint.bank_account_id', 'bank_account.id')
+            .innerJoin('pan_detail', 'signup_checkpoints.pan_id', 'pan_detail.id')
+            .innerJoin('user_name', 'pan_detail.name', 'user_name.id')
+            .select(['user_name.full_name as bank_verified_name'])
+            .where('signup_checkpoints.email', '=', email)
+            .executeTakeFirst();
+
+        if (bankData && bankData.bank_verified_name) {
+            const normalizedUserName = full_name.trim().toLowerCase().replace(/\s+/g, ' ');
+            const normalizedBankName = bankData.bank_verified_name.trim().toLowerCase().replace(/\s+/g, ' ');
+
+            if (normalizedUserName !== normalizedBankName) {
+                shouldSetDoubt = true;
+                logger.warn(
+                    `Bank name mismatch for user ${email}: User provided: "${full_name}", Bank verified: "${bankData.bank_verified_name}"`,
+                );
+            } else {
+                logger.info(`Bank name verification successful for user ${email}: Names match`);
+            }
+        } else {
+            shouldSetDoubt = true;
+            logger.warn(`No bank verification data found for user ${email}, setting doubt flag`);
+        }
+
+        await redisClient.del(mismatchKey);
+
+        await db.transaction().execute(async (tx) => {
+            const address = parserData.address;
+            const permanentAddressId = await insertAddressGetId(tx, {
+                line_1: address.line_1 || null,
+                line_2: address.line_2 || null,
+                line_3: address.line_3 || null,
+                city: address.city,
+                state: address.state,
+                country: address.country,
+                postalCode: address.postalCode,
+            });
+
+            const nameId = await insertNameGetId(tx, splitName(parserData.name));
+
+            let co = parserData.co;
+            let coId = null;
+            if (co) {
+                if (co.startsWith('C/O')) co = co.substring(4).trim();
+                coId = await insertNameGetId(tx, splitName(co));
+            }
+
+            const exists = await tx
+                .selectFrom('signup_checkpoints')
+                .select('aadhaar_id')
+                .where('email', '=', email)
+                .executeTakeFirst();
+
+            if (exists && exists.aadhaar_id) {
+                await updateCheckpoint(tx, email, phone, {
+                    aadhaar_id: null,
+                }).execute();
+
+                await tx.deleteFrom('aadhaar_detail').where('address_id', '=', exists.aadhaar_id).execute();
+            }
+
+            const aadhaarId = await tx
+                .insertInto('aadhaar_detail')
+                .values({
+                    masked_aadhaar_no: parserData.uid.substring(9, 12),
+                    name: nameId,
+                    dob: new Date(parserData.dob),
+                    co: coId,
+                    address_id: permanentAddressId,
+                    post_office: parserData.postOffice === undefined ? null : parserData.postOffice,
+                    gender: parserData.gender,
+                })
+                .returning('id')
+                .executeTakeFirstOrThrow();
+            const userProvidedNameId = await insertNameGetId(tx, splitName(full_name));
+
             const checkpoint = await updateCheckpoint(tx, email, phone, {
                 aadhaar_id: aadhaarId.id,
-                address_id: addressId,
+                permanent_address_id: permanentAddressId,
+                correspondence_address_id: permanentAddressId,
+                doubt: shouldSetDoubt,
+                user_provided_name: userProvidedNameId,
+                user_provided_dob: new Date(dob),
             })
                 .returning('id')
                 .executeTakeFirstOrThrow();
@@ -595,9 +847,15 @@ const postCheckpoint = async (
                 .where('id', '=', checkpoint.id)
                 .execute();
         });
+        const responseMessage = shouldSetDoubt
+            ? 'Aadhaar verification completed with manual review required due to name verification failure'
+            : 'Aadhaar verification completed successfully';
 
         res.status(OK).json({
-            message: 'Aadhaar verified',
+            message: responseMessage,
+            data: {
+                requires_manual_review: shouldSetDoubt,
+            },
         });
     } else if (step === CheckpointStep.INVESTMENT_SEGMENT) {
         const { segments } = req.body;
@@ -638,15 +896,21 @@ const postCheckpoint = async (
             },
         });
     } else if (step === CheckpointStep.USER_DETAIL) {
-        const { father_name, mother_name } = req.body;
+        const { father_spouse_name, mother_name, maiden_name } = req.body;
 
         await db.transaction().execute(async (tx) => {
-            const fatherNameId = await insertNameGetId(tx, splitName(father_name));
+            const fatherSpouseNameId = await insertNameGetId(tx, splitName(father_spouse_name));
             const motherNameId = await insertNameGetId(tx, splitName(mother_name));
 
+            let maidenNameId = null;
+            if (maiden_name && maiden_name.trim()) {
+                maidenNameId = await insertNameGetId(tx, splitName(maiden_name.trim()));
+            }
+
             await updateCheckpoint(tx, email, phone, {
-                father_name: fatherNameId,
+                father_spouse_name: fatherSpouseNameId,
                 mother_name: motherNameId,
+                maiden_name: maidenNameId,
             }).execute();
         });
 
@@ -969,6 +1233,263 @@ const postCheckpoint = async (
         });
 
         res.status(CREATED).json({ message: 'Nominees added.' });
+    } else if (step === CheckpointStep.ESIGN_INITIALIZE) {
+        const { redirect_url, file_id } = req.body;
+
+        const checkpointData = await db
+            .selectFrom('signup_checkpoints')
+            .leftJoin('pan_detail', 'signup_checkpoints.pan_id', 'pan_detail.id')
+            .leftJoin('user_name', 'pan_detail.name', 'user_name.id')
+            .select(['signup_checkpoints.id', 'user_name.full_name'])
+            .where('signup_checkpoints.email', '=', email)
+            .executeTakeFirstOrThrow();
+
+        const esignResponse = await ESignService.initialize({
+            file_id,
+            pdf_pre_uploaded: true,
+            callback_url: redirect_url,
+            config: {
+                accept_selfie: false,
+                allow_selfie_upload: false,
+                accept_virtual_sign: false,
+                track_location: false,
+                auth_mode: '1',
+                reason: 'KYC-Document',
+                positions: {
+                    '1': [
+                        {
+                            x: 100,
+                            y: 600,
+                        },
+                    ],
+                },
+            },
+            prefill_options: {
+                full_name: checkpointData.full_name || email.split('@')[0],
+                mobile_number: phone,
+                user_email: email,
+            },
+        });
+
+        const key = `esign:${email}`;
+        await redisClient.set(key, esignResponse.data.data.client_id);
+        await redisClient.expire(key, 10 * 60);
+
+        res.status(OK).json({
+            data: {
+                uri: esignResponse.data.data.url,
+                client_id: esignResponse.data.data.client_id,
+                token: esignResponse.data.data.token,
+            },
+            message: 'eSign session initialized',
+        });
+    } else if (step === CheckpointStep.ESIGN_COMPLETE) {
+        const clientId = await redisClient.get(`esign:${email}`);
+        if (!clientId) throw new UnauthorizedError('eSign not authorized or expired.');
+
+        const statusResponse = await ESignService.getStatus(clientId);
+        if (!statusResponse.data.data.completed) {
+            throw new UnauthorizedError('eSign process not completed');
+        }
+
+        await redisClient.del(`esign:${email}`);
+
+        const downloadResponse = await ESignService.downloadSignedDocument(clientId);
+
+        let s3UploadResult = null;
+        let pdfBuffer = null;
+
+        try {
+            logger.info(
+                `Downloading eSign document for user ${email} from: ${downloadResponse.data.data.download_url}`,
+            );
+
+            const pdfResponse = await axios.get(downloadResponse.data.data.download_url, {
+                responseType: 'arraybuffer',
+                timeout: 60000,
+                maxContentLength: 50 * 1024 * 1024,
+                headers: {
+                    'User-Agent': 'Terminal/1.0',
+                    Accept: 'application/pdf, application/octet-stream, */*',
+                },
+            });
+
+            // Convert to buffer
+            pdfBuffer = Buffer.from(pdfResponse.data);
+
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const sanitizedEmail = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '_');
+            const filename = `esign_${sanitizedEmail}_${timestamp}.pdf`;
+
+            s3UploadResult = await s3Service.uploadFromBuffer(pdfBuffer, filename, {
+                folder: `esign-documents/${new Date().getFullYear()}/${(new Date().getMonth() + 1).toString().padStart(2, '0')}`,
+                contentType: 'application/pdf',
+                metadata: {
+                    'user-email': email,
+                    'client-id': clientId,
+                    'original-filename': downloadResponse.data.data.file_name,
+                    'document-type': 'esign-kyc',
+                    'signed-date': new Date().toISOString(),
+                    'file-size': pdfBuffer.length.toString(),
+                },
+                cacheControl: 'private, max-age=31536000', // 1 year cache
+            });
+            logger.info(`eSign document successfully uploaded to S3: ${s3UploadResult.key} for user: ${email}`);
+        } catch (error: any) {
+            logger.error(`Failed to download/upload eSign document for user ${email}:`, error);
+
+            if (error.response) {
+                logger.error(`HTTP Error: ${error.response.status} - ${error.response.statusText}`);
+            } else if (error.code) {
+                logger.error(`Network Error: ${error.code} - ${error.message}`);
+            }
+
+            // Fail the eSign process if document storage fails
+            throw new Error('Failed to store eSign document. Please try the eSign process again.');
+        }
+
+        // Only proceed if S3 upload was successful
+        if (!s3UploadResult) {
+            throw new Error('Failed to store eSign document. Please try again.');
+        }
+        await db.transaction().execute(async (tx) => {
+            const checkpoint = await updateCheckpoint(tx, email, phone, {
+                esign_s3_key: s3UploadResult.key,
+                esign_s3_url: s3UploadResult.url,
+                esign_filename: downloadResponse.data.data.file_name,
+                esign_mime_type: downloadResponse.data.data.mime_type,
+                esign_completed_at: new Date(),
+                esign_file_size: pdfBuffer.length,
+            })
+                .returning('id')
+                .executeTakeFirstOrThrow();
+
+            await tx
+                .updateTable('signup_verification_status')
+                .set({
+                    esign_status: 'verified',
+                    updated_at: new Date(),
+                })
+                .where('id', '=', checkpoint.id)
+                .execute();
+        });
+        const downloadUrl = s3Service.getPublicDownloadUrl(s3UploadResult.key);
+
+        res.status(OK).json({
+            message: 'eSign completed successfully',
+            data: {
+                document_stored: true,
+                file_name: downloadResponse.data.data.file_name,
+                storage_location: 's3',
+                download_url: downloadUrl,
+                signed_at: new Date().toISOString(),
+            },
+        });
+    } else if (step === CheckpointStep.PASSWORD_SETUP) {
+        const { password, confirm_password } = req.body;
+
+        if (password !== confirm_password) {
+            throw new BadRequestError('Passwords do not match');
+        }
+        const userCheckpoint = await db
+            .selectFrom('signup_checkpoints')
+            .select(['client_id', 'id'])
+            .where('email', '=', email)
+            .executeTakeFirstOrThrow();
+
+        if (!userCheckpoint.client_id) {
+            throw new ForbiddenError('Please complete KYC process first');
+        }
+        const existingPassword = await db
+            .selectFrom('user_password_details')
+            .select('user_id')
+            .where('user_id', '=', userCheckpoint.client_id)
+            .executeTakeFirst();
+
+        if (existingPassword) {
+            throw new BadRequestError('Password already set for this user');
+        }
+
+        const hashedPassword = await hashPassword(password, 'bcrypt');
+
+        const hashAlgoRecord = await db
+            .selectFrom('hashing_algorithm')
+            .select('id')
+            .where('name', '=', hashedPassword.hashAlgo)
+            .executeTakeFirstOrThrow();
+
+        await db.transaction().execute(async (tx) => {
+            await tx
+                .insertInto('user_password_details')
+                .values({
+                    user_id: userCheckpoint.client_id!,
+                    password_hash: hashedPassword.hashedPassword,
+                    password_salt: hashedPassword.salt,
+                    hash_algo_id: hashAlgoRecord.id,
+                })
+                .execute();
+        });
+
+        res.status(CREATED).json({
+            message: 'Password set successfully. Please set your MPIN.',
+        });
+    } else if (step === CheckpointStep.MPIN_SETUP) {
+        const { mpin, confirm_mpin } = req.body;
+
+        if (mpin !== confirm_mpin) {
+            throw new BadRequestError('MPINs do not match');
+        }
+
+        const userCheckpoint = await db
+            .selectFrom('signup_checkpoints')
+            .select(['client_id', 'id'])
+            .where('email', '=', email)
+            .executeTakeFirstOrThrow();
+
+        if (!userCheckpoint.client_id) {
+            throw new ForbiddenError('Please complete signup process first');
+        }
+
+        const existingMpin = await db
+            .selectFrom('user_mpin')
+            .select('id')
+            .where('client_id', '=', userCheckpoint.client_id)
+            .executeTakeFirst();
+
+        if (existingMpin) {
+            throw new BadRequestError('MPIN already set for this user');
+        }
+
+        const hashedMpin = await hashPassword(mpin, 'bcrypt');
+
+        const hashAlgoRecord = await db
+            .selectFrom('hashing_algorithm')
+            .select('id')
+            .where('name', '=', hashedMpin.hashAlgo)
+            .executeTakeFirstOrThrow();
+
+        await db.transaction().execute(async (tx) => {
+            if (!userCheckpoint.client_id) {
+                throw new ForbiddenError('Please complete signup process first');
+            }
+            await tx
+                .insertInto('user_mpin')
+                .values({
+                    client_id: userCheckpoint.client_id,
+                    mpin_hash: hashedMpin.hashedPassword,
+                    mpin_salt: hashedMpin.salt,
+                    hash_algo_id: hashAlgoRecord.id,
+                    created_at: new Date(),
+                    updated_at: new Date(),
+                    is_active: true,
+                    failed_attempts: 0,
+                })
+                .execute();
+        });
+
+        res.status(CREATED).json({
+            message: 'MPIN set successfully',
+        });
     }
 };
 
@@ -1171,7 +1692,8 @@ const finalizeSignup = async (req: Request<JwtType>, res: Response) => {
         .selectFrom('signup_checkpoints')
         .innerJoin('pan_detail', 'signup_checkpoints.pan_id', 'pan_detail.id')
         .innerJoin('user_name', 'pan_detail.name', 'user_name.id')
-        .select(['user_name.first_name'])
+        .innerJoin('phone_number', 'signup_checkpoints.phone_id', 'phone_number.id')
+        .select(['user_name.first_name', 'phone_number.phone'])
         .where('signup_checkpoints.email', '=', email)
         .executeTakeFirstOrThrow();
 
@@ -1184,6 +1706,17 @@ const finalizeSignup = async (req: Request<JwtType>, res: Response) => {
             .where('email', '=', email)
             .execute();
     });
+
+    try {
+        if (userData.phone) {
+            await smsService.sendTemplatedSms(userData.phone, SmsTemplateType.ACCOUNT_SUCCESSFULLY_OPENED, [
+                userData.first_name,
+            ]);
+            logger.info(`Account successfully opened SMS sent to ${userData.phone}`);
+        }
+    } catch (error) {
+        logger.error(`Failed to send account successfully opened SMS: ${error}`);
+    }
 
     res.status(CREATED).json({
         message: 'Sign up successfully.',

@@ -3,12 +3,12 @@ import { Exchange } from '../common.types';
 
 // --- PARAM SCHEMAS ---
 export const WatchlistIdParamSchema = Joi.object({
-    watchlistId: Joi.string().required(),
+    watchlistId: Joi.number().required(),
 });
 
 export const WatchlistCategoryParamSchema = Joi.object({
-    watchlistId: Joi.string().required(),
-    categoryId: Joi.string().required(),
+    watchlistId: Joi.number().required(),
+    categoryId: Joi.number().required(),
 });
 
 // --- PAYLOAD SCHEMAS (BODY) ---

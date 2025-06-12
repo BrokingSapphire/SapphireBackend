@@ -15,6 +15,7 @@ export enum VerificationType {
     NOMINEE = 'nominee',
     OTHER_DOCUMENTS = 'other_documents',
     ESIGN = 'esign',
+    DEMAT = 'demat',
 }
 
 export type VerificationState = 'approve' | 'reject';
@@ -25,6 +26,14 @@ export type VerificationState = 'approve' | 'reject';
 export interface UpdateVerificationRequest {
     verificationType: VerificationType;
     status: VerificationState;
+}
+
+export interface AddDematAccountRequest {
+    depository: 'CDSL' | 'NSDL';
+    dp_name: string;
+    dp_id: string;
+    bo_id: string;
+    client_name: string;
 }
 
 /**
@@ -42,4 +51,5 @@ export const verificationTypeToFieldMap: Record<VerificationType, keyof SignupVe
     nominee: 'nominee_status',
     other_documents: 'other_documents_status',
     esign: 'esign_status',
+    demat: 'demat_status' as keyof SignupVerificationStatus,
 };

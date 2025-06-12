@@ -1,11 +1,22 @@
-import { Request, Response } from '@app/types.d';
+import { DefaultResponseData, Request, Response } from '@app/types.d';
 import { db } from '@app/database';
 import { OK } from '@app/utils/httpstatus';
-import { UpdateVerificationRequest, VerificationType, verificationTypeToFieldMap } from './compliance.types';
+import {
+    AddDematAccountRequest,
+    UpdateVerificationRequest,
+    VerificationType,
+    verificationTypeToFieldMap,
+} from './compliance.types';
 import { BadRequestError, ForbiddenError, UnauthorizedError } from '@app/apiError';
 import BankDetailsService, { BankDetails } from '@app/services/bank-details.service';
 import { SessionJwtType } from '../common.types';
 import { hashPassword } from '@app/utils/passwords';
+import { insertNameGetId } from '@app/database/transactions';
+import splitName from '@app/utils/split-name';
+import { ParamsDictionary } from 'express-serve-static-core';
+import smsService from '@app/services/sms.service';
+import { SmsTemplateType } from '@app/services/sms-templates/sms.types';
+import logger from '@app/logger';
 
 const assignOfficer = async (req: Request<SessionJwtType>, res: Response) => {
     const checkpointId = Number(req.params.checkpointId);
@@ -120,13 +131,17 @@ const fetchPanVerificationData = async (checkpointId: number) => {
         .selectFrom('signup_checkpoints')
         .innerJoin('pan_detail', 'pan_detail.id', 'signup_checkpoints.pan_id')
         .innerJoin('user_name', 'user_name.id', 'pan_detail.name')
-        .innerJoin('user_name as father_name_details', 'father_name_details.id', 'signup_checkpoints.father_name')
+        .innerJoin(
+            'user_name as father_spouse_name_details',
+            'father_spouse_name_details.id',
+            'signup_checkpoints.father_spouse_name',
+        )
         .innerJoin('profile_pictures', 'profile_pictures.user_id', 'signup_checkpoints.id')
         .select([
             'pan_detail.pan_number',
             'pan_detail.dob',
             'user_name.full_name',
-            'father_name_details.full_name as father_name',
+            'father_spouse_name_details.full_name as father_spouse_name',
             'profile_pictures.data as pan_image',
         ])
         .where('signup_checkpoints.id', '=', checkpointId)
@@ -136,7 +151,7 @@ const fetchPanVerificationData = async (checkpointId: number) => {
         pan_number: result.pan_number,
         full_name: result.full_name,
         dob: result.dob,
-        father_name: result.father_name,
+        father_spouse_name: result.father_spouse_name,
         pan_image: result.pan_image,
     };
 };
@@ -158,9 +173,9 @@ const fetchAadhaarVerificationData = async (checkpointId: number) => {
             'aadhaar_detail.masked_aadhaar_no',
             'aadhaar_detail.dob',
             'user_name.full_name',
-            'address.address1',
-            'address.address2',
-            'address.street_name',
+            'address.line_1',
+            'address.line_2',
+            'address.line_3',
             'city.name as city_name',
             'state.name as state_name',
             'postal_code.postal_code',
@@ -174,9 +189,9 @@ const fetchAadhaarVerificationData = async (checkpointId: number) => {
         name: aadhaarDetails.full_name,
         dob: aadhaarDetails.dob,
         address: {
-            address1: aadhaarDetails.address1,
-            address2: aadhaarDetails.address2,
-            street: aadhaarDetails.street_name,
+            line_1: aadhaarDetails.line_1,
+            line_2: aadhaarDetails.line_2,
+            line_3: aadhaarDetails.line_3,
             city: aadhaarDetails.city_name,
             state: aadhaarDetails.state_name,
             postalCode: aadhaarDetails.postal_code,
@@ -236,16 +251,16 @@ const fetchBankVerificationData = async (checkpointId: number) => {
 const fetchAddressVerificationData = async (checkpointId: number) => {
     const addressDetails = await db
         .selectFrom('signup_checkpoints')
-        .innerJoin('address', 'address.id', 'signup_checkpoints.address_id')
+        .innerJoin('address', 'address.id', 'signup_checkpoints.permanent_address_id')
         .innerJoin('city', 'city.id', 'address.city_id')
         .innerJoin('state', 'state.id', 'address.state_id')
         .innerJoin('postal_code', 'postal_code.id', 'address.postal_id')
         .innerJoin('country', 'country.iso', 'address.country_id')
         .leftJoin('profile_pictures', 'profile_pictures.user_id', 'signup_checkpoints.id')
         .select([
-            'address.address1',
-            'address.address2',
-            'address.street_name',
+            'address.line_1',
+            'address.line_2',
+            'address.line_3',
             'city.name as city',
             'state.name as state',
             'postal_code.postal_code',
@@ -255,9 +270,9 @@ const fetchAddressVerificationData = async (checkpointId: number) => {
         .executeTakeFirstOrThrow();
 
     return {
-        address1: addressDetails.address1,
-        address2: addressDetails.address2,
-        street: addressDetails.street_name,
+        line_1: addressDetails.line_1,
+        line_2: addressDetails.line_2,
+        line_3: addressDetails.line_3,
         city: addressDetails.city,
         state: addressDetails.state,
         postalCode: addressDetails.postal_code,
@@ -443,6 +458,26 @@ const updateVerificationStatus = async (req: Request<SessionJwtType>, res: Respo
         .where('id', '=', checkpointId)
         .execute();
 
+    if (status === 'reject') {
+        const userDetails = await db
+            .selectFrom('signup_checkpoints')
+            .innerJoin('phone_number', 'phone_number.id', 'signup_checkpoints.phone_id')
+            .innerJoin('user_name', 'user_name.id', 'signup_checkpoints.name')
+            .select(['phone_number.phone', 'user_name.first_name', 'signup_checkpoints.email'])
+            .where('signup_checkpoints.id', '=', checkpointId)
+            .executeTakeFirst();
+
+        if (userDetails && userDetails.phone) {
+            // Send rejection SMS
+            await smsService.sendTemplatedSms(
+                String(userDetails.phone),
+                SmsTemplateType.DOCUMENTS_REJECTED_NOTIFICATION,
+                [userDetails.first_name, verificationType],
+            );
+            logger.info(`Document rejection SMS sent to ${userDetails.phone} for ${verificationType}`);
+        }
+    }
+
     res.status(OK).json({
         message: `${verificationType} verification status updated to ${status}`,
     });
@@ -524,6 +559,75 @@ const getCheckpointDetails = async (req: Request, res: Response) => {
     });
 };
 
+const addDematNumber = async (
+    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, AddDematAccountRequest>,
+    res: Response,
+) => {
+    const checkpointId = Number(req.params.checkpointId);
+    const { depository, dp_name, dp_id, bo_id, client_name } = req.body;
+
+    const officer = await db
+        .selectFrom('compliance_processing')
+        .select('officer_id')
+        .where('checkpoint_id', '=', checkpointId)
+        .executeTakeFirstOrThrow();
+
+    if (officer.officer_id !== req.auth?.userId) {
+        throw new UnauthorizedError();
+    }
+
+    const existingDemat = await db
+        .selectFrom('signup_checkpoints')
+        .select('demat_account_id')
+        .where('id', '=', checkpointId)
+        .executeTakeFirst();
+
+    if (existingDemat?.demat_account_id) {
+        throw new BadRequestError('Demat account already exists for this client');
+    }
+
+    await db.transaction().execute(async (tx) => {
+        const nameId = await insertNameGetId(tx, splitName(client_name));
+
+        const dematAccount = await tx
+            .insertInto('demat_account')
+            .values({
+                depository,
+                dp_name,
+                dp_id,
+                bo_id,
+                client_name: nameId,
+            })
+            .returning('id')
+            .executeTakeFirstOrThrow();
+
+        await tx
+            .updateTable('signup_checkpoints')
+            .set({
+                demat_account_id: dematAccount.id,
+            })
+            .where('id', '=', checkpointId)
+            .execute();
+
+        await tx
+            .updateTable('signup_verification_status')
+            .set({
+                demat_status: 'verified',
+                updated_at: new Date(),
+            })
+            .where('id', '=', checkpointId)
+            .execute();
+    });
+
+    res.status(OK).json({
+        message: 'Demat account added and verified successfully',
+    });
+};
+
+/**
+ * Controller to finalize verification and create user account
+ * POST /finalize-verification/:checkpointId
+ */
 /**
  * Controller to finalize verification and create user account
  * POST /finalize-verification/:checkpointId
@@ -543,6 +647,15 @@ const finalizeVerification = async (req: Request, res: Response) => {
     } else if (verificationStatus.overall_status === 'rejected') {
         throw new BadRequestError('Verification has been rejected. Please contact support.');
     }
+
+    // Get user contact details before the transaction to ensure we have them for the SMS
+    const userContact = await db
+        .selectFrom('signup_checkpoints')
+        .innerJoin('phone_number', 'phone_number.id', 'signup_checkpoints.phone_id')
+        .innerJoin('user_name', 'user_name.id', 'signup_checkpoints.name')
+        .select(['phone_number.phone', 'user_name.first_name', 'signup_checkpoints.email'])
+        .where('signup_checkpoints.id', '=', checkpointId)
+        .executeTakeFirst();
 
     const userId = await db.transaction().execute(async (trx) => {
         // Check if user already exists to avoid duplicates
@@ -564,9 +677,11 @@ const finalizeVerification = async (req: Request, res: Response) => {
                 phone: checkpoint.phone_id,
                 pan_id: checkpoint.pan_id!,
                 aadhaar_id: checkpoint.aadhaar_id!,
-                address_id: checkpoint.address_id!,
-                father_name: checkpoint.father_name!,
+                permanent_address_id: checkpoint.permanent_address_id!,
+                correspondence_address_id: checkpoint.correspondence_address_id!,
+                father_spouse_name: checkpoint.father_spouse_name!,
                 mother_name: checkpoint.mother_name!,
+                maiden_name: checkpoint.maiden_name,
                 marital_status: checkpoint.marital_status!,
                 annual_income: checkpoint.annual_income!,
                 occupation: checkpoint.occupation!,
@@ -575,6 +690,27 @@ const finalizeVerification = async (req: Request, res: Response) => {
                 is_politically_exposed: checkpoint.is_politically_exposed ?? false,
                 signature: checkpoint.signature!,
                 ipv: checkpoint.ipv!,
+                demat_account_id: checkpoint.demat_account_id,
+                // adding default values for new user
+                user_account_type: 'Individual',
+                nationality: 'INDIAN',
+                residential_status: 'Resident Individual',
+                country_of_citizenship: 'INDIA',
+                country_of_residence: 'INDIA',
+                email_declaration: 'Self',
+                mobile_declaration: 'Self',
+                annual_report_type: 'Electronic',
+                contract_note_type: 'Electronic',
+                dp_account_settlement: 'As per SEBI regulations',
+                bsda_facility: 'NO',
+                dis_facility: 'NO',
+                internet_trading_facility: 'YES',
+                margin_trading_facility: 'NO',
+                email_with_registrar: 'YES',
+                business_categorization: 'D2C',
+                client_category_commercial_non_commercial: 'Other',
+                is_us_person: 'NO',
+                past_actions: 'NO',
                 created_at: new Date(),
                 updated_at: new Date(),
             })
@@ -621,7 +757,6 @@ const finalizeVerification = async (req: Request, res: Response) => {
                 password_hash: password.hashedPassword,
                 password_salt: password.salt,
                 hash_algo_id: hashAlgoId,
-                is_first_login: true,
             })
             .execute();
 
@@ -665,7 +800,7 @@ const finalizeVerification = async (req: Request, res: Response) => {
         await trx
             .insertInto('user_balance')
             .values({
-                user_id: checkpoint.client_id,
+                user_id: checkpoint.client_id!,
                 available_cash: 0,
                 blocked_cash: 0,
                 available_liq_margin: 0,
@@ -677,7 +812,7 @@ const finalizeVerification = async (req: Request, res: Response) => {
         const watchlist = await trx
             .insertInto('user_watchlist')
             .values({
-                user_id: checkpoint.client_id,
+                user_id: checkpoint.client_id!,
                 position_index: 0,
             })
             .returning('id')
@@ -721,9 +856,7 @@ const finalizeVerification = async (req: Request, res: Response) => {
 
         // First remove child records
         await trx.deleteFrom('bank_to_checkpoint').where('checkpoint_id', '=', checkpointId).execute();
-
         await trx.deleteFrom('nominees_to_checkpoint').where('checkpoint_id', '=', checkpointId).execute();
-
         await trx.deleteFrom('investment_segments_to_checkpoint').where('checkpoint_id', '=', checkpointId).execute();
 
         // Then remove the main checkpoint record
@@ -731,6 +864,18 @@ const finalizeVerification = async (req: Request, res: Response) => {
 
         return checkpoint.client_id;
     });
+
+    // Send account activation SMS
+    try {
+        if (userContact && userContact.phone) {
+            await smsService.sendTemplatedSms(String(userContact.phone), SmsTemplateType.ACCOUNT_SUCCESSFULLY_OPENED, [
+                userContact.first_name,
+            ]);
+            logger.info(`Account activation SMS sent to ${userContact.phone}`);
+        }
+    } catch (error) {
+        logger.error(`Failed to send account activation SMS: ${error}`);
+    }
 
     res.status(OK).json({
         message: 'User account created successfully.',
@@ -742,6 +887,14 @@ const finalizeVerification = async (req: Request, res: Response) => {
 
 const autoFinalVerification = async (req: Request, res: Response) => {
     const checkpointId = Number(req.params.checkpointId);
+
+    const userContact = await db
+        .selectFrom('signup_checkpoints')
+        .innerJoin('phone_number', 'phone_number.id', 'signup_checkpoints.phone_id')
+        .innerJoin('user_name', 'user_name.id', 'signup_checkpoints.name')
+        .select(['phone_number.phone', 'user_name.first_name', 'signup_checkpoints.email'])
+        .where('signup_checkpoints.id', '=', checkpointId)
+        .executeTakeFirst();
 
     const userId = await db.transaction().execute(async (trx) => {
         // STEP 1: Update verification status --> 'verified'
@@ -758,6 +911,7 @@ const autoFinalVerification = async (req: Request, res: Response) => {
                 nominee_status: 'verified',
                 other_documents_status: 'verified',
                 esign_status: 'verified',
+                demat_status: 'verified',
                 updated_at: new Date(),
             })
             .where('id', '=', checkpointId)
@@ -781,9 +935,10 @@ const autoFinalVerification = async (req: Request, res: Response) => {
                 phone: checkpoint.phone_id,
                 pan_id: checkpoint.pan_id!,
                 aadhaar_id: checkpoint.aadhaar_id!,
-                address_id: checkpoint.address_id!,
-                father_name: checkpoint.father_name!,
+                permanent_address_id: checkpoint.permanent_address_id!,
+                father_spouse_name: checkpoint.father_spouse_name!,
                 mother_name: checkpoint.mother_name!,
+                maiden_name: checkpoint.maiden_name,
                 marital_status: checkpoint.marital_status!,
                 annual_income: checkpoint.annual_income!,
                 occupation: checkpoint.occupation!,
@@ -792,6 +947,26 @@ const autoFinalVerification = async (req: Request, res: Response) => {
                 is_politically_exposed: checkpoint.is_politically_exposed ?? false,
                 signature: checkpoint.signature!,
                 ipv: checkpoint.ipv!,
+                demat_account_id: checkpoint.demat_account_id,
+                user_account_type: 'Individual',
+                nationality: 'INDIAN',
+                residential_status: 'Resident Individual',
+                country_of_citizenship: 'INDIA',
+                country_of_residence: 'INDIA',
+                email_declaration: 'Self',
+                mobile_declaration: 'Self',
+                annual_report_type: 'Electronic',
+                contract_note_type: 'Electronic',
+                dp_account_settlement: 'As per SEBI regulations',
+                bsda_facility: 'NO',
+                dis_facility: 'NO',
+                internet_trading_facility: 'YES',
+                margin_trading_facility: 'NO',
+                email_with_registrar: 'YES',
+                business_categorization: 'D2C',
+                client_category_commercial_non_commercial: 'Other',
+                is_us_person: 'NO',
+                past_actions: 'NO',
                 created_at: new Date(),
                 updated_at: new Date(),
             })
@@ -838,7 +1013,6 @@ const autoFinalVerification = async (req: Request, res: Response) => {
                 password_hash: password.hashedPassword,
                 password_salt: password.salt,
                 hash_algo_id: hashAlgoId,
-                is_first_login: true,
             })
             .execute();
 
@@ -882,7 +1056,7 @@ const autoFinalVerification = async (req: Request, res: Response) => {
         await trx
             .insertInto('user_balance')
             .values({
-                user_id: checkpoint.client_id,
+                user_id: checkpoint.client_id!,
                 available_cash: 0,
                 blocked_cash: 0,
                 available_liq_margin: 0,
@@ -894,7 +1068,7 @@ const autoFinalVerification = async (req: Request, res: Response) => {
         const watchlist = await trx
             .insertInto('user_watchlist')
             .values({
-                user_id: checkpoint.client_id,
+                user_id: checkpoint.client_id!,
                 position_index: 0,
             })
             .returning('id')
@@ -948,6 +1122,17 @@ const autoFinalVerification = async (req: Request, res: Response) => {
         return checkpoint.client_id;
     });
 
+    try {
+        if (userContact && userContact.phone) {
+            await smsService.sendTemplatedSms(String(userContact.phone), SmsTemplateType.ACCOUNT_SUCCESSFULLY_OPENED, [
+                userContact.first_name,
+            ]);
+            logger.info(`Account activation SMS sent to ${userContact.phone}`);
+        }
+    } catch (error) {
+        logger.error(`Failed to send account activation SMS: ${error}`);
+    }
+
     // Return success response
     res.status(OK).json({
         message: 'User account created successfully.',
@@ -966,4 +1151,5 @@ export {
     getCheckpointDetails,
     finalizeVerification,
     autoFinalVerification,
+    addDematNumber,
 };

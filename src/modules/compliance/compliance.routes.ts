@@ -8,8 +8,10 @@ import {
     getCheckpointDetails,
     assignOfficer,
     autoFinalVerification,
+    addDematNumber,
 } from './compliance.controller';
 import {
+    AddDematAccountSchema,
     CheckpointIdParamSchema,
     GetVerificationDetailParamSchema,
     UpdateVerificationStatusSchema,
@@ -63,6 +65,14 @@ router.get(
     validate(CheckpointIdParamSchema, 'params'),
     validate(GetVerificationDetailParamSchema, 'params'),
     getVerificationDetail,
+);
+
+router.post(
+    '/:checkpointId/demat',
+    jwtMiddleware,
+    validate(CheckpointIdParamSchema, 'params'),
+    validate(AddDematAccountSchema), // You'll need to create this
+    addDematNumber,
 );
 
 /**
