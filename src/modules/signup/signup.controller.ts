@@ -538,6 +538,7 @@ const postCheckpoint = async (
 
         const documents = await digilocker.listDocuments(clientId);
         const aadhaar = documents.data.data.documents.find((d: any) => d.doc_type === 'ADHAR');
+        const panDocument = documents.data.data.documents.find((d: any) => d.doc_type === 'PANCR');
 
         if (!aadhaar) throw new UnprocessableEntityError("User doesn't have aadhaar linked to his digilocker.");
 
@@ -548,6 +549,56 @@ const postCheckpoint = async (
         const file = await axios.get(downloadLink.data.data.download_url);
         const parser = new AadhaarXMLParser(file.data);
         parser.load();
+
+        // PAN-verification-record
+        let panDocumentData = null;
+
+        if (panDocument) {
+            try {
+                logger.info(`Found PAN document in DigiLocker for user ${email}, downloading...`);
+
+                const panDownloadLink = await digilocker.downloadDocument(clientId, panDocument.file_id);
+                const panResponse = await axios.get(panDownloadLink.data.data.download_url, {
+                    responseType: 'arraybuffer',
+                    timeout: 60000,
+                    maxContentLength: 50 * 1024 * 1024,
+                });
+
+                const panDocumentBuffer = Buffer.from(panResponse.data);
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const sanitizedEmail = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '_');
+                const filename = `pan_verification_${sanitizedEmail}_${timestamp}.pdf`;
+
+                const panS3UploadResult = await s3Service.uploadFromBuffer(panDocumentBuffer, filename, {
+                    folder: `pan-documents/${new Date().getFullYear()}/${(new Date().getMonth() + 1).toString().padStart(2, '0')}`,
+                    contentType: panDownloadLink.data.data.mime_type,
+                    metadata: {
+                        'user-email': email,
+                        'client-id': clientId,
+                        'document-type': 'pan-verification-record',
+                        source: 'digilocker',
+                        'downloaded-date': new Date().toISOString(),
+                        'file-size': panDocumentBuffer.length.toString(),
+                        'original-name': panDocument.name,
+                        issuer: panDocument.issuer || 'Income Tax Department',
+                    },
+                    cacheControl: 'private, max-age=31536000',
+                });
+
+                logger.info(`PAN document stored successfully: ${panS3UploadResult.key} for user: ${email}`);
+
+                panDocumentData = {
+                    s3_key: panS3UploadResult.key,
+                    s3_url: panS3UploadResult.url,
+                    filename: panDocument.name,
+                    mime_type: panDownloadLink.data.data.mime_type,
+                    file_size: panDocumentBuffer.length,
+                    issuer: panDocument.issuer,
+                };
+            } catch (error: any) {
+                logger.error(`Failed to download/store PAN document for user ${email}:`, error);
+            }
+        }
 
         // check for aadhar and PAN-aadhar mismatch
         const panAadhaarData = await db
@@ -585,6 +636,7 @@ const postCheckpoint = async (
                     requires_additional_verification: true,
                     pan_masked_aadhaar: `XXXXXXXX${panMaskedAadhaar}`,
                     digilocker_masked_aadhaar: `XXXXXXXX${digilockerMaskedAadhaar}`,
+                    pan_document_stored: !!panDocumentData,
                 },
             });
             return;
@@ -640,21 +692,38 @@ const postCheckpoint = async (
                 .returning('id')
                 .executeTakeFirstOrThrow();
 
-            const checkpoint = await updateCheckpoint(tx, email, phone, {
+            const checkpointData = {
                 aadhaar_id: aadhaarId.id,
                 permanent_address_id: permanentAddressId,
                 correspondence_address_id: permanentAddressId,
-            })
+                ...(panDocumentData
+                    ? {
+                          pan_document_s3_key: panDocumentData.s3_key,
+                          pan_document_s3_url: panDocumentData.s3_url,
+                          pan_document_filename: panDocumentData.filename,
+                          pan_document_mime_type: panDocumentData.mime_type,
+                          pan_document_completed_at: new Date(),
+                          pan_document_file_size: panDocumentData.file_size,
+                          pan_document_issuer: panDocumentData.issuer,
+                      }
+                    : {}),
+            };
+            const checkpoint = await updateCheckpoint(tx, email, phone, checkpointData)
                 .returning('id')
                 .executeTakeFirstOrThrow();
 
+            const statusUpdate = {
+                aadhaar_status: 'pending' as const,
+                address_status: 'pending' as const,
+                updated_at: new Date(),
+                ...(panDocumentData && {
+                    pan_document_status: 'verified' as const,
+                }),
+            };
+
             await tx
                 .updateTable('signup_verification_status')
-                .set({
-                    aadhaar_status: 'pending',
-                    address_status: 'pending',
-                    updated_at: new Date(),
-                })
+                .set(statusUpdate)
                 .where('id', '=', checkpoint.id)
                 .execute();
         });
