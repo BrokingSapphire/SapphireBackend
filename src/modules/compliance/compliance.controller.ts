@@ -721,7 +721,6 @@ const finalizeVerification = async (req: Request, res: Response) => {
                 password_hash: password.hashedPassword,
                 password_salt: password.salt,
                 hash_algo_id: hashAlgoId,
-                is_first_login: true,
             })
             .execute();
 
@@ -960,7 +959,6 @@ const autoFinalVerification = async (req: Request, res: Response) => {
                 password_hash: password.hashedPassword,
                 password_salt: password.salt,
                 hash_algo_id: hashAlgoId,
-                is_first_login: true,
             })
             .execute();
 
