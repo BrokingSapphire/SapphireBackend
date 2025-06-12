@@ -638,7 +638,7 @@ const postCheckpoint = async (
                     requires_additional_verification: true,
                     pan_masked_aadhaar: `XXXXXXXX${panMaskedAadhaar}`,
                     digilocker_masked_aadhaar: `XXXXXXXX${digilockerMaskedAadhaar}`,
-                    pan_document_stored: !!panDocumentData,
+                    pan_document: panDocumentData?.s3_url || undefined,
                 },
             });
             return;
@@ -694,38 +694,27 @@ const postCheckpoint = async (
                 .returning('id')
                 .executeTakeFirstOrThrow();
 
-            const checkpointData = {
+            const checkpoint = await updateCheckpoint(tx, email, phone, {
                 aadhaar_id: aadhaarId.id,
                 permanent_address_id: permanentAddressId,
                 correspondence_address_id: permanentAddressId,
                 ...(panDocumentData
                     ? {
-                          pan_document_s3_key: panDocumentData.s3_key,
-                          pan_document_s3_url: panDocumentData.s3_url,
-                          pan_document_filename: panDocumentData.filename,
-                          pan_document_mime_type: panDocumentData.mime_type,
-                          pan_document_completed_at: new Date(),
-                          pan_document_file_size: panDocumentData.file_size,
+                          pan_document: panDocumentData.s3_url,
                           pan_document_issuer: panDocumentData.issuer,
                       }
                     : {}),
-            };
-            const checkpoint = await updateCheckpoint(tx, email, phone, checkpointData)
+            })
                 .returning('id')
                 .executeTakeFirstOrThrow();
 
-            const statusUpdate = {
-                aadhaar_status: 'pending' as const,
-                address_status: 'pending' as const,
-                updated_at: new Date(),
-                ...(panDocumentData && {
-                    pan_document_status: 'verified' as const,
-                }),
-            };
-
             await tx
                 .updateTable('signup_verification_status')
-                .set(statusUpdate)
+                .set({
+                    aadhaar_status: 'pending',
+                    address_status: 'pending',
+                    pan_document_status: panDocumentData !== null ? 'verified' : undefined,
+                })
                 .where('id', '=', checkpoint.id)
                 .execute();
         });
@@ -1354,12 +1343,7 @@ const postCheckpoint = async (
         }
         await db.transaction().execute(async (tx) => {
             const checkpoint = await updateCheckpoint(tx, email, phone, {
-                esign_s3_key: s3UploadResult.key,
-                esign_s3_url: s3UploadResult.url,
-                esign_filename: downloadResponse.data.data.file_name,
-                esign_mime_type: downloadResponse.data.data.mime_type,
-                esign_completed_at: new Date(),
-                esign_file_size: pdfBuffer.length,
+                esign: s3UploadResult.url,
             })
                 .returning('id')
                 .executeTakeFirstOrThrow();
