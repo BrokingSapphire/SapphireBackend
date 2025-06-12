@@ -1,25 +1,16 @@
-// know-your-partner.controller.ts
+// general.controller.ts
 import { Response } from 'express';
 import { Request } from '@app/types.d';
 import { ParamsDictionary } from 'express-serve-static-core';
 import { DefaultResponseData } from '@app/types.d';
 import { OK } from '@app/utils/httpstatus';
 import { SessionJwtType } from '@app/modules/common.types';
-import {
-    UserOrderPreferences,
-    UserPermissions,
-    UserSettings,
-    NotificationSettings,
-    DeleteAccountInitiateRequest,
-    DeleteAccountVerifyRequest,
-    KnowYourPartnerResponse,
-    KnowYourPartnerType,
-} from '@app/database/db';
 import { db } from '@app/database';
 import { EmailOtpVerification } from '@app/services/otp.service';
 import { randomUUID } from 'crypto';
 import redisClient from '@app/services/redis.service';
 import { UnauthorizedError } from '@app/apiError';
+import { DeleteAccountInitiateRequest, DeleteAccountVerifyRequest, KnowYourPartnerResponse, KnowYourPartnerType, NotificationSettings, UserOrderPreferences, UserPermissions, UserSettings } from './general.types';
 
 const getKnowYourPartner = async (
     req: Request<undefined, ParamsDictionary, KnowYourPartnerResponse, undefined>,
@@ -37,6 +28,7 @@ const getKnowYourPartner = async (
         data: partnerInfo,
     });
 };
+
 const updateOrderPreferences = async (
     req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, UserOrderPreferences>,
     res: Response<DefaultResponseData>,
@@ -48,6 +40,7 @@ const updateOrderPreferences = async (
         .updateTable('user_preferences')
         .set({
             order_preferences: JSON.stringify(preferences),
+            updated_at: new Date(),
         })
         .where('user_id', '=', userId)
         .execute();
@@ -66,7 +59,6 @@ const updateUserSettings = async (
     const {
         theme,
         biometricAuthentication,
-        twoFactorAuthentication,
         chartProvider,
         orderNotifications,
         tradeNotifications,
@@ -79,12 +71,12 @@ const updateUserSettings = async (
         .set({
             theme,
             biometric_authentication: biometricAuthentication,
-            two_factor_authentication: twoFactorAuthentication,
             chart_provider: chartProvider,
             order_notifications: orderNotifications,
             trade_notifications: tradeNotifications,
             trade_recommendations: tradeRecommendations,
             promotion_notifications: promotion,
+            updated_at: new Date(),
         })
         .where('user_id', '=', userId)
         .execute();
@@ -181,7 +173,8 @@ const initiateAccountDeletion = async (
 
     const emailOtp = new EmailOtpVerification(user.email, 'account-deletion');
     await emailOtp.sendOtp();
-    // Mask phone number for response
+    
+    // Mask email for response
     const maskedEmail = user.email.replace(/(.{2})(.*)(@.*)/, '$1***$3');
 
     res.status(OK).json({
@@ -231,7 +224,6 @@ const verifyAccountDeletionOtp = async (
                     user_id: userId,
                     email: session.email,
                     deletion_reason: session.reason,
-                    deleted_at: new Date(),
                 })
                 .execute();
         }
@@ -267,11 +259,11 @@ const resendAccountDeletionOtp = async (
         throw new UnauthorizedError('Deletion session already completed');
     }
 
-    // Resend OTP to email (following your resend pattern)
+    // Resend OTP to email
     const emailOtp = new EmailOtpVerification(session.email, 'account-deletion');
     await emailOtp.sendOtp();
 
-    // Extend session expiry (following your pattern)
+    // Extend session expiry
     await redisClient.expire(redisKey, 10 * 60);
 
     res.status(OK).json({
