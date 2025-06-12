@@ -40,6 +40,8 @@ import logger from '@app/logger';
 import IdGenerator from '@app/services/id-generator';
 import { sendDocumentsReceivedConfirmation } from '@app/services/notification.service';
 import s3Service from '@app/services/s3.service';
+import { SmsTemplateType } from '@app/services/sms-templates/sms.types';
+import smsService from '@app/services/sms.service';
 
 const requestOtp = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, RequestOtpType>,
@@ -1690,7 +1692,8 @@ const finalizeSignup = async (req: Request<JwtType>, res: Response) => {
         .selectFrom('signup_checkpoints')
         .innerJoin('pan_detail', 'signup_checkpoints.pan_id', 'pan_detail.id')
         .innerJoin('user_name', 'pan_detail.name', 'user_name.id')
-        .select(['user_name.first_name'])
+        .innerJoin('phone_number', 'signup_checkpoints.phone_id', 'phone_number.id')
+        .select(['user_name.first_name', 'phone_number.phone'])
         .where('signup_checkpoints.email', '=', email)
         .executeTakeFirstOrThrow();
 
@@ -1703,6 +1706,17 @@ const finalizeSignup = async (req: Request<JwtType>, res: Response) => {
             .where('email', '=', email)
             .execute();
     });
+
+    try {
+        if (userData.phone) {
+            await smsService.sendTemplatedSms(userData.phone, SmsTemplateType.ACCOUNT_SUCCESSFULLY_OPENED, [
+                userData.first_name,
+            ]);
+            logger.info(`Account successfully opened SMS sent to ${userData.phone}`);
+        }
+    } catch (error) {
+        logger.error(`Failed to send account successfully opened SMS: ${error}`);
+    }
 
     res.status(CREATED).json({
         message: 'Sign up successfully.',

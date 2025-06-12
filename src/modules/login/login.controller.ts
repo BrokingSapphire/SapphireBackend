@@ -36,6 +36,9 @@ import {
     sendLoginAlert,
     sendMpinChangeConfirmation,
 } from '@app/services/notification.service';
+import { SmsTemplateType } from '@app/services/sms-templates/sms.types';
+import smsService from '@app/services/sms.service';
+import logger from '@app/logger';
 
 const login = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, LoginRequestType>,
@@ -47,6 +50,7 @@ const login = async (
         .innerJoin('user_password_details', 'user.id', 'user_password_details.user_id')
         .innerJoin('hashing_algorithm', 'user_password_details.hash_algo_id', 'hashing_algorithm.id')
         .innerJoin('user_name', 'user.name', 'user_name.id')
+        .innerJoin('phone_number', 'user.phone', 'phone_number.id')
         .select([
             'user.id',
             'user.email',
@@ -55,6 +59,7 @@ const login = async (
             'hashing_algorithm.name as hashAlgo',
             'user_password_details.password_salt as salt',
             'user_password_details.password_hash as hashedPassword',
+            'phone_number.phone',
         ])
         .$call((qb) => {
             if ('clientId' in req.body) {
@@ -93,6 +98,18 @@ const login = async (
 
     const emailOtp = new EmailOtpVerification(user.email, 'login');
     await emailOtp.sendOtp();
+
+    const otpKey = `email-otp:login:${user.email}`;
+    const otp = await redisClient.get(otpKey);
+
+    try {
+        if (user.phone && otp) {
+            await smsService.sendTemplatedSms(String(user.phone), SmsTemplateType.TERMINAL_LOGIN_OTP, [otp]);
+            logger.info(`Login OTP SMS sent to ${user.phone}`);
+        }
+    } catch (error) {
+        logger.error(`Failed to send login OTP SMS: ${error}`);
+    }
 
     res.status(OK).json({
         message: 'Password verified. OTP sent to your email.',
@@ -166,7 +183,8 @@ const resendLoginOtp = async (
     const user = await db
         .selectFrom('user')
         .innerJoin('user_name', 'user.name', 'user_name.id')
-        .select(['user.id', 'user.email', 'user_name.first_name'])
+        .innerJoin('phone_number', 'user.phone', 'phone_number.id')
+        .select(['user.id', 'user.email', 'user_name.first_name', 'phone_number.phone'])
         .$call((qb) => {
             if ('clientId' in req.body) {
                 qb.where('user.id', '=', req.body.clientId);
@@ -179,6 +197,18 @@ const resendLoginOtp = async (
 
     const emailOtp = new EmailOtpVerification(user.email, 'login');
     await emailOtp.sendOtp();
+
+    const otpKey = `email-otp:login:${user.email}`;
+    const otp = await redisClient.get(otpKey);
+
+    try {
+        if (user.phone && otp) {
+            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.TERMINAL_LOGIN_OTP, [otp]);
+            logger.info(`Login OTP SMS resent to ${user.phone}`);
+        }
+    } catch (error) {
+        logger.error(`Failed to resend login OTP SMS: ${error}`);
+    }
 
     res.status(OK).json({
         message: 'OTP resent successfully.',
@@ -199,6 +229,7 @@ const resetPassword = async (
         .innerJoin('user_password_details', 'user.id', 'user_password_details.user_id')
         .innerJoin('hashing_algorithm', 'user_password_details.hash_algo_id', 'hashing_algorithm.id')
         .innerJoin('user_name', 'user.name', 'user_name.id')
+        .innerJoin('phone_number', 'user.phone', 'phone_number.id')
         .select([
             'user.id',
             'user.email',
@@ -206,6 +237,7 @@ const resetPassword = async (
             'user_password_details.password_hash as hashedPassword',
             'user_password_details.password_salt as salt',
             'hashing_algorithm.name as hashAlgo',
+            'phone_number.phone',
         ])
         .where('user.id', '=', userId)
         .executeTakeFirstOrThrow();
@@ -239,6 +271,18 @@ const resetPassword = async (
         deviceType: req.get('User-Agent') || 'Unknown Device',
         location: 'Unknown Location', // You can add geolocation if needed
     });
+
+    try {
+        if (user.phone) {
+            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.PASSWORD_CHANGE_CONFIRMATION, [
+                user.first_name,
+            ]);
+            logger.info(`Password change confirmation SMS sent to ${user.phone}`);
+        }
+    } catch (error) {
+        // Log error but don't fail the password reset process if SMS fails
+        logger.error(`Failed to send password change confirmation SMS: ${error}`);
+    }
     res.status(OK).json({
         message: 'Password reset successful',
     });
@@ -255,7 +299,8 @@ const forgotPasswordInitiate = async (
         .selectFrom('user')
         .innerJoin('pan_detail', 'user.pan_id', 'pan_detail.id')
         .innerJoin('user_name', 'user.name', 'user_name.id')
-        .select(['user.id', 'user.email', 'user_name.first_name'])
+        .innerJoin('phone_number', 'user.phone', 'phone_number.id')
+        .select(['user.id', 'user.email', 'user_name.first_name', 'phone_number.phone'])
         .where('pan_detail.pan_number', '=', panNumber)
         .executeTakeFirstOrThrow();
 
@@ -280,6 +325,19 @@ const forgotPasswordInitiate = async (
 
     const emailOtp = new EmailOtpVerification(user.email, 'forgot-password');
     await emailOtp.sendOtp();
+
+    const otpKey = `email-otp:forgot-password:${user.email}`;
+    const otp = await redisClient.get(otpKey);
+
+    // Send OTP via SMS if phone number and OTP are available
+    try {
+        if (user.phone && otp) {
+            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.TERMINAL_PWD_RESET_OTP, [otp]);
+            logger.info(`Password reset OTP SMS sent to ${user.phone}`);
+        }
+    } catch (error) {
+        logger.error(`Failed to send password reset OTP SMS: ${error}`);
+    }
 
     res.status(OK).json({
         message: 'OTP sent to your registered email',
@@ -335,8 +393,28 @@ const resendForgotPasswordOtp = async (
         throw new UnauthorizedError('Session already used');
     }
 
+    const user = await db
+        .selectFrom('user')
+        .innerJoin('phone_number', 'user.phone', 'phone_number.id')
+        .select(['phone_number.phone'])
+        .where('user.id', '=', session.userId)
+        .executeTakeFirst();
+
     const emailOtp = new EmailOtpVerification(session.email, 'forgot-password');
     await emailOtp.sendOtp();
+
+    const otpKey = `email-otp:forgot-password:${session.email}`;
+    const otp = await redisClient.get(otpKey);
+
+    // Send OTP via SMS if phone number and OTP are available
+    try {
+        if (user && user.phone && otp) {
+            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.TERMINAL_PWD_RESET_OTP, [otp]);
+            logger.info(`Password reset OTP SMS resent to ${user.phone}`);
+        }
+    } catch (error) {
+        logger.error(`Failed to resend password reset OTP SMS: ${error}`);
+    }
 
     await redisClient.expire(redisKey, 10 * 60);
 
@@ -369,6 +447,14 @@ const forgotPasswordReset = async (
         throw new UnauthorizedError('OTP not verified or already used');
     }
 
+    const user = await db
+        .selectFrom('user')
+        .innerJoin('phone_number', 'user.phone', 'phone_number.id')
+        .innerJoin('user_name', 'user.name', 'user_name.id')
+        .select(['phone_number.phone', 'user_name.first_name'])
+        .where('user.id', '=', session.userId)
+        .executeTakeFirst();
+
     // hash the password
     const hashed = await hashPassword(newPassword, 'bcrypt');
     await db.transaction().execute(async (tx) => {
@@ -395,6 +481,16 @@ const forgotPasswordReset = async (
         deviceType: req.get('User-Agent') || 'Unknown Device',
         location: 'Unknown Location',
     });
+    try {
+        if (user && user.phone) {
+            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.PASSWORD_CHANGE_CONFIRMATION, [
+                user.first_name || session.userName,
+            ]);
+            logger.info(`Password change confirmation SMS sent to ${user.phone}`);
+        }
+    } catch (error) {
+        logger.error(`Failed to send password change confirmation SMS: ${error}`);
+    }
 
     res.status(OK).json({ message: 'Password reset successful' });
 };
@@ -538,7 +634,8 @@ const forgotMpinInitiate = async (
     const user = await db
         .selectFrom('user')
         .innerJoin('user_name', 'user.name', 'user_name.id')
-        .select(['user.id', 'user.email', 'user_name.first_name'])
+        .innerJoin('phone_number', 'user.phone', 'phone_number.id')
+        .select(['user.id', 'user.email', 'user_name.first_name', 'phone_number.phone'])
         .$call((qb) => {
             if ('clientId' in req.body) {
                 qb.where('user.id', '=', req.body.clientId);
@@ -578,6 +675,18 @@ const forgotMpinInitiate = async (
 
     const emailOtp = new EmailOtpVerification(user.email, 'forgot-mpin');
     await emailOtp.sendOtp();
+
+    const otpKey = `email-otp:forgot-mpin:${user.email}`;
+    const otp = await redisClient.get(otpKey);
+
+    try {
+        if (user.phone && otp) {
+            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.FORGET_MPIN, [otp]);
+            logger.info(`MPIN reset OTP SMS sent to ${user.phone}`);
+        }
+    } catch (error) {
+        logger.error(`Failed to send MPIN reset OTP SMS: ${error}`);
+    }
 
     res.status(OK).json({
         message: 'OTP sent to your registered email for MPIN reset',
@@ -661,6 +770,14 @@ const forgotMpinReset = async (
         throw new UnauthorizedError('OTP not verified or already used');
     }
 
+    const user = await db
+        .selectFrom('user')
+        .innerJoin('phone_number', 'user.phone', 'phone_number.id')
+        .innerJoin('user_name', 'user.name', 'user_name.id')
+        .select(['phone_number.phone', 'user_name.first_name'])
+        .where('user.id', '=', session.userId)
+        .executeTakeFirst();
+
     // Hash the new MPIN
     const hashedMpin = await hashPassword(newMpin, 'bcrypt');
 
@@ -699,6 +816,17 @@ const forgotMpinReset = async (
         deviceType: req.get('User-Agent') || 'Unknown Device',
         location: 'Unknown Location',
     });
+
+    try {
+        if (user && user.phone) {
+            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.PASSWORD_CHANGE_CONFIRMATION, [
+                user.first_name || session.userName,
+            ]);
+            logger.info(`MPIN change confirmation SMS sent to ${user.phone}`);
+        }
+    } catch (error) {
+        logger.error(`Failed to send MPIN change confirmation SMS: ${error}`);
+    }
 
     res.status(OK).json({ message: 'MPIN reset successful' });
 };
@@ -847,19 +975,21 @@ const verify2FA = async (
     }
 
     // Get user's 2FA secret
-    const user2FA = await db
-        .selectFrom('user_2fa')
-        .select('secret')
-        .where('user_id', '=', session.userId)
+    const user = await db
+        .selectFrom('user')
+        .innerJoin('user_2fa', 'user.id', 'user_2fa.user_id')
+        .innerJoin('phone_number', 'user.phone', 'phone_number.id')
+        .select(['user_2fa.secret', 'phone_number.phone'])
+        .where('user.id', '=', session.userId)
         .executeTakeFirst();
 
-    if (!user2FA) {
+    if (!user) {
         throw new UnauthorizedError('2FA is not enabled for this account');
     }
 
     // Verify the token
     const verified = speakeasy.totp.verify({
-        secret: user2FA.secret,
+        secret: user.secret,
         encoding: 'base32',
         token,
         window: 2,
@@ -884,6 +1014,15 @@ const verify2FA = async (
         deviceType: req.get('User-Agent') || 'Unknown Device',
         location: 'Unknown Location',
     });
+
+    try {
+        if (user.phone) {
+            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.TWO_FACTOR_AUTHENTICATION_OTP, [token]);
+            logger.info(`2FA verification SMS sent to ${user.phone}`);
+        }
+    } catch (error) {
+        logger.error(`Failed to send 2FA verification SMS: ${error}`);
+    }
 
     res.status(OK).json({
         message: 'Login successful',

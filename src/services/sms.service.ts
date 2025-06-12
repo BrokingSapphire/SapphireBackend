@@ -157,9 +157,27 @@ export class SmsService {
     }
     private replaceTemplateVariables(template: string, variables: string[]): string {
         let result = template;
-        for (const value of variables) {
-            result = result.replace('{#var#}', value);
+
+        // Find all placeholder patterns in the template
+        const placeholderPattern = /\{#([^#]+)#\}/g;
+        const placeholders: string[] = [];
+
+        // Avoid assignment in conditional by using a different approach
+        let match = placeholderPattern.exec(template);
+        while (match !== null) {
+            placeholders.push(match[0]); // Store the full placeholder
+            match = placeholderPattern.exec(template); // Get next match
         }
+
+        // Replace placeholders with variables in order
+        for (let i = 0; i < Math.min(placeholders.length, variables.length); i++) {
+            const placeholder = placeholders[i];
+            const value = variables[i];
+
+            // Replace all occurrences of this specific placeholder
+            result = result.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), value);
+        }
+
         return result;
     }
 }

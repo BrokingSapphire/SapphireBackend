@@ -14,6 +14,9 @@ import { hashPassword } from '@app/utils/passwords';
 import { insertNameGetId } from '@app/database/transactions';
 import splitName from '@app/utils/split-name';
 import { ParamsDictionary } from 'express-serve-static-core';
+import smsService from '@app/services/sms.service';
+import { SmsTemplateType } from '@app/services/sms-templates/sms.types';
+import logger from '@app/logger';
 
 const assignOfficer = async (req: Request<SessionJwtType>, res: Response) => {
     const checkpointId = Number(req.params.checkpointId);
@@ -455,6 +458,26 @@ const updateVerificationStatus = async (req: Request<SessionJwtType>, res: Respo
         .where('id', '=', checkpointId)
         .execute();
 
+    if (status === 'reject') {
+        const userDetails = await db
+            .selectFrom('signup_checkpoints')
+            .innerJoin('phone_number', 'phone_number.id', 'signup_checkpoints.phone_id')
+            .innerJoin('user_name', 'user_name.id', 'signup_checkpoints.name')
+            .select(['phone_number.phone', 'user_name.first_name', 'signup_checkpoints.email'])
+            .where('signup_checkpoints.id', '=', checkpointId)
+            .executeTakeFirst();
+
+        if (userDetails && userDetails.phone) {
+            // Send rejection SMS
+            await smsService.sendTemplatedSms(
+                String(userDetails.phone),
+                SmsTemplateType.DOCUMENTS_REJECTED_NOTIFICATION,
+                [userDetails.first_name, verificationType],
+            );
+            logger.info(`Document rejection SMS sent to ${userDetails.phone} for ${verificationType}`);
+        }
+    }
+
     res.status(OK).json({
         message: `${verificationType} verification status updated to ${status}`,
     });
@@ -605,6 +628,10 @@ const addDematNumber = async (
  * Controller to finalize verification and create user account
  * POST /finalize-verification/:checkpointId
  */
+/**
+ * Controller to finalize verification and create user account
+ * POST /finalize-verification/:checkpointId
+ */
 const finalizeVerification = async (req: Request, res: Response) => {
     const checkpointId = Number(req.params.checkpointId);
 
@@ -620,6 +647,15 @@ const finalizeVerification = async (req: Request, res: Response) => {
     } else if (verificationStatus.overall_status === 'rejected') {
         throw new BadRequestError('Verification has been rejected. Please contact support.');
     }
+
+    // Get user contact details before the transaction to ensure we have them for the SMS
+    const userContact = await db
+        .selectFrom('signup_checkpoints')
+        .innerJoin('phone_number', 'phone_number.id', 'signup_checkpoints.phone_id')
+        .innerJoin('user_name', 'user_name.id', 'signup_checkpoints.name')
+        .select(['phone_number.phone', 'user_name.first_name', 'signup_checkpoints.email'])
+        .where('signup_checkpoints.id', '=', checkpointId)
+        .executeTakeFirst();
 
     const userId = await db.transaction().execute(async (trx) => {
         // Check if user already exists to avoid duplicates
@@ -820,9 +856,7 @@ const finalizeVerification = async (req: Request, res: Response) => {
 
         // First remove child records
         await trx.deleteFrom('bank_to_checkpoint').where('checkpoint_id', '=', checkpointId).execute();
-
         await trx.deleteFrom('nominees_to_checkpoint').where('checkpoint_id', '=', checkpointId).execute();
-
         await trx.deleteFrom('investment_segments_to_checkpoint').where('checkpoint_id', '=', checkpointId).execute();
 
         // Then remove the main checkpoint record
@@ -830,6 +864,18 @@ const finalizeVerification = async (req: Request, res: Response) => {
 
         return checkpoint.client_id;
     });
+
+    // Send account activation SMS
+    try {
+        if (userContact && userContact.phone) {
+            await smsService.sendTemplatedSms(String(userContact.phone), SmsTemplateType.ACCOUNT_SUCCESSFULLY_OPENED, [
+                userContact.first_name,
+            ]);
+            logger.info(`Account activation SMS sent to ${userContact.phone}`);
+        }
+    } catch (error) {
+        logger.error(`Failed to send account activation SMS: ${error}`);
+    }
 
     res.status(OK).json({
         message: 'User account created successfully.',
@@ -841,6 +887,14 @@ const finalizeVerification = async (req: Request, res: Response) => {
 
 const autoFinalVerification = async (req: Request, res: Response) => {
     const checkpointId = Number(req.params.checkpointId);
+
+    const userContact = await db
+        .selectFrom('signup_checkpoints')
+        .innerJoin('phone_number', 'phone_number.id', 'signup_checkpoints.phone_id')
+        .innerJoin('user_name', 'user_name.id', 'signup_checkpoints.name')
+        .select(['phone_number.phone', 'user_name.first_name', 'signup_checkpoints.email'])
+        .where('signup_checkpoints.id', '=', checkpointId)
+        .executeTakeFirst();
 
     const userId = await db.transaction().execute(async (trx) => {
         // STEP 1: Update verification status --> 'verified'
@@ -1067,6 +1121,17 @@ const autoFinalVerification = async (req: Request, res: Response) => {
 
         return checkpoint.client_id;
     });
+
+    try {
+        if (userContact && userContact.phone) {
+            await smsService.sendTemplatedSms(String(userContact.phone), SmsTemplateType.ACCOUNT_SUCCESSFULLY_OPENED, [
+                userContact.first_name,
+            ]);
+            logger.info(`Account activation SMS sent to ${userContact.phone}`);
+        }
+    } catch (error) {
+        logger.error(`Failed to send account activation SMS: ${error}`);
+    }
 
     // Return success response
     res.status(OK).json({
