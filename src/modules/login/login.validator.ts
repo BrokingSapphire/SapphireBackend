@@ -112,3 +112,46 @@ export const Disable2FASchema = Joi.object({
             'string.length': '2FA token must be exactly 6 digits',
         }),
 });
+
+export const MpinVerifySchema = Joi.object({
+    mpin: Joi.string()
+        .length(4)
+        .pattern(/^[0-9]{4}$/)
+        .required()
+        .messages({
+            'string.pattern.base': 'MPIN must be a 4-digit number',
+            'string.length': 'MPIN must be exactly 4 digits',
+        }),
+    sessionId: Joi.string().required(),
+});
+
+export const ForgotMpinInitiateSchema = EmailOrClientIdSchema;
+
+export const ForgotMpinOtpVerifySchema = Joi.object({
+    requestId: Joi.string().required(),
+    emailOtp: Joi.string()
+        .required()
+        .length(DEFAULT_OTP_LENGTH)
+        .pattern(/^[0-9]{6}$/)
+        .messages({
+            'string.pattern.base': 'OTP must be a 6-digit number',
+            'string.length': 'OTP must be exactly 6 digits',
+        }),
+});
+
+// Forgot MPIN - Resend OTP
+export const ResendForgotMpinOtpSchema = Joi.object({
+    requestId: Joi.string().required(),
+});
+
+export const ForgotMpinResetSchema = Joi.object({
+    requestId: Joi.string().required(),
+    newMpin: Joi.string()
+        .length(4)
+        .pattern(/^[0-9]{4}$/)
+        .required()
+        .messages({
+            'string.pattern.base': 'New MPIN must be a 4-digit number',
+            'string.length': 'New MPIN must be exactly 4 digits',
+        }),
+});

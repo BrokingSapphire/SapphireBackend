@@ -13,6 +13,11 @@ import {
     Verify2FASetupSchema,
     Verify2FASchema,
     Disable2FASchema,
+    ForgotMpinResetSchema,
+    ResendForgotMpinOtpSchema,
+    ForgotMpinOtpVerifySchema,
+    ForgotMpinInitiateSchema,
+    MpinVerifySchema,
 } from './login.validator';
 import {
     login,
@@ -27,6 +32,11 @@ import {
     verify2FASetup,
     verify2FA,
     disable2FA,
+    verifyMpin,
+    forgotMpinInitiate,
+    forgotMpinOtpVerify,
+    resendForgotMpinOtp,
+    forgotMpinReset,
 } from './login.controller';
 import { jwtMiddleware } from '@app/utils/jwt';
 
@@ -452,5 +462,105 @@ router.post('/verify-2fa', validate(Verify2FASchema), verify2FA);
  *         description: Unauthorized
  */
 router.post('/disable-2fa', [jwtMiddleware, validate(Disable2FASchema)], disable2FA);
+
+/**
+ * @swagger
+ * /login/verify-mpin:
+ *   post:
+ *     tags: [Login]
+ *     summary: Verify MPIN during login
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/MpinVerifySchema'
+ *     responses:
+ *       200:
+ *         description: MPIN verified successfully
+ *       401:
+ *         description: Invalid MPIN or session
+ */
+router.post('/verify-mpin', validate(MpinVerifySchema), verifyMpin);
+
+/**
+ * @swagger
+ * /login/forgot-mpin/initiate:
+ *   post:
+ *     tags: [Login]
+ *     summary: Initiate forgot MPIN process
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ForgotMpinInitiateSchema'
+ *     responses:
+ *       200:
+ *         description: OTP sent to email
+ *       404:
+ *         description: User not found
+ */
+router.post('/forgot-mpin/initiate', validate(ForgotMpinInitiateSchema), forgotMpinInitiate);
+
+/**
+ * @swagger
+ * /login/forgot-mpin/verify-otp:
+ *   post:
+ *     tags: [Login]
+ *     summary: Verify OTP for forgot MPIN
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ForgotMpinOtpVerifySchema'
+ *     responses:
+ *       200:
+ *         description: OTP verified successfully
+ *       401:
+ *         description: Invalid or expired OTP
+ */
+router.post('/forgot-mpin/verify-otp', validate(ForgotMpinOtpVerifySchema), forgotMpinOtpVerify);
+
+/**
+ * @swagger
+ * /login/forgot-mpin/resend-otp:
+ *   post:
+ *     tags: [Login]
+ *     summary: Resend OTP for forgot MPIN
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ResendForgotMpinOtpSchema'
+ *     responses:
+ *       200:
+ *         description: OTP resent successfully
+ *       401:
+ *         description: Session expired or invalid
+ */
+router.post('/forgot-mpin/resend-otp', validate(ResendForgotMpinOtpSchema), resendForgotMpinOtp);
+
+/**
+ * @swagger
+ * /login/forgot-mpin/reset:
+ *   post:
+ *     tags: [Login]
+ *     summary: Reset MPIN after OTP verification
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ForgotMpinResetSchema'
+ *     responses:
+ *       200:
+ *         description: MPIN reset successful
+ *       401:
+ *         description: OTP not verified or session expired
+ */
+router.post('/forgot-mpin/reset', validate(ForgotMpinResetSchema), forgotMpinReset);
 
 export default router;
