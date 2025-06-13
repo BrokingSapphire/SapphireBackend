@@ -182,7 +182,7 @@ const initiateAccountDeletion = async (
         email: user.email,
         userName: user.first_name,
         phone: user.phone,
-        reason: reason || null,
+        reason: reason || [],
         isVerified: false,
         isUsed: false,
         createdAt: new Date().toISOString(),

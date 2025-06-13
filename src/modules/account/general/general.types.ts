@@ -95,7 +95,7 @@ export interface NotificationSettings {
 }
 
 export interface DeleteAccountInitiateRequest {
-    reason?: string;
+    reason: string[];
 }
 
 export interface DeleteAccountVerifyRequest {
