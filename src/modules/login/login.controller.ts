@@ -989,7 +989,7 @@ const verify2FA = async (
 
     // Verify the token
     const verified = speakeasy.totp.verify({
-        secret: user.secret,
+        secret: user.secret!,
         encoding: 'base32',
         token,
         window: 2,
@@ -1066,7 +1066,7 @@ const disable2FA = async (
 
     // Verify the 2FA token
     const verified = speakeasy.totp.verify({
-        secret: user2FA.secret,
+        secret: user2FA.secret!,
         encoding: 'base32',
         token,
         window: 2,
