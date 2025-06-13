@@ -105,16 +105,17 @@ const resendOtp = async (
 
     if (type === CredentialsType.EMAIL) {
         // Check if there's an active OTP session for email
-        const emailOtpKey = `email-otp:signup:${email}`;
+
+        const userExists = await db.selectFrom('user').where('email', '=', email).executeTakeFirst();
+        if (userExists) {
+            throw new BadRequestError('Email already exists');
+        }
+
+        const emailOtpKey = `otp:email-otp:signup:${email}`;
         const existingOtp = await redisClient.get(emailOtpKey);
 
         if (!existingOtp) {
             throw new BadRequestError('No active OTP session found. Please request a new OTP.');
-        }
-        const userExists = await db.selectFrom('user').where('email', '=', email).executeTakeFirst();
-
-        if (userExists) {
-            throw new BadRequestError('Email already exists');
         }
 
         const emailOtp = new EmailOtpVerification(email, 'signup');
@@ -130,7 +131,7 @@ const resendOtp = async (
         }
 
         // Check if there's an active OTP session for phone
-        const phoneOtpKey = `phone-otp:signup:${email}:${phone}`;
+        const phoneOtpKey = `otp:phone-otp:signup:${email}:${phone}`;
         const existingOtp = await redisClient.get(phoneOtpKey);
 
         if (!existingOtp) {
