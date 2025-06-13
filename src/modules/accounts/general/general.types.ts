@@ -27,8 +27,45 @@ export enum TradingSegment {
 export interface UserOrderPreferences {
     [key: string]: any; 
 }
+export enum TwoFactorMethod {
+    DISABLED = 'disabled',
+    SMS_OTP = 'sms_otp',
+    AUTHENTICATOR = 'authenticator',
+}
 
-export type TwoFactorMethod = 'email_otp' | 'authenticator' | 'disabled';
+export interface TwoFactorSetupRequest {
+    method: TwoFactorMethod;
+}
+
+export interface TwoFactorSetupResponse extends DefaultResponseData {
+    data: {
+        method: TwoFactorMethod;
+        secret?: string;
+        qrCodeUrl?: string;
+        manualEntryKey?: string;
+        maskedPhone?: string;
+        sessionId: string;
+    };
+}
+export interface TwoFactorVerifySetupRequest {
+    method: TwoFactorMethod;
+    token: string;
+    sessionId: string;
+    secret?: string;
+}
+
+export interface TwoFactorStatusResponse extends DefaultResponseData {
+    data: {
+        method: TwoFactorMethod;
+        enabled: boolean;
+        maskedPhone?: string;
+    };
+}
+
+export interface TwoFactorDisableRequest {
+    password: string;
+    token: string;
+}
 
 export interface UserSettings {
     theme: Theme;

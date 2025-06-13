@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { validate } from '@app/middlewares';
 import {
-    LoginOtpVerifySchema,
     ResetPasswordSchema,
     LoginRequestSchema,
     ForgotPasswordInitiateSchema,
@@ -9,10 +8,7 @@ import {
     ForgotPasswordResetSchema,
     ResendLoginOtpSchema,
     ResendForgotPasswordOtpSchema,
-    Setup2FASchema,
-    Verify2FASetupSchema,
     Verify2FASchema,
-    Disable2FASchema,
     ForgotMpinResetSchema,
     ResendForgotMpinOtpSchema,
     ForgotMpinOtpVerifySchema,
@@ -21,17 +17,13 @@ import {
 } from './login.validator';
 import {
     login,
-    verifyLoginOtp,
     resetPassword,
     forgotPasswordInitiate,
     forgotOTPverify,
     forgotPasswordReset,
-    resendLoginOtp,
     resendForgotPasswordOtp,
-    setup2FA,
-    verify2FASetup,
     verify2FA,
-    disable2FA,
+    send2FALoginOtp,
     verifyMpin,
     forgotMpinInitiate,
     forgotMpinOtpVerify,
@@ -74,35 +66,32 @@ router.post('/', validate(LoginRequestSchema), login);
 
 /**
  * @swagger
- * /login/resend-otp:
+ * /login/verify-2fa:
  *   post:
  *     tags: [Login]
- *     summary: Resend OTP for login authentication
- *     description: Resends the OTP to the registered email for login authentication
+ *     summary: Verify 2FA code during login
+ *     description: Verify the 2FA code (SMS OTP or Authenticator) during login process
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             oneOf:
- *               - type: object
- *                 properties:
- *                   clientId:
- *                     type: string
- *                     example: "CLIENT001"
- *                 required:
- *                   - clientId
- *               - type: object
- *                 properties:
- *                   email:
- *                     type: string
- *                     format: email
- *                     example: "user@example.com"
- *                 required:
- *                   - email
+ *             type: object
+ *             required:
+ *               - sessionId
+ *               - token
+ *             properties:
+ *               sessionId:
+ *                 type: string
+ *                 example: 123e4567-e89b-12d3-a456-426614174000
+ *                 description: Login session ID from login response
+ *               token:
+ *                 type: string
+ *                 example: '123456'
+ *                 description: 6-digit SMS OTP or 6-digit authenticator code
  *     responses:
  *       200:
- *         description: OTP resent successfully
+ *         description: 2FA code verified successfully
  *         content:
  *           application/json:
  *             schema:
@@ -110,50 +99,66 @@ router.post('/', validate(LoginRequestSchema), login);
  *               properties:
  *                 message:
  *                   type: string
- *                   example: OTP resent successfully.
- *       400:
- *         description: Invalid request
- *       404:
- *         description: User not found
- */
-router.post('/resend-otp', validate(ResendLoginOtpSchema), resendLoginOtp);
-
-/**
- * @swagger
- * /login/verify-otp:
- *   post:
- *     tags: [Login]
- *     summary: Verify OTP for login authentication
- *     description: Verifies the OTP sent during login for non-first-time users
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/LoginOtpVerifySchema'
- *     responses:
- *       200:
- *         description: OTP verification successful
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: Login successful
- *                 token:
- *                   type: string
- *                   example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
- *                 isFirstLogin:
- *                   type: boolean
- *                   example: false
+ *                   example: 2FA verified. Please enter your MPIN.
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     sessionId:
+ *                       type: string
+ *                       example: 123e4567-e89b-12d3-a456-426614174000
+ *                     nextStep:
+ *                       type: string
+ *                       example: mpin
  *       400:
  *         description: Invalid request
  *       401:
- *         description: Invalid or expired OTP
+ *         description: Invalid or expired 2FA code
  */
-router.post('/verify-otp', validate(LoginOtpVerifySchema), verifyLoginOtp);
+router.post('/verify-2fa', validate(Verify2FASchema), verify2FA);
+
+/**
+ * @swagger
+ * /login/2fa/send-otp:
+ *   post:
+ *     tags: [Login]
+ *     summary: Send 2FA SMS OTP during login
+ *     description: Send or resend SMS OTP for 2FA verification during login (only for SMS_OTP method)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - sessionId
+ *             properties:
+ *               sessionId:
+ *                 type: string
+ *                 example: 123e4567-e89b-12d3-a456-426614174000
+ *                 description: Login session ID from login response
+ *     responses:
+ *       200:
+ *         description: OTP sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: OTP sent for 2FA verification
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     maskedPhone:
+ *                       type: string
+ *                       example: '+91 98******90'
+ *       400:
+ *         description: Invalid request
+ *       401:
+ *         description: Session expired, password verification required, or SMS OTP not enabled
+ */
+router.post('/2fa/send-otp', validate(ResendLoginOtpSchema), send2FALoginOtp);
 
 /**
  * @swagger
@@ -373,52 +378,6 @@ router.post('/forgot-password/reset', validate(ForgotPasswordResetSchema), forgo
 
 /**
  * @swagger
- * /login/setup-2fa:
- *   post:
- *     tags: [Login]
- *     summary: Setup 2FA (Two-Factor Authentication)
- *     description: Enable 2FA for added security
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/Setup2FASchema'
- *     responses:
- *       200:
- *         description: 2FA setup successful
- *       400:
- *         description: Invalid request
- *       401:
- *         description: Unauthorized
- */
-router.post('/setup-2fa', [jwtMiddleware, validate(Setup2FASchema)], setup2FA);
-
-/**
- * @swagger
- * /login/verify-2fa-setup:
- *   post:
- *     tags: [Login]
- *     summary: Verify 2FA setup
- *     description: Verify the 2FA setup with the provided code
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/Verify2FASetupSchema'
- *     responses:
- *       200:
- *         description: 2FA setup verified successfully
- *       400:
- *         description: Invalid request
- *       401:
- *         description: Unauthorized
- */
-router.post('/verify-2fa-setup', [jwtMiddleware, validate(Verify2FASetupSchema)], verify2FASetup);
-
-/**
- * @swagger
  * /login/verify-2fa:
  *   post:
  *     tags: [Login]
@@ -439,29 +398,6 @@ router.post('/verify-2fa-setup', [jwtMiddleware, validate(Verify2FASetupSchema)]
  *         description: Invalid or expired 2FA code
  */
 router.post('/verify-2fa', validate(Verify2FASchema), verify2FA);
-
-/**
- * @swagger
- * /login/disable-2fa:
- *   post:
- *     tags: [Login]
- *     summary: Disable 2FA
- *     description: Disable Two-Factor Authentication
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/Disable2FASchema'
- *     responses:
- *       200:
- *         description: 2FA disabled successfully
- *       400:
- *         description: Invalid request
- *       401:
- *         description: Unauthorized
- */
-router.post('/disable-2fa', [jwtMiddleware, validate(Disable2FASchema)], disable2FA);
 
 /**
  * @swagger
