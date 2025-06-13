@@ -193,7 +193,7 @@ const verifyOtp = async (
         await phoneOtp.verifyOtp(otp);
         await redisClient.del(`email-verified:${email}`);
 
-        const { client_id } = await db.transaction().execute(async (tx) => {
+        const result = await db.transaction().execute(async (tx) => {
             const existingCheckpoint = await tx
                 .selectFrom('signup_checkpoints')
                 .leftJoin('phone_number', 'signup_checkpoints.phone_id', 'phone_number.id')
@@ -201,7 +201,7 @@ const verifyOtp = async (
                     'signup_checkpoints.id',
                     'signup_checkpoints.phone_id',
                     'phone_number.phone',
-                    'signup_checkpoints.client_id',
+                    // 'signup_checkpoints.client_id',
                 ])
                 .where('email', '=', email)
                 .executeTakeFirst();
@@ -223,7 +223,7 @@ const verifyOtp = async (
                     await tx.deleteFrom('phone_number').where('id', '=', existingCheckpoint.phone_id).execute();
                 }
 
-                return existingCheckpoint;
+                return { client_id: null };
             } else {
                 const phoneId = await tx
                     .insertInto('phone_number')
@@ -245,7 +245,7 @@ const verifyOtp = async (
 
         const token = sign<JwtType>({ email, phone });
 
-        res.status(OK).json({ message: 'OTP verified', token, data: { clientId: client_id } });
+        res.status(OK).json({ message: 'OTP verified', token, data: { clientId: result.client_id } });
     }
 };
 
