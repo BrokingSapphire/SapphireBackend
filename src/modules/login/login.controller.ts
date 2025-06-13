@@ -98,30 +98,28 @@ const login = async (
     await redisClient.set(redisKey, JSON.stringify(loginSession));
     await redisClient.expire(redisKey, 10 * 60);
 
-    if(user2FA && user2FA.method !== 'disabled'){
-
+    if (user2FA && user2FA.method !== 'disabled') {
         const method = user2FA.method as TwoFactorMethod;
 
         if (method === TwoFactorMethod.SMS_OTP) {
-
             const phoneStr = String(user.phone);
 
             const smsOtp = new PhoneOtpVerification(user.email, '2fa-login', phoneStr);
             await smsOtp.sendOtp();
 
             const otpKey = `phone-otp:2fa-login:${user.phone}`;
-    const otp = await redisClient.get(otpKey);
-    
-    // Send SMS using the 2FA template
-    try {
-        if (otp) {
-            await smsService.sendTemplatedSms(phoneStr, SmsTemplateType.TWO_FACTOR_AUTHENTICATION_OTP, [otp]);
-            logger.info(`2FA OTP SMS sent to ${user.phone}`);
-        }
-    } catch (error) {
-        logger.error(`Failed to send 2FA OTP SMS: ${error}`);
-    }
-            
+            const otp = await redisClient.get(otpKey);
+
+            // Send SMS using the 2FA template
+            try {
+                if (otp) {
+                    await smsService.sendTemplatedSms(phoneStr, SmsTemplateType.TWO_FACTOR_AUTHENTICATION_OTP, [otp]);
+                    logger.info(`2FA OTP SMS sent to ${user.phone}`);
+                }
+            } catch (error) {
+                logger.error(`Failed to send 2FA OTP SMS: ${error}`);
+            }
+
             res.status(OK).json({
                 message: 'Password verified. SMS OTP sent for 2FA verification.',
                 data: {
@@ -130,8 +128,7 @@ const login = async (
                     twoFactorMethod: method,
                 },
             });
-        }else {
-
+        } else {
             const user2FADetails = await db
                 .selectFrom('user_2fa')
                 .select(['secret'])
@@ -146,7 +143,7 @@ const login = async (
                 });
 
                 secretObj.base32 = user2FADetails.secret;
-                
+
                 qrCodeUrl = await QRCode.toDataURL(secretObj.otpauth_url!);
             }
 

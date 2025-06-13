@@ -1,8 +1,11 @@
+import { AccountType } from '@app/modules/signup/signup.types';
+
 export enum DematStatus {
     ACTIVE = 'active',
     FROZEN = 'frozen',
     SUSPENDED = 'suspended',
     UNDER_REVIEW = 'under_review',
+    PROCESSING = 'processing',
 }
 
 export enum DematAction {
@@ -31,3 +34,30 @@ export type VerifySettlementFrequencyChangeRequestType = {
 export type ResendSettlementFrequencyOtpRequestType = {
     sessionId: string;
 };
+
+export interface SegmentActivationSettings {
+    cashMutualFunds?: boolean;
+    futuresAndOptions?: boolean;
+    commodityDerivatives?: boolean;
+    debt?: boolean;
+    currency?: boolean;
+}
+
+export interface AddBankAccountRequest {
+    account_no: string;
+    ifsc_code: string;
+    account_type: AccountType;
+}
+
+export interface RemoveBankRequest {
+    bankAccountId: number;
+}
+
+export interface FreezeDematRequest {
+    action: DematAction;
+    reason?: string;
+}
+
+export interface UpdateSettlementFrequencyRequest {
+    frequency: FundsSettlementFrequency;
+}

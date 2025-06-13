@@ -1,5 +1,5 @@
-import { ChartProvider, Theme } from "@app/database/db";
-import { DefaultResponseData } from "@app/types";
+import { ChartProvider, Theme } from '@app/database/db';
+import { DefaultResponseData } from '@app/types';
 
 export enum ProfileSection {
     GENERAL = 'general',
@@ -25,7 +25,7 @@ export enum TradingSegment {
 }
 
 export interface UserOrderPreferences {
-    [key: string]: any; 
+    [key: string]: any;
 }
 export enum TwoFactorMethod {
     DISABLED = 'disabled',

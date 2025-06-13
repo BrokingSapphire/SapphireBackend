@@ -5,19 +5,16 @@ import { DefaultResponseData } from '@app/types.d';
 import { OK } from '@app/utils/httpstatus';
 import { SessionJwtType } from '@app/modules/common.types';
 import { db } from '@app/database';
-import {
-    AddBankAccountRequest,
-    RemoveBankRequest,
-    SegmentActivationSettings,
-    FreezeDematRequest,
-    UpdateSettlementFrequencyRequest,
-} from '@app/database/db';
 import { BadRequestError, UnauthorizedError } from '@app/apiError';
 import {
     DematAction,
     DematStatus,
     FundsSettlementFrequency,
     VerifySettlementFrequencyChangeRequestType,
+    AddBankAccountRequest,
+    RemoveBankRequest,
+    SegmentActivationSettings,
+    FreezeDematRequest,
 } from './manage.types';
 import redisClient from '@app/services/redis.service';
 import { EmailOtpVerification } from '@app/services/otp.service';

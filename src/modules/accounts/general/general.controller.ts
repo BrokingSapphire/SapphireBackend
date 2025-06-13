@@ -10,7 +10,22 @@ import { EmailOtpVerification, PhoneOtpVerification } from '@app/services/otp.se
 import { randomUUID } from 'crypto';
 import redisClient from '@app/services/redis.service';
 import { UnauthorizedError } from '@app/apiError';
-import { DeleteAccountInitiateRequest, DeleteAccountVerifyRequest, KnowYourPartnerResponse, KnowYourPartnerType, NotificationSettings, TwoFactorDisableRequest, TwoFactorMethod, TwoFactorSetupRequest, TwoFactorSetupResponse, TwoFactorStatusResponse, TwoFactorVerifySetupRequest, UserOrderPreferences, UserPermissions, UserSettings } from './general.types';
+import {
+    DeleteAccountInitiateRequest,
+    DeleteAccountVerifyRequest,
+    KnowYourPartnerResponse,
+    KnowYourPartnerType,
+    NotificationSettings,
+    TwoFactorDisableRequest,
+    TwoFactorMethod,
+    TwoFactorSetupRequest,
+    TwoFactorSetupResponse,
+    TwoFactorStatusResponse,
+    TwoFactorVerifySetupRequest,
+    UserOrderPreferences,
+    UserPermissions,
+    UserSettings,
+} from './general.types';
 import { SmsTemplateType } from '@app/services/sms-templates/sms.types';
 import smsService from '@app/services/sms.service';
 import { verifyPassword } from '@app/utils/passwords';
@@ -179,7 +194,7 @@ const initiateAccountDeletion = async (
 
     const emailOtp = new EmailOtpVerification(user.email, 'account-deletion');
     await emailOtp.sendOtp();
-    
+
     // Mask email for response
     const maskedEmail = user.email.replace(/(.{2})(.*)(@.*)/, '$1***$3');
 
@@ -305,7 +320,7 @@ const get2FAStatus = async (
             enabled,
         },
     });
-}
+};
 const setup2FA = async (
     req: Request<SessionJwtType, ParamsDictionary, TwoFactorSetupResponse, TwoFactorSetupRequest>,
     res: Response<TwoFactorSetupResponse>,
@@ -342,21 +357,21 @@ const setup2FA = async (
         }
 
         // Send SMS OTP for verification
-        const smsOtp = new PhoneOtpVerification(user.email, '2fa-setup', phoneNumber)
+        const smsOtp = new PhoneOtpVerification(user.email, '2fa-setup', phoneNumber);
         await smsOtp.sendOtp();
 
         const otpKey = `phone-otp:2fa-setup:${user.email}`;
-const otp = await redisClient.get(otpKey);
+        const otp = await redisClient.get(otpKey);
 
-try {
-    if (otp) {
-        await smsService.sendTemplatedSms(phoneNumber, SmsTemplateType.TWO_FACTOR_AUTHENTICATION_OTP, [
-            String(otp)
-        ]);
-    }
-} catch (error) {
-    logger.error(`Failed to send SMS: ${error}`);
-}
+        try {
+            if (otp) {
+                await smsService.sendTemplatedSms(phoneNumber, SmsTemplateType.TWO_FACTOR_AUTHENTICATION_OTP, [
+                    String(otp),
+                ]);
+            }
+        } catch (error) {
+            logger.error(`Failed to send SMS: ${error}`);
+        }
 
         // Store temporary setup session
         const setupSession = {
@@ -380,7 +395,6 @@ try {
                 sessionId,
             },
         });
-
     } else if (method === TwoFactorMethod.AUTHENTICATOR) {
         // Setup Authenticator
         const secret = speakeasy.generateSecret({
@@ -447,11 +461,7 @@ const verify2FASetup = async (
     let verified = false;
 
     if (method === TwoFactorMethod.SMS_OTP) {
-        const user = await db
-            .selectFrom('user')
-            .select(['email'])
-            .where('id', '=', userId)
-            .executeTakeFirstOrThrow();
+        const user = await db.selectFrom('user').select(['email']).where('id', '=', userId).executeTakeFirstOrThrow();
 
         const phoneStr = String(session.phoneNumber);
         const smsOtp = new PhoneOtpVerification(user.email, '2fa-setup', phoneStr);
@@ -618,9 +628,7 @@ const send2FADisableOtp = async (
 
     try {
         if (otp) {
-            await smsService.sendTemplatedSms(phoneStr, SmsTemplateType.TWO_FACTOR_AUTHENTICATION_OTP, [
-                String(otp)
-            ]);
+            await smsService.sendTemplatedSms(phoneStr, SmsTemplateType.TWO_FACTOR_AUTHENTICATION_OTP, [String(otp)]);
             logger.info(`2FA disable OTP SMS sent to ${phoneStr}`);
         }
     } catch (error) {
@@ -634,7 +642,6 @@ const send2FADisableOtp = async (
         },
     });
 };
-
 
 export {
     getKnowYourPartner,

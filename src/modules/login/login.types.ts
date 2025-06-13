@@ -92,7 +92,6 @@ export type NewMpinRequestType = {
 //     token: string;
 // };
 
-
 export type Verify2FARequestType = {
     sessionId: string;
     token: string;
