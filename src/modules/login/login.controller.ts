@@ -23,7 +23,7 @@ import {
     ResendForgotMpinOtpRequestType,
     Verify2FARequestType,
 } from './login.types';
-import { TwoFactorMethod } from '../accounts/general/general.types';
+import { TwoFactorMethod } from '../account/general/general.types';
 import { ResponseWithToken, SessionJwtType } from '@app/modules/common.types';
 import { hashPassword, verifyPassword } from '@app/utils/passwords';
 import { PhoneOtpVerification } from '@app/services/otp.service';
