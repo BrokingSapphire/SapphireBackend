@@ -43,3 +43,6 @@ src/database/db.d.ts
 
 # Temp files
 tmp/
+
+# Firebase cloud messaging JSON
+firebasecloudmessaging.json

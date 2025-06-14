@@ -46,4 +46,11 @@ export const env = {
         uatVpa: process.env.NTT_UAT_VPA || 'vpa',
         mccCode: process.env.NTT_MCC_CODE || '1234',
     },
+    firebase: {
+        projectId: process.env.FIREBASE_PROJECT_ID || 'project',
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL || 'client_email@email.com',
+        privateKey: process.env.FIREBASE_PRIVATE_KEY || 'private_key',
+        webVapidKey: process.env.FIREBASE_WEB_VAPID_KEY || 'vapid_key',
+        senderId: process.env.FIREBASE_SENDER_ID || 'sender_id',
+    },
 };
