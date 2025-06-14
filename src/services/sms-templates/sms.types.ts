@@ -1,6 +1,5 @@
 export enum SmsTemplateType {
     WITHDRAWAL_PROCESSED = 'WITHDRAWAL_PROCESSED',
-    TERMINAL_LOGIN_OTP = 'TERMINAL_LOGIN_OTP',
     ACCOUNT_SUCCESSFULLY_OPENED = 'ACCOUNT_SUCCESSFULLY_OPENED',
     DOCUMENTS_RECEIVED_CONFIRMATION = 'DOCUMENTS_RECEIVED_CONFIRMATION',
     MARGIN_SHORTFALL_ALERT = 'MARGIN_SHORTFALL_ALERT',
@@ -21,9 +20,6 @@ export enum SmsTemplateType {
 const templateContentMap: Record<SmsTemplateType, string> = {
     [SmsTemplateType.WITHDRAWAL_PROCESSED]:
         'Dear {#name#}, your withdrawal request of ₹{#amount#} has been processed. Expected credit within {#time#} hours. Sapphire Broking',
-
-    [SmsTemplateType.TERMINAL_LOGIN_OTP]:
-        'Your OTP for Sapphire Terminal login is {#otp#}. Do not share this OTP with anyone. It is valid for 10 minutes. Sapphire Broking',
 
     [SmsTemplateType.ACCOUNT_SUCCESSFULLY_OPENED]:
         'Dear {#name#}, your Sapphire account is now active! Start trading now: terminal.sapphirebroking.com Sapphire Broking',

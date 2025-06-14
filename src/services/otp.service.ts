@@ -110,6 +110,25 @@ abstract class OtpVerification {
     }
 
     /**
+     * Get the existing OTP from Redis without generating a new one
+     */
+    protected async getExistingOtp(): Promise<string | null> {
+        const key = `otp:${this.context}:${this.id}`;
+        try {
+            const storedOtp = await redisClient.get(key);
+            if (storedOtp) {
+                logger.debug(`Retrieved existing OTP for key: ${key}`);
+                return storedOtp;
+            }
+            logger.debug(`No existing OTP found for key: ${key}`);
+            return null;
+        } catch (error) {
+            logger.error('Error retrieving existing OTP from Redis:', error);
+            return null;
+        }
+    }
+
+    /**
      * Generates a random OTP with specified length
      */
     private generateOtp(): string {
@@ -122,7 +141,16 @@ abstract class OtpVerification {
     }
 }
 
-type EmailTemplate = 'login' | 'signup' | 'forgot-password' | 'forgot-mpin';
+type EmailTemplate =
+    | 'login'
+    | 'signup'
+    | 'forgot-password'
+    | 'account-deletion'
+    | 'forgot-mpin'
+    | '2fa-login'
+    | '2fa-setup'
+    | '2fa-disable'
+    | 'settlement-frequency-change';
 
 class EmailOtpVerification extends OtpVerification {
     private readonly template: EmailTemplate;
@@ -162,6 +190,44 @@ class EmailOtpVerification extends OtpVerification {
             logger.info(`Email OTP sent successfully to ${this.id} for ${this.template}`);
         } catch (error) {
             logger.error(`Failed to send email OTP to ${this.id}:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Resend the existing OTP to the user's email, or generate new one if expired
+     */
+
+    public async resendExistingOtp(): Promise<void> {
+        let otpToSend = await this.getExistingOtp();
+
+        if (!otpToSend) {
+            logger.info(`No existing OTP found for ${this.id}, generating new OTP`);
+            otpToSend = await this.storeOtp();
+        }
+
+        let templateFile = this.template;
+        try {
+            fs.accessSync(`templates/${this.template}-email.html`);
+        } catch (error) {
+            logger.warn(`Template ${this.template}-email.html not found, using login template`);
+            templateFile = 'login';
+        }
+
+        const content = fs.readFileSync(`templates/${templateFile}-email.html`, 'utf-8');
+
+        const mailOptions: Mail.Options = {
+            from: env.email.from,
+            to: this.id,
+            subject: this.getSubject(),
+            html: formatHtml(content, otpToSend, this.id, undefined, this.settings.ip),
+        };
+
+        try {
+            await transporter.sendMail(mailOptions);
+            logger.info(`Email OTP resent successfully to ${this.id} for ${this.template}`);
+        } catch (error) {
+            logger.error(`Failed to resend email OTP to ${this.id}:`, error);
             throw error;
         }
     }
@@ -213,6 +279,36 @@ class PhoneOtpVerification extends OtpVerification {
             logger.error(`Failed to send phone OTP via SMS to ${this.id}:`, error);
 
             throw new Error(`Failed to send SMS OTP: ${error instanceof Error ? error.message : error}`);
+        }
+    }
+
+    /**
+     * Resend the existing OTP to the user's phone, or generate new one if expired
+     */
+    public async resendExistingOtp(): Promise<void> {
+        let otpToSend = await this.getExistingOtp();
+
+        // no OTP exists or expire then generate new-one
+        if (!otpToSend) {
+            logger.info(`No existing OTP found for phone ${this.id}, generating new OTP`);
+            otpToSend = await this.storeOtp();
+        }
+
+        try {
+            const smsResult = await smsService.sendOtpSms(
+                this.id, // Phn number
+                otpToSend,
+                this.template, // Context (signup, login, etc.)
+            );
+
+            if (!smsResult) {
+                throw new Error('SMS service returned false - template not found or other issue');
+            }
+
+            logger.info(`Phone OTP resent successfully to ${this.id} for ${this.template}`);
+        } catch (error) {
+            logger.error(`Failed to resend phone OTP via SMS to ${this.id}:`, error);
+            throw new Error(`Failed to resend SMS OTP: ${error instanceof Error ? error.message : error}`);
         }
     }
 }

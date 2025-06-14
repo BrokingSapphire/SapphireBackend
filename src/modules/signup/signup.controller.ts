@@ -49,11 +49,6 @@ const requestOtp = async (
 ) => {
     const { type, email } = req.body;
     if (type === CredentialsType.EMAIL) {
-        const userExists = await db.selectFrom('user').where('email', '=', email).executeTakeFirst();
-        if (userExists) {
-            throw new BadRequestError('Email already exists');
-        }
-
         const emailOtp = new EmailOtpVerification(email, 'signup');
         await emailOtp.sendOtp();
     } else if (type === CredentialsType.PHONE) {
@@ -74,8 +69,11 @@ const requestOtp = async (
             .select('signup_checkpoints.email')
             .where('phone_number.phone', '=', phone)
             .executeTakeFirst();
-        if (checkpointExists && checkpointExists.email !== email) {
-            throw new BadRequestError('Phone number already exists');
+
+        if (checkpointExists) {
+            if (checkpointExists.email !== email) {
+                throw new BadRequestError('Phone number already exists');
+            }
         }
 
         if (!(await redisClient.get(`email-verified:${email}`))) {
@@ -105,12 +103,6 @@ const resendOtp = async (
 
     if (type === CredentialsType.EMAIL) {
         // Check if there's an active OTP session for email
-
-        const userExists = await db.selectFrom('user').where('email', '=', email).executeTakeFirst();
-        if (userExists) {
-            throw new BadRequestError('Email already exists');
-        }
-
         const emailOtpKey = `otp:email-otp:signup:${email}`;
         const existingOtp = await redisClient.get(emailOtpKey);
 
@@ -119,7 +111,7 @@ const resendOtp = async (
         }
 
         const emailOtp = new EmailOtpVerification(email, 'signup');
-        await emailOtp.sendOtp();
+        await emailOtp.resendExistingOtp();
 
         await redisClient.incr(rateLimitKey);
         await redisClient.expire(rateLimitKey, 10 * 60); // 10 mins expiration
@@ -130,7 +122,6 @@ const resendOtp = async (
             throw new BadRequestError('Phone number is required');
         }
 
-        // Check if there's an active OTP session for phone
         const phoneOtpKey = `otp:phone-otp:signup:${email}:${phone}`;
         const existingOtp = await redisClient.get(phoneOtpKey);
 
@@ -156,8 +147,10 @@ const resendOtp = async (
             .where('phone_number.phone', '=', phone)
             .executeTakeFirst();
 
-        if (checkpointExists && checkpointExists.email !== email) {
-            throw new BadRequestError('Phone number already exists');
+        if (checkpointExists) {
+            if (checkpointExists.email !== email) {
+                throw new BadRequestError('Phone number already exists');
+            }
         }
 
         if (!(await redisClient.get(`email-verified:${email}`))) {
@@ -165,7 +158,7 @@ const resendOtp = async (
         }
 
         const phoneOtp = new PhoneOtpVerification(email, 'signup', phone);
-        await phoneOtp.sendOtp();
+        await phoneOtp.resendExistingOtp();
 
         await redisClient.incr(rateLimitKey);
         await redisClient.expire(rateLimitKey, 10 * 60); // 10 mins expiration
@@ -194,7 +187,7 @@ const verifyOtp = async (
         await phoneOtp.verifyOtp(otp);
         await redisClient.del(`email-verified:${email}`);
 
-        const result = await db.transaction().execute(async (tx) => {
+        const { client_id } = await db.transaction().execute(async (tx) => {
             const existingCheckpoint = await tx
                 .selectFrom('signup_checkpoints')
                 .leftJoin('phone_number', 'signup_checkpoints.phone_id', 'phone_number.id')
@@ -202,7 +195,7 @@ const verifyOtp = async (
                     'signup_checkpoints.id',
                     'signup_checkpoints.phone_id',
                     'phone_number.phone',
-                    // 'signup_checkpoints.client_id',
+                    'signup_checkpoints.client_id',
                 ])
                 .where('email', '=', email)
                 .executeTakeFirst();
@@ -224,7 +217,7 @@ const verifyOtp = async (
                     await tx.deleteFrom('phone_number').where('id', '=', existingCheckpoint.phone_id).execute();
                 }
 
-                return { client_id: null };
+                return existingCheckpoint;
             } else {
                 const phoneId = await tx
                     .insertInto('phone_number')
@@ -246,7 +239,7 @@ const verifyOtp = async (
 
         const token = sign<JwtType>({ email, phone });
 
-        res.status(OK).json({ message: 'OTP verified', token, data: { clientId: result.client_id } });
+        res.status(OK).json({ message: 'OTP verified', token, data: { clientId: client_id } });
     }
 };
 

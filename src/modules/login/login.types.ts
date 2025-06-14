@@ -1,11 +1,5 @@
 import { DefaultResponseData, Pretty } from '@app/types';
 
-// export type LoginResponseWithToken = DefaultResponseData<{
-//     isFirstLogin: boolean;
-// }> & {
-//     token: string;
-// };
-
 export type EmailOrClientId =
     | {
           clientId: string;
@@ -72,28 +66,11 @@ export type NewMpinRequestType = {
     newMpin: string;
 };
 
-// 2FA Types
-export type Setup2FARequestType = {
-    password: string;
-};
-
-export type Setup2FAResponseType = DefaultResponseData<{
-    secret: string;
-    qrCodeUrl: string;
-    manualEntryKey: string;
-}>;
-
-export type Verify2FASetupRequestType = {
-    secret: string;
-    token: string;
-};
-
 export type Verify2FARequestType = {
     sessionId: string;
     token: string;
 };
 
-export type Disable2FARequestType = {
-    password: string;
-    token: string;
+export type Send2FALoginOtpRequestType = {
+    sessionId: string;
 };

@@ -12,25 +12,21 @@ import * as QRCode from 'qrcode';
 import {
     LoginRequestType,
     ResetPasswordRequestType,
-    LoginOtpVerifyRequestType,
     ForgotPasswordRequestType,
     ForgotOTPVerifyRequestType,
     NewPasswordRequestType,
-    EmailOrClientId,
     ResendForgotPasswordOtpRequestType,
     MpinVerifyRequestType,
     ForgotMpinRequestType,
     ForgotMpinOtpVerifyRequestType,
     NewMpinRequestType,
     ResendForgotMpinOtpRequestType,
-    Setup2FARequestType,
-    Setup2FAResponseType,
-    Verify2FASetupRequestType,
     Verify2FARequestType,
-    Disable2FARequestType,
 } from './login.types';
+import { TwoFactorMethod } from '../account/general/general.types';
 import { ResponseWithToken, SessionJwtType } from '@app/modules/common.types';
 import { hashPassword, verifyPassword } from '@app/utils/passwords';
+import { PhoneOtpVerification } from '@app/services/otp.service';
 import {
     sendPasswordChangeConfirmation,
     sendLoginAlert,
@@ -45,6 +41,8 @@ const login = async (
     res: Response,
 ) => {
     const { password } = req.body;
+    const clientId = 'clientId' in req.body ? req.body.clientId : undefined;
+    const email = 'email' in req.body ? req.body.email : undefined;
     const user = await db
         .selectFrom('user')
         .innerJoin('user_password_details', 'user.id', 'user_password_details.user_id')
@@ -62,10 +60,10 @@ const login = async (
             'phone_number.phone',
         ])
         .$call((qb) => {
-            if ('clientId' in req.body) {
-                qb.where('user.id', '=', req.body.clientId);
-            } else if ('email' in req.body) {
-                qb.where('user.email', '=', req.body.email);
+            if (clientId) {
+                qb.where('user.id', '=', clientId);
+            } else if (email) {
+                qb.where('user.email', '=', email);
             }
 
             return qb;
@@ -78,15 +76,21 @@ const login = async (
         throw new UnauthorizedError('Invalid credentials');
     }
 
+    const user2FA = await db
+        .selectFrom('user_2fa')
+        .select(['method'])
+        .where('user_id', '=', user.id)
+        .executeTakeFirst();
+
     const loginSessionId = randomUUID();
     const loginSession = {
         sessionId: loginSessionId,
         userId: user.id,
         email: user.email,
         userName: user.first_name,
-        clientId: 'clientId' in req.body ? req.body.clientId : undefined,
+        clientId: clientId || undefined,
         passwordVerified: true,
-        otpVerified: false,
+        twoFactorVerified: false,
         mpinVerified: false,
         isUsed: false,
         createdAt: new Date().toISOString(),
@@ -96,36 +100,83 @@ const login = async (
     await redisClient.set(redisKey, JSON.stringify(loginSession));
     await redisClient.expire(redisKey, 10 * 60);
 
-    const emailOtp = new EmailOtpVerification(user.email, 'login');
-    await emailOtp.sendOtp();
+    if (user2FA && user2FA.method !== 'disabled') {
+        const method = user2FA.method as TwoFactorMethod;
 
-    const otpKey = `email-otp:login:${user.email}`;
-    const otp = await redisClient.get(otpKey);
+        if (method === TwoFactorMethod.SMS_OTP) {
+            const phoneStr = String(user.phone);
 
-    try {
-        if (user.phone && otp) {
-            await smsService.sendTemplatedSms(String(user.phone), SmsTemplateType.TERMINAL_LOGIN_OTP, [otp]);
-            logger.info(`Login OTP SMS sent to ${user.phone}`);
+            const smsOtp = new PhoneOtpVerification(user.email, '2fa-login', phoneStr);
+            await smsOtp.sendOtp();
+
+            const otpKey = `phone-otp:2fa-login:${user.phone}`;
+            const otp = await redisClient.get(otpKey);
+
+            // Send SMS using the 2FA template
+            try {
+                if (otp) {
+                    await smsService.sendTemplatedSms(phoneStr, SmsTemplateType.TWO_FACTOR_AUTHENTICATION_OTP, [otp]);
+                    logger.info(`2FA OTP SMS sent to ${user.phone}`);
+                }
+            } catch (error) {
+                logger.error(`Failed to send 2FA OTP SMS: ${error}`);
+            }
+
+            res.status(OK).json({
+                message: 'Password verified. SMS OTP sent for 2FA verification.',
+                data: {
+                    sessionId: loginSessionId,
+                    nextStep: '2fa',
+                    twoFactorMethod: method,
+                },
+            });
+        } else {
+            const user2FADetails = await db
+                .selectFrom('user_2fa')
+                .select(['secret'])
+                .where('user_id', '=', user.id)
+                .executeTakeFirst();
+
+            let qrCodeUrl;
+            if (user2FADetails?.secret) {
+                const secretObj = speakeasy.generateSecret({
+                    name: `Sapphire (${user.email})`,
+                    issuer: 'Sapphire Trading',
+                });
+
+                secretObj.base32 = user2FADetails.secret;
+
+                qrCodeUrl = await QRCode.toDataURL(secretObj.otpauth_url!);
+            }
+
+            res.status(OK).json({
+                message: 'Password verified. Please enter your authenticator code.',
+                data: {
+                    sessionId: loginSessionId,
+                    nextStep: '2fa',
+                    twoFactorMethod: method,
+                    qrCodeUrl,
+                    manualEntryKey: user2FADetails?.secret,
+                },
+            });
         }
-    } catch (error) {
-        logger.error(`Failed to send login OTP SMS: ${error}`);
+        return;
     }
-
     res.status(OK).json({
-        message: 'Password verified. OTP sent to your email.',
+        message: 'Password verified. Please enter your MPIN.',
         data: {
             sessionId: loginSessionId,
-            nextStep: 'otp',
+            nextStep: 'mpin',
         },
     });
 };
 
-// Verify the OTP for the login
-const verifyLoginOtp = async (
-    req: Request<undefined, ParamsDictionary, DefaultResponseData, LoginOtpVerifyRequestType>,
+// Verify 2FA during login
+const verify2FA = async (
+    req: Request<undefined, ParamsDictionary, DefaultResponseData, Verify2FARequestType>,
     res: Response,
 ) => {
-    const { otp, sessionId } = req.body;
+    const { sessionId, token } = req.body;
 
     const redisKey = `login_session:${sessionId}`;
     const sessionStr = await redisClient.get(redisKey);
@@ -144,29 +195,60 @@ const verifyLoginOtp = async (
         throw new UnauthorizedError('Password verification required first');
     }
 
-    if (session.otpVerified) {
-        throw new UnauthorizedError('OTP already verified');
+    if (session.twoFactorVerified) {
+        throw new UnauthorizedError('2FA already verified');
     }
 
-    const requestClientId = 'clientId' in req.body ? req.body.clientId : undefined;
-    const requestEmail = 'email' in req.body ? req.body.email : undefined;
+    // Get user's 2FA configuration
+    const user2FA = await db
+        .selectFrom('user_2fa')
+        .innerJoin('user', 'user_2fa.user_id', 'user.id')
+        .innerJoin('phone_number', 'user.phone', 'phone_number.id')
+        .select(['user_2fa.method', 'user_2fa.secret', 'phone_number.phone', 'user.email'])
+        .where('user_2fa.user_id', '=', session.userId)
+        .executeTakeFirst();
 
-    if (requestClientId && session.clientId !== requestClientId) {
-        throw new UnauthorizedError('Invalid login session - client ID mismatch');
+    if (!user2FA) {
+        throw new UnauthorizedError('2FA is not enabled for this account');
     }
-    if (requestEmail && session.email !== requestEmail) {
-        throw new UnauthorizedError('Invalid login session - email mismatch');
+
+    const method = user2FA.method as TwoFactorMethod;
+    let verified = false;
+
+    if (method === TwoFactorMethod.SMS_OTP) {
+        // Verify SMS OTP
+        const smsOtp = new PhoneOtpVerification(user2FA.email, '2fa-login' as any, user2FA.phone);
+        try {
+            await smsOtp.verifyOtp(token);
+            verified = true;
+        } catch (error) {
+            throw new UnauthorizedError('Invalid SMS OTP');
+        }
+    } else if (method === TwoFactorMethod.AUTHENTICATOR) {
+        // Verify Authenticator token
+        verified = speakeasy.totp.verify({
+            secret: user2FA.secret!,
+            encoding: 'base32',
+            token,
+            window: 2,
+        });
+
+        if (!verified) {
+            throw new UnauthorizedError('Invalid authenticator token');
+        }
+    } else {
+        throw new UnauthorizedError('Invalid 2FA method');
     }
 
-    const emailOtp = new EmailOtpVerification(session.email, 'login');
-    await emailOtp.verifyOtp(otp);
+    if (!verified) {
+        throw new UnauthorizedError('Invalid 2FA token');
+    }
 
-    // Mark OTP as verified
-    session.otpVerified = true;
+    session.twoFactorVerified = true;
     await redisClient.set(redisKey, JSON.stringify(session));
 
     res.status(OK).json({
-        message: 'OTP verified. Please enter MPIN.',
+        message: '2FA verified. Please enter your MPIN.',
         data: {
             sessionId,
             nextStep: 'mpin',
@@ -174,44 +256,184 @@ const verifyLoginOtp = async (
     });
 };
 
-// resend-login OTP
-
-const resendLoginOtp = async (
-    req: Request<undefined, ParamsDictionary, DefaultResponseData, EmailOrClientId>,
-    res: Response,
+const Resend2FALoginOtp = async (
+    req: Request<undefined, ParamsDictionary, DefaultResponseData, { sessionId: string }>,
+    res: Response<DefaultResponseData>,
 ) => {
-    const user = await db
-        .selectFrom('user')
-        .innerJoin('user_name', 'user.name', 'user_name.id')
+    const { sessionId } = req.body;
+
+    const redisKey = `login_session:${sessionId}`;
+    const sessionStr = await redisClient.get(redisKey);
+
+    if (!sessionStr) {
+        throw new UnauthorizedError('Login session expired or invalid');
+    }
+
+    const session = JSON.parse(sessionStr);
+
+    if (!session.passwordVerified) {
+        throw new UnauthorizedError('Password verification required first');
+    }
+
+    // Get user's 2FA configuration
+    const user2FA = await db
+        .selectFrom('user_2fa')
+        .innerJoin('user', 'user_2fa.user_id', 'user.id')
         .innerJoin('phone_number', 'user.phone', 'phone_number.id')
-        .select(['user.id', 'user.email', 'user_name.first_name', 'phone_number.phone'])
-        .$call((qb) => {
-            if ('clientId' in req.body) {
-                qb.where('user.id', '=', req.body.clientId);
-            } else if ('email' in req.body) {
-                qb.where('user.email', '=', req.body.email);
-            }
-            return qb;
-        })
-        .executeTakeFirstOrThrow();
+        .select(['user_2fa.method', 'phone_number.phone', 'user.email'])
+        .where('user_2fa.user_id', '=', session.userId)
+        .executeTakeFirst();
 
-    const emailOtp = new EmailOtpVerification(user.email, 'login');
-    await emailOtp.sendOtp();
+    if (!user2FA) {
+        throw new UnauthorizedError('2FA is not enabled for this account');
+    }
 
-    const otpKey = `email-otp:login:${user.email}`;
+    if (user2FA.method !== TwoFactorMethod.SMS_OTP) {
+        throw new UnauthorizedError('SMS OTP is not enabled for this account');
+    }
+
+    // Send SMS OTP
+    const smsOtp = new PhoneOtpVerification(user2FA.email, '2fa-login' as any, user2FA.phone);
+    await smsOtp.sendOtp();
+
+    const otpKey = `phone-otp:2fa-login:${user2FA.phone}`;
     const otp = await redisClient.get(otpKey);
 
     try {
-        if (user.phone && otp) {
-            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.TERMINAL_LOGIN_OTP, [otp]);
-            logger.info(`Login OTP SMS resent to ${user.phone}`);
+        if (otp) {
+            await smsService.sendTemplatedSms(user2FA.phone, SmsTemplateType.TWO_FACTOR_AUTHENTICATION_OTP, [otp]);
+            logger.info(`2FA OTP SMS resent to ${user2FA.phone}`);
         }
     } catch (error) {
-        logger.error(`Failed to resend login OTP SMS: ${error}`);
+        logger.error(`Failed to resend 2FA OTP SMS: ${error}`);
     }
 
     res.status(OK).json({
-        message: 'OTP resent successfully.',
+        message: 'OTP sent for 2FA verification',
+        data: {
+            maskedPhone: user2FA.phone.replace(/(\d{2})(\d{6})(\d{2})/, '$1******$3'),
+        },
+    });
+};
+
+const verifyMpin = async (
+    req: Request<undefined, ParamsDictionary, ResponseWithToken, MpinVerifyRequestType>,
+    res: Response<ResponseWithToken>,
+) => {
+    const { mpin, sessionId } = req.body;
+
+    const redisKey = `login_session:${sessionId}`;
+    const sessionStr = await redisClient.get(redisKey);
+
+    if (!sessionStr) {
+        throw new UnauthorizedError('Login session expired or invalid');
+    }
+
+    const session = JSON.parse(sessionStr);
+
+    if (session.isUsed) {
+        throw new UnauthorizedError('Login session already used');
+    }
+
+    if (!session.passwordVerified) {
+        throw new UnauthorizedError('Password verification required first');
+    }
+
+    // Check if 2FA was required and verified
+    const user2FA = await db
+        .selectFrom('user_2fa')
+        .select(['method'])
+        .where('user_id', '=', session.userId)
+        .executeTakeFirst();
+
+    if (user2FA && user2FA.method !== 'disabled') {
+        if (!session.twoFactorVerified) {
+            throw new UnauthorizedError('2FA verification required first');
+        }
+    }
+
+    if (session.mpinVerified) {
+        throw new UnauthorizedError('MPIN already verified');
+    }
+
+    const userId = session.userId;
+
+    const mpinRecord = await db
+        .selectFrom('user_mpin')
+        .innerJoin('hashing_algorithm', 'user_mpin.hash_algo_id', 'hashing_algorithm.id')
+        .select([
+            'user_mpin.mpin_hash as hashedPassword',
+            'user_mpin.mpin_salt as salt',
+            'user_mpin.is_active',
+            'user_mpin.failed_attempts',
+            'hashing_algorithm.name as hashAlgo',
+        ])
+        .where('user_mpin.client_id', '=', userId)
+        .executeTakeFirst();
+
+    if (!mpinRecord) {
+        throw new UnauthorizedError('MPIN not set for this user');
+    }
+
+    if (!mpinRecord.is_active) {
+        throw new UnauthorizedError('MPIN is disabled for this user');
+    }
+
+    if (mpinRecord.failed_attempts >= 3) {
+        throw new UnauthorizedError('MPIN is locked due to too many failed attempts');
+    }
+
+    const authenticated = await verifyPassword(mpin, {
+        hashedPassword: mpinRecord.hashedPassword,
+        salt: mpinRecord.salt,
+        hashAlgo: mpinRecord.hashAlgo,
+    });
+
+    if (!authenticated) {
+        await db
+            .updateTable('user_mpin')
+            .set({
+                failed_attempts: mpinRecord.failed_attempts + 1,
+                last_failed_attempt: new Date(),
+                updated_at: new Date(),
+            })
+            .where('client_id', '=', userId)
+            .execute();
+
+        throw new UnauthorizedError('Invalid MPIN');
+    }
+
+    await db
+        .updateTable('user_mpin')
+        .set({
+            failed_attempts: 0,
+            last_failed_attempt: null,
+            updated_at: new Date(),
+        })
+        .where('client_id', '=', userId)
+        .execute();
+
+    // Complete the login
+    session.mpinVerified = true;
+    session.isUsed = true;
+    await redisClient.set(redisKey, JSON.stringify(session));
+
+    // Generate token
+    const token = sign<SessionJwtType>({
+        userId: session.userId,
+    });
+
+    await sendLoginAlert(session.email, {
+        userName: session.userName,
+        email: session.email,
+        ip: req.ip || 'N/A',
+        deviceType: req.get('User-Agent') || 'Unknown Device',
+        location: 'Unknown Location',
+    });
+
+    res.status(OK).json({
+        message: 'Login successful',
+        token,
     });
 };
 
@@ -495,138 +717,6 @@ const forgotPasswordReset = async (
     res.status(OK).json({ message: 'Password reset successful' });
 };
 
-const verifyMpin = async (
-    req: Request<undefined, ParamsDictionary, ResponseWithToken, MpinVerifyRequestType>,
-    res: Response<ResponseWithToken>,
-) => {
-    const { mpin, sessionId } = req.body;
-
-    const redisKey = `login_session:${sessionId}`;
-    const sessionStr = await redisClient.get(redisKey);
-
-    if (!sessionStr) {
-        throw new UnauthorizedError('Login session expired or invalid');
-    }
-
-    const session = JSON.parse(sessionStr);
-
-    if (session.isUsed) {
-        throw new UnauthorizedError('Login session already used');
-    }
-
-    if (!session.passwordVerified) {
-        throw new UnauthorizedError('Password verification required first');
-    }
-
-    if (session.mpinVerified) {
-        throw new UnauthorizedError('MPIN already verified');
-    }
-
-    if (!session.otpVerified) {
-        throw new UnauthorizedError('OTP verification required first');
-    }
-
-    const userId = session.userId;
-
-    const mpinRecord = await db
-        .selectFrom('user_mpin')
-        .innerJoin('hashing_algorithm', 'user_mpin.hash_algo_id', 'hashing_algorithm.id')
-        .select([
-            'user_mpin.mpin_hash as hashedPassword',
-            'user_mpin.mpin_salt as salt',
-            'user_mpin.is_active',
-            'user_mpin.failed_attempts',
-            'hashing_algorithm.name as hashAlgo',
-        ])
-        .where('user_mpin.client_id', '=', userId)
-        .executeTakeFirst();
-
-    if (!mpinRecord) {
-        throw new UnauthorizedError('MPIN not set for this user');
-    }
-
-    if (!mpinRecord.is_active) {
-        throw new UnauthorizedError('MPIN is disabled for this user');
-    }
-
-    if (mpinRecord.failed_attempts >= 3) {
-        throw new UnauthorizedError('MPIN is locked due to too many failed attempts');
-    }
-
-    const authenticated = await verifyPassword(mpin, {
-        hashedPassword: mpinRecord.hashedPassword,
-        salt: mpinRecord.salt,
-        hashAlgo: mpinRecord.hashAlgo,
-    });
-
-    if (!authenticated) {
-        await db
-            .updateTable('user_mpin')
-            .set({
-                failed_attempts: mpinRecord.failed_attempts + 1,
-                last_failed_attempt: new Date(),
-                updated_at: new Date(),
-            })
-            .where('client_id', '=', userId)
-            .execute();
-
-        throw new UnauthorizedError('Invalid MPIN');
-    }
-
-    await db
-        .updateTable('user_mpin')
-        .set({
-            failed_attempts: 0,
-            last_failed_attempt: null,
-            updated_at: new Date(),
-        })
-        .where('client_id', '=', userId)
-        .execute();
-
-    session.mpinVerified = true;
-    await redisClient.set(redisKey, JSON.stringify(session));
-
-    // Check if 2FA is enabled for the user
-    const user2FA = await db
-        .selectFrom('user_2fa')
-        .select('id')
-        .where('user_id', '=', session.userId)
-        .executeTakeFirst();
-
-    if (user2FA) {
-        // 2FA is enabled, don't mark session as used yet
-        res.status(OK).json({
-            message: 'MPIN verified. Please provide your 2FA code.',
-            data: {
-                sessionId,
-            },
-        });
-        return;
-    }
-
-    // No 2FA enabled, complete the login
-    session.isUsed = true;
-    await redisClient.set(redisKey, JSON.stringify(session));
-
-    // Generate token
-    const token = sign<SessionJwtType>({
-        userId: session.userId,
-    });
-
-    await sendLoginAlert(session.email, {
-        userName: session.userName,
-        email: session.email,
-        ip: req.ip || 'N/A',
-        deviceType: req.get('User-Agent') || 'Unknown Device',
-        location: 'Unknown Location',
-    });
-
-    res.status(OK).json({
-        message: 'MPIN verification successful. Login complete.',
-        token,
-    });
-};
-
 const forgotMpinInitiate = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, ForgotMpinRequestType>,
     res: Response,
@@ -831,266 +921,9 @@ const forgotMpinReset = async (
     res.status(OK).json({ message: 'MPIN reset successful' });
 };
 
-// Setup 2FA
-const setup2FA = async (
-    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, Setup2FARequestType>,
-    res: Response<Setup2FAResponseType>,
-) => {
-    const { userId } = req.auth!;
-    const { password } = req.body;
-
-    // Verify user password first
-    const user = await db
-        .selectFrom('user')
-        .innerJoin('user_password_details', 'user.id', 'user_password_details.user_id')
-        .innerJoin('hashing_algorithm', 'user_password_details.hash_algo_id', 'hashing_algorithm.id')
-        .innerJoin('user_name', 'user.name', 'user_name.id')
-        .select([
-            'user.id',
-            'user.email',
-            'user_name.first_name',
-            'hashing_algorithm.name as hashAlgo',
-            'user_password_details.password_salt as salt',
-            'user_password_details.password_hash as hashedPassword',
-        ])
-        .where('user.id', '=', userId)
-        .executeTakeFirstOrThrow();
-
-    const authenticated = await verifyPassword(password, user);
-    if (!authenticated) {
-        throw new UnauthorizedError('Invalid password');
-    }
-
-    // Check if 2FA is already enabled
-    const existing2FA = await db
-        .selectFrom('user_2fa')
-        .select('secret')
-        .where('user_id', '=', userId)
-        .executeTakeFirst();
-
-    if (existing2FA) {
-        throw new UnauthorizedError('2FA is already enabled for this account');
-    }
-
-    // Generate secret
-    const secret = speakeasy.generateSecret({
-        name: `Sapphire (${user.email})`,
-        issuer: 'Sapphire Trading',
-        length: 32,
-    });
-
-    // Generate QR code
-    const qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url!);
-
-    // Store temporary secret in Redis (expires in 10 minutes)
-    const tempKey = `2fa_setup:${userId}`;
-    await redisClient.set(tempKey, secret.base32);
-    await redisClient.expire(tempKey, 10 * 60);
-
-    res.status(OK).json({
-        message: '2FA setup initiated. Please verify with your authenticator app.',
-        data: {
-            secret: secret.base32,
-            qrCodeUrl,
-            manualEntryKey: secret.base32,
-        },
-    });
-};
-
-// Verify 2FA setup
-const verify2FASetup = async (
-    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, Verify2FASetupRequestType>,
-    res: Response,
-) => {
-    const { userId } = req.auth!;
-    const { secret, token } = req.body;
-
-    // Retrieve secret from Redis
-    const tempKey = `2fa_setup:${userId}`;
-    const storedSecret = await redisClient.get(tempKey);
-
-    if (!storedSecret || storedSecret !== secret) {
-        throw new UnauthorizedError('Invalid or expired setup session');
-    }
-
-    // Verify the token
-    const verified = speakeasy.totp.verify({
-        secret,
-        encoding: 'base32',
-        token,
-        window: 2,
-    });
-
-    if (!verified) {
-        throw new UnauthorizedError('Invalid 2FA token');
-    }
-
-    // Save 2FA secret to database
-    await db.transaction().execute(async (tx) => {
-        await tx
-            .insertInto('user_2fa')
-            .values({
-                user_id: userId,
-                secret,
-            })
-            .onConflict((oc) =>
-                oc.column('user_id').doUpdateSet({
-                    secret,
-                    updated_at: new Date(),
-                }),
-            )
-            .execute();
-    });
-
-    // Remove temporary key
-    await redisClient.del(tempKey);
-
-    res.status(OK).json({
-        message: '2FA has been successfully enabled for your account',
-    });
-};
-
-// Verify 2FA during login
-const verify2FA = async (
-    req: Request<undefined, ParamsDictionary, DefaultResponseData, Verify2FARequestType>,
-    res: Response<ResponseWithToken>,
-) => {
-    const { sessionId, token } = req.body;
-
-    const redisKey = `login_session:${sessionId}`;
-    const sessionStr = await redisClient.get(redisKey);
-
-    if (!sessionStr) {
-        throw new UnauthorizedError('Login session expired or invalid');
-    }
-
-    const session = JSON.parse(sessionStr);
-
-    if (session.isUsed) {
-        throw new UnauthorizedError('Login session already used');
-    }
-
-    if (!session.passwordVerified || !session.otpVerified || !session.mpinVerified) {
-        throw new UnauthorizedError('Complete previous authentication steps first');
-    }
-
-    // Get user's 2FA secret
-    const user = await db
-        .selectFrom('user')
-        .innerJoin('user_2fa', 'user.id', 'user_2fa.user_id')
-        .innerJoin('phone_number', 'user.phone', 'phone_number.id')
-        .select(['user_2fa.secret', 'phone_number.phone'])
-        .where('user.id', '=', session.userId)
-        .executeTakeFirst();
-
-    if (!user) {
-        throw new UnauthorizedError('2FA is not enabled for this account');
-    }
-
-    // Verify the token
-    const verified = speakeasy.totp.verify({
-        secret: user.secret!,
-        encoding: 'base32',
-        token,
-        window: 2,
-    });
-
-    if (!verified) {
-        throw new UnauthorizedError('Invalid 2FA token');
-    }
-
-    // Mark session as used and generate JWT
-    session.isUsed = true;
-    session.twoFactorVerified = true;
-    await redisClient.set(redisKey, JSON.stringify(session));
-
-    const jwtToken = sign<SessionJwtType>({ userId: session.userId });
-
-    // Send login notification
-    await sendLoginAlert(session.email, {
-        userName: session.userName,
-        email: session.email,
-        ip: req.ip || 'N/A',
-        deviceType: req.get('User-Agent') || 'Unknown Device',
-        location: 'Unknown Location',
-    });
-
-    try {
-        if (user.phone) {
-            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.TWO_FACTOR_AUTHENTICATION_OTP, [token]);
-            logger.info(`2FA verification SMS sent to ${user.phone}`);
-        }
-    } catch (error) {
-        logger.error(`Failed to send 2FA verification SMS: ${error}`);
-    }
-
-    res.status(OK).json({
-        message: 'Login successful',
-        token: jwtToken,
-    });
-};
-
-// Disable 2FA
-const disable2FA = async (
-    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, Disable2FARequestType>,
-    res: Response,
-) => {
-    const { userId } = req.auth!;
-    const { password, token } = req.body;
-
-    // Verify user password
-    const user = await db
-        .selectFrom('user')
-        .innerJoin('user_password_details', 'user.id', 'user_password_details.user_id')
-        .innerJoin('hashing_algorithm', 'user_password_details.hash_algo_id', 'hashing_algorithm.id')
-        .select([
-            'user.id',
-            'hashing_algorithm.name as hashAlgo',
-            'user_password_details.password_salt as salt',
-            'user_password_details.password_hash as hashedPassword',
-        ])
-        .where('user.id', '=', userId)
-        .executeTakeFirstOrThrow();
-
-    const authenticated = await verifyPassword(password, user);
-    if (!authenticated) {
-        throw new UnauthorizedError('Invalid password');
-    }
-
-    // Get user's 2FA secret
-    const user2FA = await db.selectFrom('user_2fa').select('secret').where('user_id', '=', userId).executeTakeFirst();
-
-    if (!user2FA) {
-        throw new UnauthorizedError('2FA is not enabled for this account');
-    }
-
-    // Verify the 2FA token
-    const verified = speakeasy.totp.verify({
-        secret: user2FA.secret!,
-        encoding: 'base32',
-        token,
-        window: 2,
-    });
-
-    if (!verified) {
-        throw new UnauthorizedError('Invalid 2FA token');
-    }
-
-    // Disable 2FA
-    await db.transaction().execute(async (tx) => {
-        await tx.deleteFrom('user_2fa').where('user_id', '=', userId).execute();
-    });
-
-    res.status(OK).json({
-        message: '2FA has been successfully disabled for your account',
-    });
-};
-
 export {
     login,
-    verifyLoginOtp,
     verifyMpin,
-    resendLoginOtp,
     resetPassword,
     forgotPasswordInitiate,
     resendForgotPasswordOtp,
@@ -1100,8 +933,6 @@ export {
     forgotMpinOtpVerify,
     resendForgotMpinOtp,
     forgotMpinReset,
-    setup2FA,
-    verify2FASetup,
     verify2FA,
-    disable2FA,
+    Resend2FALoginOtp,
 };

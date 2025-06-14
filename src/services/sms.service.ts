@@ -144,12 +144,15 @@ export class SmsService {
         switch (context) {
             case 'signup':
                 return SmsTemplateType.SAPPHIRE_SIGNUP;
-            case 'login':
-                return SmsTemplateType.TERMINAL_LOGIN_OTP;
+            // case 'login':
+            //     return SmsTemplateType.TERMINAL_LOGIN_OTP;
             case 'forgot-password':
             case 'reset-password':
                 return SmsTemplateType.TERMINAL_PWD_RESET_OTP;
             case '2fa':
+            case '2fa-login':
+            case '2fa-setup':
+            case '2fa-disable':
                 return SmsTemplateType.TWO_FACTOR_AUTHENTICATION_OTP;
             default:
                 return null;
