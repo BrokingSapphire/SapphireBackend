@@ -27,6 +27,7 @@ import { TwoFactorMethod } from '../account/general/general.types';
 import { ResponseWithToken, SessionJwtType } from '@app/modules/common.types';
 import { hashPassword, verifyPassword } from '@app/utils/passwords';
 import { PhoneOtpVerification } from '@app/services/otp.service';
+import deviceTrackingService from '@app/services/deviceip.service';
 import {
     sendPasswordChangeConfirmation,
     sendLoginAlert,
@@ -43,6 +44,9 @@ const login = async (
     const { password } = req.body;
     const clientId = 'clientId' in req.body ? req.body.clientId : undefined;
     const email = 'email' in req.body ? req.body.email : undefined;
+
+    const deviceInfo = deviceTrackingService.getDeviceInfo(req);
+
     const user = await db
         .selectFrom('user')
         .innerJoin('user_password_details', 'user.id', 'user_password_details.user_id')
@@ -73,6 +77,24 @@ const login = async (
     const authenticated = await verifyPassword(password, user);
 
     if (!authenticated) {
+        await db
+            .insertInto('user_login_history')
+            .values({
+                user_id: user.id,
+                email: user.email,
+                ip_address: deviceInfo.ip,
+                user_agent: deviceInfo.device.userAgent,
+                browser: deviceInfo.device.browser || null,
+                device: deviceInfo.device.device || null,
+                device_type: deviceInfo.device.deviceType || null,
+                location_country: deviceInfo.location.country || null,
+                location_region: deviceInfo.location.region || null,
+                location_city: deviceInfo.location.city || null,
+                success: false,
+                failure_reason: 'Invalid password',
+                session_id: null,
+            })
+            .execute();
         throw new UnauthorizedError('Invalid credentials');
     }
 
@@ -94,6 +116,12 @@ const login = async (
         mpinVerified: false,
         isUsed: false,
         createdAt: new Date().toISOString(),
+        deviceInfo: {
+            ip: deviceInfo.ip,
+            location: deviceInfo.location,
+            device: deviceInfo.device,
+            timestamp: deviceInfo.timestamp,
+        },
     };
 
     const redisKey = `login_session:${loginSessionId}`;
@@ -186,6 +214,7 @@ const verify2FA = async (
     }
 
     const session = JSON.parse(sessionStr);
+    const deviceInfo = deviceTrackingService.getDeviceInfo(req);
 
     if (session.isUsed) {
         throw new UnauthorizedError('Login session already used');
@@ -234,6 +263,24 @@ const verify2FA = async (
         });
 
         if (!verified) {
+            await db
+                .insertInto('user_login_history')
+                .values({
+                    user_id: session.userId,
+                    email: session.email,
+                    ip_address: deviceInfo.ip,
+                    user_agent: deviceInfo.device.userAgent,
+                    browser: deviceInfo.device.browser || null,
+                    device: deviceInfo.device.device || null,
+                    device_type: deviceInfo.device.deviceType || null,
+                    location_country: deviceInfo.location.country || null,
+                    location_region: deviceInfo.location.region || null,
+                    location_city: deviceInfo.location.city || null,
+                    success: false,
+                    failure_reason: 'Invalid authenticator token',
+                    session_id: sessionId,
+                })
+                .execute();
             throw new UnauthorizedError('Invalid authenticator token');
         }
     } else {
@@ -254,6 +301,24 @@ const verify2FA = async (
             nextStep: 'mpin',
         },
     });
+    await db
+        .insertInto('user_login_history')
+        .values({
+            user_id: session.userId,
+            email: session.email,
+            ip_address: deviceInfo.ip,
+            user_agent: deviceInfo.device.userAgent,
+            browser: deviceInfo.device.browser || null,
+            device: deviceInfo.device.device || null,
+            device_type: deviceInfo.device.deviceType || null,
+            location_country: deviceInfo.location.country || null,
+            location_region: deviceInfo.location.region || null,
+            location_city: deviceInfo.location.city || null,
+            success: true,
+            failure_reason: null,
+            session_id: sessionId,
+        })
+        .execute();
 };
 
 const Resend2FALoginOtp = async (
@@ -330,6 +395,7 @@ const verifyMpin = async (
     }
 
     const session = JSON.parse(sessionStr);
+    const deviceInfo = deviceTrackingService.getDeviceInfo(req);
 
     if (session.isUsed) {
         throw new UnauthorizedError('Login session already used');
@@ -400,6 +466,25 @@ const verifyMpin = async (
             .where('client_id', '=', userId)
             .execute();
 
+        await db
+            .insertInto('user_login_history')
+            .values({
+                user_id: userId,
+                email: session.email,
+                ip_address: deviceInfo.ip,
+                user_agent: deviceInfo.device.userAgent,
+                browser: deviceInfo.device.browser || null,
+                device: deviceInfo.device.device || null,
+                device_type: deviceInfo.device.deviceType || null,
+                location_country: deviceInfo.location.country || null,
+                location_region: deviceInfo.location.region || null,
+                location_city: deviceInfo.location.city || null,
+                success: false,
+                failure_reason: 'Invalid MPIN',
+                session_id: sessionId,
+            })
+            .execute();
+
         throw new UnauthorizedError('Invalid MPIN');
     }
 
@@ -422,6 +507,25 @@ const verifyMpin = async (
     const token = sign<SessionJwtType>({
         userId: session.userId,
     });
+
+    await db
+        .insertInto('user_login_history')
+        .values({
+            user_id: userId,
+            email: session.email,
+            ip_address: deviceInfo.ip,
+            user_agent: deviceInfo.device.userAgent,
+            browser: deviceInfo.device.browser || null,
+            device: deviceInfo.device.device || null,
+            device_type: deviceInfo.device.deviceType || null,
+            location_country: deviceInfo.location.country || null,
+            location_region: deviceInfo.location.region || null,
+            location_city: deviceInfo.location.city || null,
+            success: true,
+            failure_reason: null,
+            session_id: sessionId,
+        })
+        .execute();
 
     await sendLoginAlert(session.email, {
         userName: session.userName,
