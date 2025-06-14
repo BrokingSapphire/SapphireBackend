@@ -41,6 +41,8 @@ const login = async (
     res: Response,
 ) => {
     const { password } = req.body;
+    const clientId = 'clientId' in req.body ? req.body.clientId : undefined;
+    const email = 'email' in req.body ? req.body.email : undefined;
     const user = await db
         .selectFrom('user')
         .innerJoin('user_password_details', 'user.id', 'user_password_details.user_id')
@@ -58,10 +60,10 @@ const login = async (
             'phone_number.phone',
         ])
         .$call((qb) => {
-            if ('clientId' in req.body) {
-                qb.where('user.id', '=', req.body.clientId);
-            } else if ('email' in req.body) {
-                qb.where('user.email', '=', req.body.email);
+            if (clientId) {
+                qb.where('user.id', '=', clientId);
+            } else if (email) {
+                qb.where('user.email', '=', email);
             }
 
             return qb;
@@ -86,7 +88,7 @@ const login = async (
         userId: user.id,
         email: user.email,
         userName: user.first_name,
-        clientId: 'clientId' in req.body ? req.body.clientId : undefined,
+        clientId: clientId || undefined,
         passwordVerified: true,
         twoFactorVerified: false,
         mpinVerified: false,
@@ -254,7 +256,7 @@ const verify2FA = async (
     });
 };
 
-const send2FALoginOtp = async (
+const Resend2FALoginOtp = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, { sessionId: string }>,
     res: Response<DefaultResponseData>,
 ) => {
@@ -932,5 +934,5 @@ export {
     resendForgotMpinOtp,
     forgotMpinReset,
     verify2FA,
-    send2FALoginOtp,
+    Resend2FALoginOtp,
 };

@@ -23,7 +23,7 @@ import {
     forgotPasswordReset,
     resendForgotPasswordOtp,
     verify2FA,
-    send2FALoginOtp,
+    Resend2FALoginOtp,
     verifyMpin,
     forgotMpinInitiate,
     forgotMpinOtpVerify,
@@ -158,7 +158,7 @@ router.post('/verify-2fa', validate(Verify2FASchema), verify2FA);
  *       401:
  *         description: Session expired, password verification required, or SMS OTP not enabled
  */
-router.post('/2fa/send-otp', validate(ResendLoginOtpSchema), send2FALoginOtp);
+router.post('/2fa/resend-otp', validate(ResendLoginOtpSchema), Resend2FALoginOtp);
 
 /**
  * @swagger
@@ -375,29 +375,6 @@ router.post('/forgot-password/verify-otp', validate(ForgotOTPVerifySchema), forg
  *         description: OTP not verified or session expired
  */
 router.post('/forgot-password/reset', validate(ForgotPasswordResetSchema), forgotPasswordReset);
-
-/**
- * @swagger
- * /login/verify-2fa:
- *   post:
- *     tags: [Login]
- *     summary: Verify 2FA code
- *     description: Verify the 2FA code during login
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/Verify2FASchema'
- *     responses:
- *       200:
- *         description: 2FA code verified successfully
- *       400:
- *         description: Invalid request
- *       401:
- *         description: Invalid or expired 2FA code
- */
-router.post('/verify-2fa', validate(Verify2FASchema), verify2FA);
 
 /**
  * @swagger
