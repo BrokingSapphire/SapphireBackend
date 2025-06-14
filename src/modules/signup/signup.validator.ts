@@ -76,13 +76,17 @@ const CheckpointSchema = Joi.object({
             .items(Joi.string().valid(...Object.values(InvestmentSegment)))
             .required(),
     }),
-    father_name: Joi.alternatives().conditional('step', {
+    father_spouse_name: Joi.alternatives().conditional('step', {
         is: CheckpointStep.USER_DETAIL,
         then: Joi.string().required(),
     }),
     mother_name: Joi.alternatives().conditional('step', {
         is: CheckpointStep.USER_DETAIL,
         then: Joi.string().required(),
+    }),
+    maiden_name: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.USER_DETAIL,
+        then: Joi.string().optional().allow(null, ''),
     }),
     marital_status: Joi.alternatives().conditional('step', {
         is: CheckpointStep.PERSONAL_DETAIL,
