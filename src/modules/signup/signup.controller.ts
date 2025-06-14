@@ -379,6 +379,78 @@ const getCheckpoint = async (req: Request<JwtType, GetCheckpointType>, res: Resp
             data: { nominees: formattedNominees },
             message: 'Nominees fetched successfully',
         });
+        // Add these cases to your getCheckpoint function, right before the final else block:
+    } else if (step === CheckpointStep.PASSWORD_SETUP) {
+        // Check if user has completed KYC and has client_id
+        const userCheckpoint = await db
+            .selectFrom('signup_checkpoints')
+            .select(['client_id'])
+            .where('email', '=', email)
+            .executeTakeFirstOrThrow();
+
+        if (!userCheckpoint.client_id) {
+            throw new ForbiddenError('Please complete KYC process first');
+        }
+
+        // Check if password is already set
+        const existingPassword = await db
+            .selectFrom('user_password_details')
+            .select('user_id')
+            .where('user_id', '=', userCheckpoint.client_id)
+            .executeTakeFirst();
+
+        res.status(OK).json({
+            data: {
+                client_id: userCheckpoint.client_id,
+                password_already_set: !!existingPassword,
+                requirements: {
+                    minLength: 8,
+                    maxLength: 64,
+                },
+            },
+            message: 'Password setup ready',
+        });
+    } else if (step === CheckpointStep.MPIN_SETUP) {
+        // Check if user has completed password setup
+        const userCheckpoint = await db
+            .selectFrom('signup_checkpoints')
+            .select(['client_id'])
+            .where('email', '=', email)
+            .executeTakeFirstOrThrow();
+
+        if (!userCheckpoint.client_id) {
+            throw new ForbiddenError('Please complete signup process first');
+        }
+
+        // Check if password is set (prerequisite for MPIN)
+        const existingPassword = await db
+            .selectFrom('user_password_details')
+            .select('user_id')
+            .where('user_id', '=', userCheckpoint.client_id)
+            .executeTakeFirst();
+
+        if (!existingPassword) {
+            throw new ForbiddenError('Please set password first');
+        }
+
+        // Check if MPIN is already set
+        const existingMpin = await db
+            .selectFrom('user_mpin')
+            .select('id')
+            .where('client_id', '=', userCheckpoint.client_id)
+            .executeTakeFirst();
+
+        res.status(OK).json({
+            data: {
+                client_id: userCheckpoint.client_id,
+                mpin_already_set: !!existingMpin,
+                requirements: {
+                    length: 4,
+                    type: 'numeric',
+                },
+            },
+            message: 'MPIN setup ready',
+        });
     } else {
         res.status(NOT_FOUND).json({ message: 'Checkpoint data not found' });
     }
