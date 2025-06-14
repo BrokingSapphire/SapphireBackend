@@ -24,8 +24,8 @@ export enum CheckpointStep {
     ESIGN_INITIALIZE = 'esign_initialize',
     ESIGN_COMPLETE = 'esign_complete',
     INCOME_PROOF = 'income_proof',
-    PASSWORD_SETUP = 'PASSWORD_SETUP',
-    MPIN_SETUP = 'MPIN_SETUP',
+    PASSWORD_SETUP = 'password_setup',
+    MPIN_SETUP = 'mpin_setup',
 }
 
 export enum InvestmentSegment {

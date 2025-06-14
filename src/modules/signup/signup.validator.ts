@@ -160,18 +160,19 @@ const CheckpointSchema = Joi.object({
         ),
     }),
 
-    password_setup: Joi.alternatives().conditional('step', {
+    password: Joi.alternatives().conditional('step', {
         is: CheckpointStep.PASSWORD_SETUP,
-        then: Joi.object({
-            password: Joi.string().min(8).max(64).required().messages({
-                'string.min': 'Password must be at least 8 characters',
-                'string.max': 'Password must not exceed 64 characters',
-                'any.required': 'Password is required',
-            }),
-            confirm_password: Joi.string().valid(Joi.ref('password')).required().messages({
-                'any.only': 'Passwords do not match',
-                'any.required': 'Confirm password is required',
-            }),
+        then: Joi.string().min(8).max(64).required().messages({
+            'string.min': 'Password must be at least 8 characters',
+            'string.max': 'Password must not exceed 64 characters',
+            'any.required': 'Password is required',
+        }),
+    }),
+    confirm_password: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.PASSWORD_SETUP,
+        then: Joi.string().valid(Joi.ref('password')).required().messages({
+            'any.only': 'Passwords do not match',
+            'any.required': 'Confirm password is required',
         }),
     }),
     mpin: Joi.alternatives().conditional('step', {
@@ -183,6 +184,13 @@ const CheckpointSchema = Joi.object({
                 'string.pattern.base': 'MPIN must be 4 digits',
                 'any.required': 'MPIN is required',
             }),
+    }),
+    confirm_mpin: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.MPIN_SETUP,
+        then: Joi.string().valid(Joi.ref('mpin')).required().messages({
+            'any.only': 'MPINs do not match',
+            'any.required': 'Confirm MPIN is required',
+        }),
     }),
 });
 
