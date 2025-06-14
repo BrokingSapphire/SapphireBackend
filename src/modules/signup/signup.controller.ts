@@ -49,11 +49,6 @@ const requestOtp = async (
 ) => {
     const { type, email } = req.body;
     if (type === CredentialsType.EMAIL) {
-        const userExists = await db.selectFrom('user').where('email', '=', email).executeTakeFirst();
-        if (userExists) {
-            throw new BadRequestError('Email already exists');
-        }
-
         const emailOtp = new EmailOtpVerification(email, 'signup');
         await emailOtp.sendOtp();
     } else if (type === CredentialsType.PHONE) {
@@ -74,8 +69,11 @@ const requestOtp = async (
             .select('signup_checkpoints.email')
             .where('phone_number.phone', '=', phone)
             .executeTakeFirst();
-        if (checkpointExists && checkpointExists.email !== email) {
-            throw new BadRequestError('Phone number already exists');
+
+        if (checkpointExists) {
+            if (checkpointExists.email !== email) {
+                throw new BadRequestError('Phone number already exists');
+            }
         }
 
         if (!(await redisClient.get(`email-verified:${email}`))) {
@@ -110,11 +108,6 @@ const resendOtp = async (
 
         if (!existingOtp) {
             throw new BadRequestError('No active OTP session found. Please request a new OTP.');
-        }
-        const userExists = await db.selectFrom('user').where('email', '=', email).executeTakeFirst();
-
-        if (userExists) {
-            throw new BadRequestError('Email already exists');
         }
 
         const emailOtp = new EmailOtpVerification(email, 'signup');
@@ -154,8 +147,10 @@ const resendOtp = async (
             .where('phone_number.phone', '=', phone)
             .executeTakeFirst();
 
-        if (checkpointExists && checkpointExists.email !== email) {
-            throw new BadRequestError('Phone number already exists');
+        if (checkpointExists) {
+            if (checkpointExists.email !== email) {
+                throw new BadRequestError('Phone number already exists');
+            }
         }
 
         if (!(await redisClient.get(`email-verified:${email}`))) {
