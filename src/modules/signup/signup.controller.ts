@@ -1298,15 +1298,19 @@ const postCheckpoint = async (
 
         const esignResponse = await ESignService.initialize({
             file_id,
-            pdf_pre_uploaded: true,
+            pdf_pre_uploaded: false,
+            expiry_minutes: 10,
+            sign_type: 'aadhaar',
             callback_url: redirect_url,
             config: {
                 accept_selfie: false,
                 allow_selfie_upload: false,
                 accept_virtual_sign: false,
                 track_location: false,
+                skip_otp: true,
+                skip_email: true,
                 auth_mode: '1',
-                reason: 'KYC-Document',
+                reason: 'kyc',
                 positions: {
                     '1': [
                         {

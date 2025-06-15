@@ -39,6 +39,8 @@ export interface ESignConfig {
     auth_mode: string;
     reason: string;
     positions: ESignPositions;
+    skip_otp?: boolean;
+    skip_email?: boolean;
 }
 
 export interface ESignInitializeRequest {
