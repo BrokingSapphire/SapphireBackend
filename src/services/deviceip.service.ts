@@ -37,6 +37,7 @@ export class DeviceTrackingService {
             logger.debug('Device info extracted', {
                 ip: deviceInfo.ip,
                 country: deviceInfo.location.country,
+                location: deviceInfo.location,
                 browser: deviceInfo.device.browser,
             });
 
@@ -123,22 +124,30 @@ export class DeviceTrackingService {
      * Get geographical information from IP address
      */
     private getLocationFromIp(ip: string) {
+        logger.debug(`Starting geolocation lookup for IP: ${ip}`);
+
         if (!this.isValidIp(ip) || ip === 'unknown') {
             return {};
         }
 
         try {
+            logger.debug(`Looking up geolocation for public IP: ${ip}`);
             const geo = geoip.lookup(ip);
+
+            logger.debug(`Geoip lookup result:`, geo);
 
             if (!geo) {
                 return { country: 'Unknown' };
             }
 
-            return {
+            const result = {
                 country: geo.country || 'Unknown',
                 region: geo.region || 'Unknown',
                 city: geo.city || 'Unknown',
             };
+
+            logger.debug(`Final location result:`, result);
+            return result;
         } catch (error) {
             logger.warn('Error getting location from IP:', error);
             return { country: 'Unknown' };
