@@ -1,6 +1,6 @@
 import axios, { AxiosResponse } from 'axios';
 import SurepassApi from './surepass-api';
-import { ESignInitializeRequest, ESignInitializeResponse, ESignStatusResponse, ESignDownloadResponse } from './types';
+import { ESignInitializeRequest } from './types';
 import { BlobLike, FormData } from 'formdata-node';
 
 const URI: string = 'esign';
@@ -10,7 +10,7 @@ class ESignService extends SurepassApi {
         super(URI);
     }
 
-    initialize<T = ESignInitializeResponse, R = AxiosResponse<T>>(data: ESignInitializeRequest): Promise<R> {
+    initialize<T = any, R = AxiosResponse<T>>(data: ESignInitializeRequest): Promise<R> {
         return this.request({
             url: 'initialize',
             method: 'POST',
@@ -61,16 +61,16 @@ class ESignService extends SurepassApi {
         });
     }
 
-    getStatus<T = ESignStatusResponse, R = AxiosResponse<T>>(clientId: string): Promise<R> {
+    getStatus<T = any, R = AxiosResponse<T>>(clientId: string): Promise<R> {
         return this.request({
             url: `status/${clientId}`,
             method: 'GET',
         });
     }
 
-    downloadSignedDocument<T = ESignDownloadResponse, R = AxiosResponse<T>>(clientId: string): Promise<R> {
+    downloadSignedDocument<T = any, R = AxiosResponse<T>>(clientId: string): Promise<R> {
         return this.request({
-            url: `download/${clientId}`,
+            url: `get-signed-document/${clientId}`,
             method: 'GET',
         });
     }

@@ -1347,11 +1347,9 @@ const postCheckpoint = async (
         let pdfBuffer = null;
 
         try {
-            logger.info(
-                `Downloading eSign document for user ${email} from: ${downloadResponse.data.data.download_url}`,
-            );
+            logger.info(`Downloading eSign document for user ${email} from: ${downloadResponse.data.data.url}`);
 
-            const pdfResponse = await axios.get(downloadResponse.data.data.download_url, {
+            const pdfResponse = await axios.get(downloadResponse.data.data.url, {
                 responseType: 'arraybuffer',
                 timeout: 60000,
                 maxContentLength: 50 * 1024 * 1024,
@@ -1373,7 +1371,6 @@ const postCheckpoint = async (
                 contentType: 'application/pdf',
                 metadata: {
                     'user-email': email,
-                    'original-filename': downloadResponse.data.data.file_name,
                     'document-type': 'esign-kyc',
                     'signed-date': new Date().toISOString(),
                     'file-size': pdfBuffer.length.toString(),
