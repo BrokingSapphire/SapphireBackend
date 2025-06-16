@@ -1687,6 +1687,15 @@ const getIncomeProof = async (req: Request<JwtType>, res: Response) => {
 const finalizeSignup = async (req: Request<JwtType>, res: Response) => {
     const { email } = req.auth!;
 
+    // format name for the first letter to be captial
+    const formatName = (name: string): string => {
+        if (!name) return '';
+        return name
+            .split(' ')
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
+    };
+
     const hasClientId = await db
         .selectFrom('signup_checkpoints')
         .select('client_id')
@@ -1734,8 +1743,11 @@ const finalizeSignup = async (req: Request<JwtType>, res: Response) => {
 
     try {
         if (userData.phone) {
+            const formattedName = formatName(userData.first_name);
+
             await smsService.sendTemplatedSms(userData.phone, SmsTemplateType.DOCUMENTS_RECEIVED_CONFIRMATION, [
-                userData.first_name,
+                // userData.first_name,
+                formattedName,
             ]);
             logger.info(`Account successfully opened SMS sent to ${userData.phone}`);
         }
@@ -1747,7 +1759,7 @@ const finalizeSignup = async (req: Request<JwtType>, res: Response) => {
         message: 'Sign up successfully.',
         data: {
             clientId: id,
-            firstName: userData.first_name,
+            firstName: formatName(userData.first_name),
         },
     });
 };
