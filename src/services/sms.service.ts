@@ -1,7 +1,7 @@
 import { env } from '@app/env';
 import axios from 'axios';
 import { InternalServerError } from '@app/apiError';
-import templateContentMap, { SmsTemplateType } from './sms-templates/sms.types';
+import templateContentMap, { SmsTemplateType } from './notifications-types/sms.types';
 import logger from '@app/logger';
 
 const BASE_URL = 'https://mobiglitz.com/vb'; // changed from http to https

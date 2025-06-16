@@ -2,6 +2,7 @@ import { env } from '@app/env';
 import axios from 'axios';
 import { InternalServerError } from '@app/apiError';
 import logger from '@app/logger';
+import notificationTemplateMap, { NotificationTemplateType } from './notifications-types/fcm.types';
 
 /**
  * Service for handling Firebase Cloud Messaging (FCM) push notifications
@@ -323,6 +324,40 @@ export class FcmService {
             logger.error(`FCM topic notification failed for: ${topic}`, error.message);
             throw new InternalServerError('Failed to send topic notification');
         }
+    }
+
+    public async sendTemplatedNotification(
+        token: string,
+        templateType: NotificationTemplateType,
+        variables: string[] = [],
+    ) {
+        const template = notificationTemplateMap[templateType];
+        if (!template) {
+            logger.error(`Notification template not found: ${templateType}`);
+            throw new InternalServerError('Notification template not found');
+        }
+
+        // Replace var in title and body
+        const title = this.replaceVariables(template.title, variables);
+        const body = this.replaceVariables(template.body, variables);
+
+        return await this.sendNotification(token, title, body, template.data, template.options);
+    }
+
+    /**
+     * Replace template variables
+     */
+    private replaceVariables(template: string, variables: string[]): string {
+        let result = template;
+
+        // Replace Placeholders
+        const placeholders = template.match(/\{#[^#]+#\}/g) || [];
+
+        for (let i = 0; i < Math.min(placeholders.length, variables.length); i++) {
+            result = result.replace(placeholders[i], variables[i]);
+        }
+
+        return result;
     }
 }
 

@@ -26,7 +26,7 @@ import {
     UserPermissions,
     UserSettings,
 } from './general.types';
-import { SmsTemplateType } from '@app/services/sms-templates/sms.types';
+import { SmsTemplateType } from '@app/services/notifications-types/sms.types';
 import smsService from '@app/services/sms.service';
 import { verifyPassword } from '@app/utils/passwords';
 import * as speakeasy from 'speakeasy';

@@ -40,7 +40,7 @@ import logger from '@app/logger';
 import IdGenerator from '@app/services/id-generator';
 import { sendDocumentsReceivedConfirmation } from '@app/services/notification.service';
 import s3Service from '@app/services/s3.service';
-import { SmsTemplateType } from '@app/services/sms-templates/sms.types';
+import { SmsTemplateType } from '@app/services/notifications-types/sms.types';
 import smsService from '@app/services/sms.service';
 
 const requestOtp = async (
@@ -1760,7 +1760,7 @@ const finalizeSignup = async (req: Request<JwtType>, res: Response) => {
 
     try {
         if (userData.phone) {
-            await smsService.sendTemplatedSms(userData.phone, SmsTemplateType.ACCOUNT_SUCCESSFULLY_OPENED, [
+            await smsService.sendTemplatedSms(userData.phone, SmsTemplateType.DOCUMENTS_RECEIVED_CONFIRMATION, [
                 userData.first_name,
             ]);
             logger.info(`Account successfully opened SMS sent to ${userData.phone}`);

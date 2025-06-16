@@ -15,7 +15,7 @@ import { insertNameGetId } from '@app/database/transactions';
 import splitName from '@app/utils/split-name';
 import { ParamsDictionary } from 'express-serve-static-core';
 import smsService from '@app/services/sms.service';
-import { SmsTemplateType } from '@app/services/sms-templates/sms.types';
+import { SmsTemplateType } from '@app/services/notifications-types/sms.types';
 import logger from '@app/logger';
 
 const assignOfficer = async (req: Request<SessionJwtType>, res: Response) => {

@@ -4,7 +4,7 @@ import transporter from '@app/services/email.service';
 import Mail from 'nodemailer/lib/mailer';
 import * as fs from 'node:fs';
 import smsService from './sms.service';
-import { SmsTemplateType } from './sms-templates/sms.types';
+import { SmsTemplateType } from './notifications-types/sms.types';
 
 interface NotificationData {
     userName: string;
