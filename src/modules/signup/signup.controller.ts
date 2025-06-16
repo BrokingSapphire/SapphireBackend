@@ -1394,7 +1394,7 @@ const setupMpin = async (
             .selectFrom('hashing_algorithm')
             .select('id')
             .where('name', '=', hashedMpin.hashAlgo)
-            .executeTakeFirstOrThrow();
+            .executeTakeFirst();
 
         let hashAlgoId;
         if (!hashAlgo) {
@@ -1472,7 +1472,7 @@ const setupPassword = async (
             .selectFrom('hashing_algorithm')
             .select('id')
             .where('name', '=', hashedPassword.hashAlgo)
-            .executeTakeFirstOrThrow();
+            .executeTakeFirst();
         let hashAlgoId;
         if (!hashAlgo) {
             const insertedHashAlgo = await tx
