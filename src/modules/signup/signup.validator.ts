@@ -179,23 +179,20 @@ const CheckpointSchema = Joi.object({
             'any.required': 'Confirm password is required',
         }),
     }),
-    mpin: Joi.alternatives().conditional('step', {
-        is: CheckpointStep.MPIN_SETUP,
-        then: Joi.string()
-            .pattern(/^[0-9]{4}$/)
-            .required()
-            .messages({
-                'string.pattern.base': 'MPIN must be 4 digits',
-                'any.required': 'MPIN is required',
-            }),
-    }),
-    confirm_mpin: Joi.alternatives().conditional('step', {
-        is: CheckpointStep.MPIN_SETUP,
-        then: Joi.string().valid(Joi.ref('mpin')).required().messages({
-            'any.only': 'MPINs do not match',
-            'any.required': 'Confirm MPIN is required',
+});
+
+const SetupMpinSchema = Joi.object({
+    mpin: Joi.string()
+        .pattern(/^[0-9]{4}$/)
+        .required()
+        .messages({
+            'string.pattern.base': 'MPIN must be 4 digits',
+            'any.required': 'MPIN is required',
         }),
+    confirm_mpin: Joi.string().valid(Joi.ref('mpin')).required().messages({
+        'any.only': 'MPINs do not match',
+        'any.required': 'Confirm MPIN is required',
     }),
 });
 
-export { RequestOtpSchema, ResendOtpSchema, VerifyOtpSchema, CheckpointSchema };
+export { RequestOtpSchema, ResendOtpSchema, VerifyOtpSchema, CheckpointSchema, SetupMpinSchema };

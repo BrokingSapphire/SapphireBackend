@@ -22,6 +22,7 @@ import {
     UIDParams,
     AccountType,
     ResendOtpType,
+    SetupMpinType,
 } from './signup.types';
 import { CredentialsType, ResponseWithToken } from '@app/modules/common.types';
 import DigiLockerService from '@app/services/surepass/digilocker.service';
@@ -1467,64 +1468,67 @@ const postCheckpoint = async (
         res.status(CREATED).json({
             message: 'Password set successfully. Please set your MPIN.',
         });
-    } else if (step === CheckpointStep.MPIN_SETUP) {
-        const { mpin, confirm_mpin } = req.body;
-
-        if (mpin !== confirm_mpin) {
-            throw new BadRequestError('MPINs do not match');
-        }
-
-        const userCheckpoint = await db
-            .selectFrom('signup_checkpoints')
-            .select(['client_id', 'id'])
-            .where('email', '=', email)
-            .executeTakeFirstOrThrow();
-
-        if (!userCheckpoint.client_id) {
-            throw new ForbiddenError('Please complete signup process first');
-        }
-
-        const existingMpin = await db
-            .selectFrom('user_mpin')
-            .select('id')
-            .where('client_id', '=', userCheckpoint.client_id)
-            .executeTakeFirst();
-
-        if (existingMpin) {
-            throw new BadRequestError('MPIN already set for this user');
-        }
-
-        const hashedMpin = await hashPassword(mpin, 'bcrypt');
-
-        const hashAlgoRecord = await db
-            .selectFrom('hashing_algorithm')
-            .select('id')
-            .where('name', '=', hashedMpin.hashAlgo)
-            .executeTakeFirstOrThrow();
-
-        await db.transaction().execute(async (tx) => {
-            if (!userCheckpoint.client_id) {
-                throw new ForbiddenError('Please complete signup process first');
-            }
-            await tx
-                .insertInto('user_mpin')
-                .values({
-                    client_id: userCheckpoint.client_id,
-                    mpin_hash: hashedMpin.hashedPassword,
-                    mpin_salt: hashedMpin.salt,
-                    hash_algo_id: hashAlgoRecord.id,
-                    created_at: new Date(),
-                    updated_at: new Date(),
-                    is_active: true,
-                    failed_attempts: 0,
-                })
-                .execute();
-        });
-
-        res.status(CREATED).json({
-            message: 'MPIN set successfully',
-        });
     }
+};
+
+const setupMpin = async (
+    req: Request<JwtType, ParamsDictionary, DefaultResponseData, SetupMpinType>,
+    res: Response,
+) => {
+    const { email } = req.auth!;
+    const { mpin, confirm_mpin } = req.body;
+
+    if (mpin !== confirm_mpin) {
+        throw new BadRequestError('MPINs do not match');
+    }
+
+    const userCheckpoint = await db
+        .selectFrom('signup_checkpoints')
+        .select(['client_id', 'id'])
+        .where('email', '=', email)
+        .executeTakeFirstOrThrow();
+
+    if (!userCheckpoint.client_id) {
+        throw new ForbiddenError('Please complete signup process first');
+    }
+
+    const existingMpin = await db
+        .selectFrom('user_mpin')
+        .select('id')
+        .where('client_id', '=', userCheckpoint.client_id)
+        .executeTakeFirst();
+
+    if (existingMpin) {
+        throw new BadRequestError('MPIN already set for this user');
+    }
+
+    const hashedMpin = await hashPassword(mpin, 'bcrypt');
+
+    const hashAlgoRecord = await db
+        .selectFrom('hashing_algorithm')
+        .select('id')
+        .where('name', '=', hashedMpin.hashAlgo)
+        .executeTakeFirstOrThrow();
+
+    await db.transaction().execute(async (tx) => {
+        await tx
+            .insertInto('user_mpin')
+            .values({
+                client_id: userCheckpoint.client_id!,
+                mpin_hash: hashedMpin.hashedPassword,
+                mpin_salt: hashedMpin.salt,
+                hash_algo_id: hashAlgoRecord.id,
+                created_at: new Date(),
+                updated_at: new Date(),
+                is_active: true,
+                failed_attempts: 0,
+            })
+            .execute();
+    });
+
+    res.status(CREATED).json({
+        message: 'MPIN set successfully',
+    });
 };
 
 const ipvImageUpload = wrappedMulterHandler(imageUpload.single('image'));
@@ -1774,4 +1778,5 @@ export {
     putIncomeProof,
     getIncomeProof,
     finalizeSignup,
+    setupMpin,
 };

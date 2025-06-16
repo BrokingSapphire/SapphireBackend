@@ -1,5 +1,11 @@
 import { Router } from 'express';
-import { CheckpointSchema, RequestOtpSchema, ResendOtpSchema, VerifyOtpSchema } from './signup.validator';
+import {
+    CheckpointSchema,
+    RequestOtpSchema,
+    ResendOtpSchema,
+    VerifyOtpSchema,
+    SetupMpinSchema,
+} from './signup.validator';
 import { validate } from '@app/middlewares';
 import {
     finalizeSignup,
@@ -14,6 +20,7 @@ import {
     requestOtp,
     resendOtp,
     verifyOtp,
+    setupMpin,
 } from './signup.controller';
 import { jwtMiddleware } from '@app/utils/jwt';
 
@@ -255,5 +262,31 @@ router.get('/income-proof', jwtMiddleware, getIncomeProof);
  *         description: Signup process incomplete or invalid
  */
 router.post('/finalize', jwtMiddleware, finalizeSignup);
+
+/**
+ * @swagger
+ * /setup-mpin:
+ *   post:
+ *     tags: [Signup]
+ *     summary: Setup MPIN after signup finalization
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/SetupMpinSchema'
+ *     responses:
+ *       201:
+ *         description: MPIN set successfully
+ *       401:
+ *         description: Unauthorized
+ *       400:
+ *         description: Invalid MPIN or MPINs do not match
+ *       403:
+ *         description: Please complete signup process first
+ */
+router.post('/setup-mpin', jwtMiddleware, validate(SetupMpinSchema), setupMpin);
 
 export default router;

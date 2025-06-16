@@ -210,12 +210,12 @@ export type PostCheckpointType =
           step: CheckpointStep.PASSWORD_SETUP;
           password: string;
           confirm_password: string;
-      }
-    | {
-          step: CheckpointStep.MPIN_SETUP;
-          mpin: string;
-          confirm_mpin: string;
       };
+
+export type SetupMpinType = {
+    mpin: string;
+    confirm_mpin: string;
+};
 
 export type UIDParams = {
     uid: string;
