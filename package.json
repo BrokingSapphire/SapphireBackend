@@ -38,6 +38,7 @@
     "fast-xml-parser": "^5.0.8",
     "firebase-admin": "^13.4.0",
     "geoip-lite": "^1.4.10",
+    "formdata-node": "^6.0.3",
     "helmet": "^8.0.0",
     "i18n-iso-countries": "^7.14.0",
     "joi": "^17.13.3",

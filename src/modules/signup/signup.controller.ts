@@ -22,6 +22,8 @@ import {
     UIDParams,
     AccountType,
     ResendOtpType,
+    SetupMpinType,
+    SetupPasswordType,
 } from './signup.types';
 import { CredentialsType, ResponseWithToken } from '@app/modules/common.types';
 import DigiLockerService from '@app/services/surepass/digilocker.service';
@@ -40,8 +42,9 @@ import logger from '@app/logger';
 import IdGenerator from '@app/services/id-generator';
 import { sendDocumentsReceivedConfirmation } from '@app/services/notification.service';
 import s3Service from '@app/services/s3.service';
-import { SmsTemplateType } from '@app/services/sms-templates/sms.types';
+import { SmsTemplateType } from '@app/services/notifications-types/sms.types';
 import smsService from '@app/services/sms.service';
+import { fileFromPath } from 'formdata-node/file-from-path';
 
 const requestOtp = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, RequestOtpType>,
@@ -88,7 +91,6 @@ const requestOtp = async (
 };
 
 // resendOTP
-
 const resendOtp = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, ResendOtpType>,
     res: Response,
@@ -485,13 +487,6 @@ const postCheckpoint = async (
         res.status(OK).json({ message: 'PAN verified' });
     } else if (step === CheckpointStep.AADHAAR_URI) {
         const { redirect } = req.body;
-
-        const checkpointData = await db
-            .selectFrom('signup_checkpoints')
-            .leftJoin('pan_detail', 'signup_checkpoints.pan_id', 'pan_detail.id')
-            .select(['signup_checkpoints.id', 'pan_detail.masked_aadhaar'])
-            .where('signup_checkpoints.email', '=', email)
-            .executeTakeFirstOrThrow();
 
         const digilocker = new DigiLockerService();
         const digiResponse = await digilocker.initialize({
@@ -1214,7 +1209,7 @@ const postCheckpoint = async (
 
         res.status(CREATED).json({ message: 'Nominees added.' });
     } else if (step === CheckpointStep.ESIGN_INITIALIZE) {
-        const { redirect_url, file_id } = req.body;
+        const { redirect_url } = req.body;
 
         const checkpointData = await db
             .selectFrom('signup_checkpoints')
@@ -1225,16 +1220,19 @@ const postCheckpoint = async (
             .executeTakeFirstOrThrow();
 
         const esignResponse = await ESignService.initialize({
-            file_id,
             pdf_pre_uploaded: true,
+            expiry_minutes: 10,
             callback_url: redirect_url,
             config: {
                 accept_selfie: false,
                 allow_selfie_upload: false,
                 accept_virtual_sign: false,
                 track_location: false,
+                allow_download: false,
+                skip_otp: true,
+                skip_email: true,
                 auth_mode: '1',
-                reason: 'KYC-Document',
+                reason: 'kyc',
                 positions: {
                     '1': [
                         {
@@ -1251,6 +1249,8 @@ const postCheckpoint = async (
             },
         });
 
+        await ESignService.uploadFile(esignResponse.data.data.client_id, await fileFromPath('documents/kyc.pdf'));
+
         const key = `esign:${email}`;
         await redisClient.set(key, esignResponse.data.data.client_id);
         await redisClient.expire(key, 10 * 60);
@@ -1258,8 +1258,6 @@ const postCheckpoint = async (
         res.status(OK).json({
             data: {
                 uri: esignResponse.data.data.url,
-                client_id: esignResponse.data.data.client_id,
-                token: esignResponse.data.data.token,
             },
             message: 'eSign session initialized',
         });
@@ -1272,19 +1270,15 @@ const postCheckpoint = async (
             throw new UnauthorizedError('eSign process not completed');
         }
 
-        await redisClient.del(`esign:${email}`);
-
         const downloadResponse = await ESignService.downloadSignedDocument(clientId);
 
         let s3UploadResult = null;
         let pdfBuffer = null;
 
         try {
-            logger.info(
-                `Downloading eSign document for user ${email} from: ${downloadResponse.data.data.download_url}`,
-            );
+            logger.info(`Downloading eSign document for user ${email} from: ${downloadResponse.data.data.url}`);
 
-            const pdfResponse = await axios.get(downloadResponse.data.data.download_url, {
+            const pdfResponse = await axios.get(downloadResponse.data.data.url, {
                 responseType: 'arraybuffer',
                 timeout: 60000,
                 maxContentLength: 50 * 1024 * 1024,
@@ -1306,8 +1300,6 @@ const postCheckpoint = async (
                 contentType: 'application/pdf',
                 metadata: {
                     'user-email': email,
-                    'client-id': clientId,
-                    'original-filename': downloadResponse.data.data.file_name,
                     'document-type': 'esign-kyc',
                     'signed-date': new Date().toISOString(),
                     'file-size': pdfBuffer.length.toString(),
@@ -1325,16 +1317,19 @@ const postCheckpoint = async (
             }
 
             // Fail the eSign process if document storage fails
-            throw new Error('Failed to store eSign document. Please try the eSign process again.');
+            // throw new Error('Failed to store eSign document. Please try the eSign process again.');
+            logger.warn(
+                `eSign document storage failed for user ${email}. Process will continue. Manual intervention may be required.`,
+            );
         }
 
-        // Only proceed if S3 upload was successful
-        if (!s3UploadResult) {
-            throw new Error('Failed to store eSign document. Please try again.');
-        }
+        // // Only proceed if S3 upload was successful
+        // if (!s3UploadResult) {
+        //     throw new Error('Failed to store eSign document. Please try again.');
+        // }
         await db.transaction().execute(async (tx) => {
             const checkpoint = await updateCheckpoint(tx, email, phone, {
-                esign: s3UploadResult.url,
+                esign: s3UploadResult?.url || downloadResponse.data.data.url,
             })
                 .returning('id')
                 .executeTakeFirstOrThrow();
@@ -1348,124 +1343,168 @@ const postCheckpoint = async (
                 .where('id', '=', checkpoint.id)
                 .execute();
         });
-        const downloadUrl = s3Service.getPublicDownloadUrl(s3UploadResult.key);
+
+        await redisClient.del(`esign:${email}`);
 
         res.status(OK).json({
             message: 'eSign completed successfully',
             data: {
-                document_stored: true,
-                file_name: downloadResponse.data.data.file_name,
-                storage_location: 's3',
-                download_url: downloadUrl,
+                download_url: s3UploadResult?.url || downloadResponse.data.data.url,
                 signed_at: new Date().toISOString(),
             },
         });
-    } else if (step === CheckpointStep.PASSWORD_SETUP) {
-        const { password, confirm_password } = req.body;
+    }
+};
 
-        if (password !== confirm_password) {
-            throw new BadRequestError('Passwords do not match');
-        }
-        const userCheckpoint = await db
-            .selectFrom('signup_checkpoints')
-            .select(['client_id', 'id'])
-            .where('email', '=', email)
-            .executeTakeFirstOrThrow();
+const setupMpin = async (
+    req: Request<JwtType, ParamsDictionary, DefaultResponseData, SetupMpinType>,
+    res: Response,
+) => {
+    const { email } = req.auth!;
+    const { mpin, confirm_mpin } = req.body;
 
-        if (!userCheckpoint.client_id) {
-            throw new ForbiddenError('Please complete KYC process first');
-        }
-        const existingPassword = await db
-            .selectFrom('user_password_details')
-            .select('user_id')
-            .where('user_id', '=', userCheckpoint.client_id)
-            .executeTakeFirst();
+    if (mpin !== confirm_mpin) {
+        throw new BadRequestError('MPINs do not match');
+    }
 
-        if (existingPassword) {
-            throw new BadRequestError('Password already set for this user');
-        }
+    const userCheckpoint = await db
+        .selectFrom('signup_checkpoints')
+        .select(['client_id', 'id'])
+        .where('email', '=', email)
+        .executeTakeFirstOrThrow();
 
-        const hashedPassword = await hashPassword(password, 'bcrypt');
+    if (!userCheckpoint.client_id) {
+        throw new ForbiddenError('Please complete signup process first');
+    }
 
-        const hashAlgoRecord = await db
-            .selectFrom('hashing_algorithm')
-            .select('id')
-            .where('name', '=', hashedPassword.hashAlgo)
-            .executeTakeFirstOrThrow();
+    const existingMpin = await db
+        .selectFrom('user_mpin')
+        .select('id')
+        .where('client_id', '=', userCheckpoint.client_id)
+        .executeTakeFirst();
 
-        await db.transaction().execute(async (tx) => {
-            await tx
-                .insertInto('user_password_details')
-                .values({
-                    user_id: userCheckpoint.client_id!,
-                    password_hash: hashedPassword.hashedPassword,
-                    password_salt: hashedPassword.salt,
-                    hash_algo_id: hashAlgoRecord.id,
-                })
-                .execute();
-        });
+    if (existingMpin) {
+        throw new BadRequestError('MPIN already set for this user');
+    }
 
-        res.status(CREATED).json({
-            message: 'Password set successfully. Please set your MPIN.',
-        });
-    } else if (step === CheckpointStep.MPIN_SETUP) {
-        const { mpin, confirm_mpin } = req.body;
+    const hashedMpin = await hashPassword(mpin, 'bcrypt');
 
-        if (mpin !== confirm_mpin) {
-            throw new BadRequestError('MPINs do not match');
-        }
-
-        const userCheckpoint = await db
-            .selectFrom('signup_checkpoints')
-            .select(['client_id', 'id'])
-            .where('email', '=', email)
-            .executeTakeFirstOrThrow();
-
-        if (!userCheckpoint.client_id) {
-            throw new ForbiddenError('Please complete signup process first');
-        }
-
-        const existingMpin = await db
-            .selectFrom('user_mpin')
-            .select('id')
-            .where('client_id', '=', userCheckpoint.client_id)
-            .executeTakeFirst();
-
-        if (existingMpin) {
-            throw new BadRequestError('MPIN already set for this user');
-        }
-
-        const hashedMpin = await hashPassword(mpin, 'bcrypt');
-
-        const hashAlgoRecord = await db
+    await db.transaction().execute(async (tx) => {
+        const hashAlgo = await db
             .selectFrom('hashing_algorithm')
             .select('id')
             .where('name', '=', hashedMpin.hashAlgo)
-            .executeTakeFirstOrThrow();
+            .executeTakeFirst();
 
-        await db.transaction().execute(async (tx) => {
-            if (!userCheckpoint.client_id) {
-                throw new ForbiddenError('Please complete signup process first');
-            }
-            await tx
-                .insertInto('user_mpin')
+        let hashAlgoId;
+        if (!hashAlgo) {
+            const insertedHashAlgo = await tx
+                .insertInto('hashing_algorithm')
                 .values({
-                    client_id: userCheckpoint.client_id,
-                    mpin_hash: hashedMpin.hashedPassword,
-                    mpin_salt: hashedMpin.salt,
-                    hash_algo_id: hashAlgoRecord.id,
-                    created_at: new Date(),
-                    updated_at: new Date(),
-                    is_active: true,
-                    failed_attempts: 0,
+                    name: 'bcrypt',
                 })
-                .execute();
-        });
+                .returning('id')
+                .executeTakeFirst();
 
-        res.status(CREATED).json({
-            message: 'MPIN set successfully',
-        });
+            if (!insertedHashAlgo) {
+                throw new Error('Failed to insert hashing algorithm');
+            }
+            hashAlgoId = insertedHashAlgo.id;
+        } else {
+            hashAlgoId = hashAlgo.id;
+        }
+
+        await tx
+            .insertInto('user_mpin')
+            .values({
+                client_id: userCheckpoint.client_id!,
+                mpin_hash: hashedMpin.hashedPassword,
+                mpin_salt: hashedMpin.salt,
+                hash_algo_id: hashAlgoId,
+                created_at: new Date(),
+                updated_at: new Date(),
+                is_active: true,
+                failed_attempts: 0,
+            })
+            .execute();
+    });
+
+    res.status(CREATED).json({
+        message: 'MPIN set successfully',
+    });
+};
+
+const setupPassword = async (
+    req: Request<JwtType, ParamsDictionary, DefaultResponseData, SetupPasswordType>,
+    res: Response,
+) => {
+    const { email } = req.auth!;
+    const { password, confirm_password } = req.body;
+
+    if (password !== confirm_password) {
+        throw new BadRequestError('Passwords do not match');
     }
+
+    const userCheckpoint = await db
+        .selectFrom('signup_checkpoints')
+        .select(['client_id', 'id'])
+        .where('email', '=', email)
+        .executeTakeFirstOrThrow();
+
+    if (!userCheckpoint.client_id) {
+        throw new ForbiddenError('Please complete signup process first');
+    }
+
+    const existingPassword = await db
+        .selectFrom('user_password_details')
+        .select('user_id')
+        .where('user_id', '=', userCheckpoint.client_id)
+        .executeTakeFirst();
+
+    if (existingPassword) {
+        throw new BadRequestError('Password already set for this user');
+    }
+
+    const hashedPassword = await hashPassword(password, 'bcrypt');
+
+    await db.transaction().execute(async (tx) => {
+        const hashAlgo = await db
+            .selectFrom('hashing_algorithm')
+            .select('id')
+            .where('name', '=', hashedPassword.hashAlgo)
+            .executeTakeFirst();
+        let hashAlgoId;
+        if (!hashAlgo) {
+            const insertedHashAlgo = await tx
+                .insertInto('hashing_algorithm')
+                .values({
+                    name: 'bcrypt',
+                })
+                .returning('id')
+                .executeTakeFirst();
+
+            if (!insertedHashAlgo) {
+                throw new Error('Failed to insert hashing algorithm');
+            }
+            hashAlgoId = insertedHashAlgo.id;
+        } else {
+            hashAlgoId = hashAlgo.id;
+        }
+
+        await tx
+            .insertInto('user_password_details')
+            .values({
+                user_id: userCheckpoint.client_id!,
+                password_hash: hashedPassword.hashedPassword,
+                password_salt: hashedPassword.salt,
+                hash_algo_id: hashAlgoId,
+            })
+            .execute();
+    });
+
+    res.status(CREATED).json({
+        message: 'Password set successfully. Please set your MPIN.',
+    });
 };
 
 const ipvImageUpload = wrappedMulterHandler(imageUpload.single('image'));
@@ -1648,6 +1687,15 @@ const getIncomeProof = async (req: Request<JwtType>, res: Response) => {
 const finalizeSignup = async (req: Request<JwtType>, res: Response) => {
     const { email } = req.auth!;
 
+    // format name for the first letter to be captial
+    const formatName = (name: string): string => {
+        if (!name) return '';
+        return name
+            .split(' ')
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
+    };
+
     const hasClientId = await db
         .selectFrom('signup_checkpoints')
         .select('client_id')
@@ -1656,6 +1704,17 @@ const finalizeSignup = async (req: Request<JwtType>, res: Response) => {
 
     if (hasClientId.client_id) {
         throw new ForbiddenError('Client ID already exists');
+    }
+
+    const esignStatus = await db
+        .selectFrom('signup_verification_status')
+        .innerJoin('signup_checkpoints', 'signup_verification_status.id', 'signup_checkpoints.id')
+        .select('signup_verification_status.esign_status')
+        .where('signup_checkpoints.email', '=', email)
+        .executeTakeFirst();
+
+    if (esignStatus?.esign_status !== 'verified') {
+        throw new ForbiddenError('Please complete eSign process first');
     }
 
     // TODO: Add more verification for fields
@@ -1684,8 +1743,11 @@ const finalizeSignup = async (req: Request<JwtType>, res: Response) => {
 
     try {
         if (userData.phone) {
-            await smsService.sendTemplatedSms(userData.phone, SmsTemplateType.ACCOUNT_SUCCESSFULLY_OPENED, [
-                userData.first_name,
+            const formattedName = formatName(userData.first_name);
+
+            await smsService.sendTemplatedSms(userData.phone, SmsTemplateType.DOCUMENTS_RECEIVED_CONFIRMATION, [
+                // userData.first_name,
+                formattedName,
             ]);
             logger.info(`Account successfully opened SMS sent to ${userData.phone}`);
         }
@@ -1697,7 +1759,7 @@ const finalizeSignup = async (req: Request<JwtType>, res: Response) => {
         message: 'Sign up successfully.',
         data: {
             clientId: id,
-            firstName: userData.first_name,
+            firstName: formatName(userData.first_name),
         },
     });
 };
@@ -1715,4 +1777,6 @@ export {
     putIncomeProof,
     getIncomeProof,
     finalizeSignup,
+    setupMpin,
+    setupPassword,
 };

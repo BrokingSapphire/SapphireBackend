@@ -36,9 +36,12 @@ export interface ESignConfig {
     allow_selfie_upload: boolean;
     accept_virtual_sign: boolean;
     track_location: boolean;
+    allow_download: boolean;
     auth_mode: string;
     reason: string;
     positions: ESignPositions;
+    skip_otp?: boolean;
+    skip_email?: boolean;
 }
 
 export interface ESignInitializeRequest {
@@ -55,41 +58,4 @@ export interface ESignInitializeRequest {
     expiry_minutes?: number;
     sign_type?: string;
     state?: string;
-}
-
-export interface ESignInitializeResponse {
-    data: {
-        token: string;
-        client_id: string;
-        url: string;
-    };
-    message_code: string;
-    success: boolean;
-    message: string;
-    status_code: number;
-}
-
-export interface ESignStatusResponse {
-    data: {
-        status: string;
-        completed: boolean;
-        signed_document_url?: string;
-        failure_reason?: string;
-    };
-    message_code: string;
-    success: boolean;
-    message: string;
-    status_code: number;
-}
-
-export interface ESignDownloadResponse {
-    data: {
-        download_url: string;
-        file_name: string;
-        mime_type: string;
-    };
-    message_code: string;
-    success: boolean;
-    message: string;
-    status_code: number;
 }

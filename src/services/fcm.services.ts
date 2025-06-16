@@ -1,585 +1,364 @@
-import * as admin from 'firebase-admin';
-import logger from '@app/logger';
 import { env } from '@app/env';
+import axios from 'axios';
+import { InternalServerError } from '@app/apiError';
+import logger from '@app/logger';
+import notificationTemplateMap, { NotificationTemplateType } from './notifications-types/fcm.types';
 
-interface FCMNotificationData {
-    userName: string;
-    userId: string;
-    tokens: string[];
-    date?: string;
-    time?: string;
-    ip?: string;
-    deviceType?: string;
-    location?: string;
-    amount?: string;
-    availableBalance?: string;
-    creditHours?: string;
-    reason?: string;
-    marginShortfall?: string;
-}
+/**
+ * Service for handling Firebase Cloud Messaging (FCM) push notifications
+ */
 
-interface NotificationPayload {
-    title: string;
-    body: string;
-    icon?: string;
-    image?: string;
-    clickAction?: string;
-    data?: Record<string, string>;
-}
+export class FcmService {
+    private readonly projectId: string;
+    private readonly clientEmail: string;
+    private readonly privateKey: string;
 
-// Initialize Firebase Admin SDK
-if (!admin.apps.length) {
-    admin.initializeApp({
-        credential: admin.credential.cert({
-            projectId: env.firebase.projectId,
-            clientEmail: env.firebase.clientEmail,
-            privateKey: env.firebase.privateKey.replace(/\\n/g, '\n'),
-        }),
-        projectId: env.firebase.projectId,
-    });
-}
+    private accessToken: string | null = null;
+    private tokenExpiryTime: number = 0;
 
-type FCMNotificationTemplate =
-    | 'password-change-confirmation'
-    | 'mpin-change-confirmation'
-    | 'account-locked'
-    | 'login-alert'
-    | 'welcome'
-    | 'withdrawal-processed'
-    | 'account-successfully-opened'
-    | 'documents-received-confirmation'
-    | 'margin-shortfall-alert'
-    | 'payout-rejected'
-    | 'documents-rejected-notification'
-    | 'kyc-update-required'
-    | 'funds-added'
-    | 'account-suspension-notice'
-    | 'trade-executed'
-    | 'market-alert'
-    | 'price-alert';
+    constructor() {
+        this.projectId = env.firebase.projectId;
+        this.clientEmail = env.firebase.clientEmail;
+        this.privateKey = env.firebase.privateKey;
 
-class FCMNotificationService {
-    private readonly template: FCMNotificationTemplate;
+        logger.info(`FCM Service initialized for project: ${this.projectId}`);
 
-    constructor(template: FCMNotificationTemplate) {
-        this.template = template;
-    }
-
-    public async sendNotification(data: FCMNotificationData): Promise<void> {
-        try {
-            if (!data.tokens || data.tokens.length === 0) {
-                logger.warn(`No FCM tokens provided for ${this.template} notification`);
-                return;
-            }
-
-            // Clean invalid tokens
-            const validTokens = await this.cleanInvalidTokens(data.tokens);
-
-            if (validTokens.length === 0) {
-                logger.warn(`No valid FCM tokens for ${this.template} notification`);
-                return;
-            }
-
-            const payload = this.buildNotificationPayload(data);
-            await this.sendToTokens(validTokens, payload);
-
-            logger.info(`Sent ${this.template} FCM notification to ${validTokens.length} devices`);
-        } catch (error) {
-            logger.error(`Failed to send ${this.template} FCM notification:`, error);
-            throw error;
+        if (!this.projectId || !this.clientEmail || !this.privateKey) {
+            logger.warn('FCM configuration incomplete - some environment variables missing');
         }
     }
 
     /**
-     * Send notification to specific tokens
+     * Get OAuth2 access token for FCM API
      */
-    private async sendToTokens(tokens: string[], payload: NotificationPayload): Promise<admin.messaging.BatchResponse> {
+    private async getAccessToken(): Promise<string> {
+        if (this.accessToken && Date.now() < this.tokenExpiryTime - 300000) {
+            return this.accessToken;
+        }
         try {
-            const message: admin.messaging.MulticastMessage = {
-                tokens,
-                notification: {
-                    title: payload.title,
-                    body: payload.body,
-                    imageUrl: payload.image,
-                },
-                data: payload.data,
-                webpush: payload.clickAction
-                    ? {
-                          notification: {
-                              icon: payload.icon || '/icons/notification-icon.png',
-                              requireInteraction: true,
-                              actions: [
-                                  {
-                                      action: 'open',
-                                      title: 'Open App',
-                                  },
-                              ],
-                          },
-                          fcmOptions: {
-                              link: payload.clickAction,
-                          },
-                      }
-                    : undefined,
-                android: {
+            const { GoogleAuth } = require('google-auth-library');
+
+            const serviceAccount = {
+                type: 'service_account',
+                project_id: this.projectId,
+                client_email: this.clientEmail,
+                private_key: this.privateKey.replace(/\\n/g, '\n'),
+            };
+
+            const auth = new GoogleAuth({
+                credentials: serviceAccount,
+                scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
+            });
+            const client = await auth.getClient();
+            const tokenResponse = await client.getAccessToken();
+
+            if (!tokenResponse.token) {
+                throw new Error('Failed to obtain access token');
+            }
+
+            this.accessToken = tokenResponse.token;
+            this.tokenExpiryTime = Date.now() + 3600000;
+
+            logger.debug('FCM access token obtained successfully');
+            return this.accessToken!;
+        } catch (error: any) {
+            logger.error('Failed to obtain FCM access token:', error.message);
+            throw new InternalServerError('Failed to authenticate with FCM service');
+        }
+    }
+    /**
+     * Send push notification to a specific device token
+     */
+    public async sendNotification(
+        token: string,
+        title: string,
+        body: string,
+        data?: Record<string, string>,
+        options?: {
+            imageUrl?: string;
+            clickAction?: string;
+            badge?: string;
+        },
+    ) {
+        if (!token || typeof token !== 'string') {
+            logger.error('Invalid FCM token provided');
+            throw new InternalServerError('Invalid device token');
+        }
+        try {
+            const accessToken = await this.getAccessToken();
+            const fcmEndpoint = `https://fcm.googleapis.com/v1/projects/${this.projectId}/messages:send`;
+
+            const message: any = {
+                message: {
+                    token,
                     notification: {
-                        icon: payload.icon,
-                        clickAction: payload.clickAction,
+                        title,
+                        body,
                     },
-                    priority: 'high',
-                },
-                apns: {
-                    payload: {
-                        aps: {
-                            badge: 1,
+                    android: {
+                        notification: {
+                            title,
+                            body,
+                            click_action: options?.clickAction,
+                            ...(options?.imageUrl && { image: options.imageUrl }),
+                        },
+                    },
+                    apns: {
+                        payload: {
+                            aps: {
+                                alert: {
+                                    title,
+                                    body,
+                                },
+                                badge: options?.badge ? parseInt(options.badge, 10) : undefined,
+                            },
+                        },
+                        ...(options?.imageUrl && {
+                            fcm_options: {
+                                image: options.imageUrl,
+                            },
+                        }),
+                    },
+                    webpush: {
+                        notification: {
+                            title,
+                            body,
+                            icon: '/icon-192x192.png', // Default app icon
+                            ...(options?.imageUrl && { image: options.imageUrl }),
+                        },
+                        fcm_options: {
+                            link: options?.clickAction || '/',
                         },
                     },
                 },
             };
 
-            const response = await admin.messaging().sendEachForMulticast(message, false);
-
-            // Log results
-            if (response.failureCount > 0) {
-                const failedTokens: string[] = [];
-                response.responses.forEach((resp, idx) => {
-                    if (!resp.success) {
-                        failedTokens.push(tokens[idx]);
-                        logger.error(`Failed to send FCM to token ${tokens[idx]}: ${resp.error?.message}`);
-                    }
-                });
-                logger.warn(`FCM batch send completed with ${response.failureCount} failures`);
+            // Add custom data if provided
+            if (data && Object.keys(data).length > 0) {
+                message.message.data = data;
             }
 
-            return response;
-        } catch (error) {
-            logger.error('Failed to send FCM batch notification:', error);
-            throw error;
-        }
-    }
+            logger.debug(`Sending FCM notification to token: ${token.substring(0, 20)}...`);
 
-    /**
-     * Validate FCM token
-     */
-    private async validateToken(token: string): Promise<boolean> {
-        try {
-            const testMessage: admin.messaging.Message = {
-                token,
-                data: { test: 'true' },
+            const response = await axios.post(fcmEndpoint, message, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${accessToken}`,
+                },
+                timeout: 10000, // 10 second timeout
+            });
+
+            logger.info(`FCM notification sent successfully to token: ${token.substring(0, 20)}...`, {
+                messageId: response.data.name,
+            });
+
+            return {
+                success: true,
+                messageId: response.data.name,
             };
-
-            await admin.messaging().send(testMessage, true);
-            return true;
         } catch (error: any) {
-            if (
-                error.code === 'messaging/invalid-registration-token' ||
-                error.code === 'messaging/registration-token-not-registered'
-            ) {
-                return false;
+            if (error.code === 'ECONNABORTED') {
+                logger.error(`FCM API timeout for token: ${token.substring(0, 20)}...`);
+                throw new InternalServerError('Push notification service timeout');
+            } else if (error.response) {
+                const errorData = error.response.data;
+                logger.error(`FCM API error for token: ${token.substring(0, 20)}...`, {
+                    status: error.response.status,
+                    error: errorData,
+                });
+
+                // Handle specific FCM errors
+                if (errorData?.error?.details?.[0]?.errorCode === 'UNREGISTERED') {
+                    logger.warn(`FCM token is invalid/unregistered: ${token.substring(0, 20)}...`);
+                    throw new InternalServerError('Device token is invalid or expired');
+                }
+
+                throw new InternalServerError(`Push notification service error: ${error.response.status}`);
+            } else {
+                logger.error(`FCM API network error for token: ${token.substring(0, 20)}...`, error.message);
+                throw new InternalServerError('Push notification service unavailable');
             }
-            return false;
         }
     }
-
     /**
-     * Clean invalid tokens from a list
+     * Send notifications to multiple tokens (batch)
      */
-    private async cleanInvalidTokens(tokens: string[]): Promise<string[]> {
-        const validTokens: string[] = [];
-
-        for (const token of tokens) {
-            const isValid = await this.validateToken(token);
-            if (isValid) {
-                validTokens.push(token);
-            }
+    public async sendBatchNotification(
+        tokens: string[],
+        title: string,
+        body: string,
+        data?: Record<string, string>,
+        options?: {
+            imageUrl?: string;
+            clickAction?: string;
+            badge?: string;
+        },
+    ) {
+        if (!tokens || tokens.length === 0) {
+            logger.warn('No tokens provided for batch notification');
+            return { success: [], failed: [] };
         }
 
-        return validTokens;
-    }
-    /**
-     * Build notification payload based on template
-     */
-    private buildNotificationPayload(data: FCMNotificationData): NotificationPayload {
-        const currentDate =
-            data.date ||
-            new Date().toLocaleDateString('en-IN', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-            });
-
-        const currentTime =
-            data.time ||
-            new Date().toLocaleTimeString('en-IN', {
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: true,
-            });
-
-        const baseData = {
-            template: this.template,
-            userId: data.userId,
-            timestamp: new Date().toISOString(),
+        const results = {
+            success: [] as string[],
+            failed: [] as { token: string; error: string }[],
         };
 
-        switch (this.template) {
-            case 'password-change-confirmation':
-                return {
-                    title: 'Password Changed Successfully',
-                    body: `Hi ${data.userName}, your password has been changed successfully on ${currentDate} at ${currentTime}.`,
-                    icon: '/icons/security.png',
-                    clickAction: '/profile/security',
-                    data: { ...baseData, type: 'security' },
-                };
+        // Process in batches of 500 (FCM limit)
+        const batchSize = 500;
+        for (let i = 0; i < tokens.length; i += batchSize) {
+            const batch = tokens.slice(i, i + batchSize);
 
-            case 'mpin-change-confirmation':
-                return {
-                    title: 'MPIN Changed Successfully',
-                    body: `Hi ${data.userName}, your MPIN has been changed successfully on ${currentDate} at ${currentTime}.`,
-                    icon: '/icons/security.png',
-                    clickAction: '/profile/security',
-                    data: { ...baseData, type: 'security' },
-                };
+            const promises = batch.map(async (token) => {
+                try {
+                    await this.sendNotification(token, title, body, data, options);
+                    results.success.push(token);
+                } catch (error: any) {
+                    results.failed.push({
+                        token: token.substring(0, 20) + '...',
+                        error: error.message,
+                    });
+                }
+            });
 
-            case 'account-locked':
-                return {
-                    title: 'Account Security Alert',
-                    body: `Hi ${data.userName}, your account has been temporarily locked due to security reasons. Please contact support.`,
-                    icon: '/icons/warning.png',
-                    clickAction: '/support',
-                    data: { ...baseData, type: 'security', priority: 'high' },
-                };
-
-            case 'login-alert':
-                return {
-                    title: 'New Login Detected',
-                    body: `Hi ${data.userName}, a new login was detected from ${data.deviceType || 'Unknown Device'} on ${currentDate}.`,
-                    icon: '/icons/login.png',
-                    clickAction: '/profile/security',
-                    data: {
-                        ...baseData,
-                        type: 'login',
-                        ip: data.ip || '',
-                        location: data.location || '',
-                        deviceType: data.deviceType || '',
-                    },
-                };
-
-            case 'welcome':
-                return {
-                    title: 'Welcome to Sapphire Broking',
-                    body: `Hi ${data.userName}, welcome to Sapphire Broking! Start your investment journey with us.`,
-                    icon: '/icons/welcome.png',
-                    clickAction: '/dashboard',
-                    data: { ...baseData, type: 'welcome' },
-                };
-
-            case 'funds-added':
-                return {
-                    title: 'Funds Added Successfully',
-                    body: `Hi ${data.userName}, ₹${data.amount} has been added to your account. Available balance: ₹${data.availableBalance}`,
-                    icon: '/icons/money.png',
-                    clickAction: '/funds',
-                    data: {
-                        ...baseData,
-                        type: 'funds',
-                        amount: data.amount || '',
-                        availableBalance: data.availableBalance || '',
-                    },
-                };
-
-            case 'withdrawal-processed':
-                return {
-                    title: 'Withdrawal Processed',
-                    body: `Hi ${data.userName}, your withdrawal of ₹${data.amount} has been processed successfully.`,
-                    icon: '/icons/withdrawal.png',
-                    clickAction: '/transactions',
-                    data: {
-                        ...baseData,
-                        type: 'withdrawal',
-                        amount: data.amount || '',
-                    },
-                };
-
-            case 'margin-shortfall-alert':
-                return {
-                    title: 'Margin Shortfall Alert',
-                    body: `Hi ${data.userName}, you have a margin shortfall of ₹${data.marginShortfall}. Please add funds immediately.`,
-                    icon: '/icons/alert.png',
-                    clickAction: '/funds/add',
-                    data: {
-                        ...baseData,
-                        type: 'margin',
-                        priority: 'high',
-                        marginShortfall: data.marginShortfall || '',
-                    },
-                };
-
-            case 'account-successfully-opened':
-                return {
-                    title: 'Account Successfully Opened',
-                    body: `Hi ${data.userName}, congratulations! Your trading account has been successfully opened.`,
-                    icon: '/icons/success.png',
-                    clickAction: '/dashboard',
-                    data: { ...baseData, type: 'account-status' },
-                };
-
-            case 'documents-received-confirmation':
-                return {
-                    title: 'Documents Received',
-                    body: `Hi ${data.userName}, we have received your documents and they are under review.`,
-                    icon: '/icons/documents.png',
-                    clickAction: '/profile/documents',
-                    data: { ...baseData, type: 'documents' },
-                };
-
-            case 'payout-rejected':
-                return {
-                    title: 'Payout Request Rejected',
-                    body: `Hi ${data.userName}, your payout request has been rejected. Reason: ${data.reason || 'Please contact support'}.`,
-                    icon: '/icons/error.png',
-                    clickAction: '/transactions',
-                    data: {
-                        ...baseData,
-                        type: 'payout',
-                        reason: data.reason || '',
-                    },
-                };
-
-            case 'documents-rejected-notification':
-                return {
-                    title: 'Documents Rejected',
-                    body: `Hi ${data.userName}, your submitted documents have been rejected. Please resubmit with correct information.`,
-                    icon: '/icons/warning.png',
-                    clickAction: '/profile/documents',
-                    data: {
-                        ...baseData,
-                        type: 'documents',
-                        reason: data.reason || '',
-                    },
-                };
-
-            case 'kyc-update-required':
-                return {
-                    title: 'KYC Update Required',
-                    body: `Hi ${data.userName}, please update your KYC information to continue using our services.`,
-                    icon: '/icons/kyc.png',
-                    clickAction: '/profile/kyc',
-                    data: { ...baseData, type: 'kyc' },
-                };
-
-            case 'account-suspension-notice':
-                return {
-                    title: 'Account Suspension Notice',
-                    body: `Hi ${data.userName}, your account has been suspended. Please contact support for assistance.`,
-                    icon: '/icons/suspension.png',
-                    clickAction: '/support',
-                    data: {
-                        ...baseData,
-                        type: 'suspension',
-                        priority: 'high',
-                    },
-                };
-
-            case 'trade-executed':
-                return {
-                    title: 'Trade Executed',
-                    body: `Hi ${data.userName}, your trade has been executed successfully.`,
-                    icon: '/icons/trade.png',
-                    clickAction: '/orders',
-                    data: { ...baseData, type: 'trade' },
-                };
-
-            case 'market-alert':
-                return {
-                    title: 'Market Alert',
-                    body: `Hi ${data.userName}, important market update available.`,
-                    icon: '/icons/market.png',
-                    clickAction: '/market',
-                    data: { ...baseData, type: 'market' },
-                };
-
-            case 'price-alert':
-                return {
-                    title: 'Price Alert',
-                    body: `Hi ${data.userName}, your price alert has been triggered.`,
-                    icon: '/icons/price.png',
-                    clickAction: '/watchlist',
-                    data: { ...baseData, type: 'price-alert' },
-                };
-
-            default:
-                return {
-                    title: 'Notification - Sapphire Broking',
-                    body: `Hi ${data.userName}, you have a new notification.`,
-                    icon: '/icons/notification.png',
-                    clickAction: '/notifications',
-                    data: { ...baseData, type: 'general' },
-                };
+            await Promise.allSettled(promises);
         }
-    }
-}
 
-// Utility class for FCM operations
-class FCMUtility {
+        logger.info(
+            `Batch notification completed: ${results.success.length} successful, ${results.failed.length} failed`,
+        );
+        return results;
+    }
     /**
-     * Send notification to topic
+     * Validate FCM token format
      */
-    static async sendToTopic(
+    public isValidToken(token: string): boolean {
+        // FCM tokens are typically 163 characters long and contain alphanumeric characters, hyphens, and underscores
+        const fcmTokenPattern = /^[a-zA-Z0-9_:-]{140,200}$/;
+        return fcmTokenPattern.test(token);
+    }
+    /**
+     * Send notification to a topic (mass notification)
+     */
+    public async sendTopicNotification(
         topic: string,
         title: string,
         body: string,
         data?: Record<string, string>,
-    ): Promise<string> {
+        options?: {
+            imageUrl?: string;
+            clickAction?: string;
+        },
+    ) {
         try {
-            const message: admin.messaging.Message = {
-                topic,
-                notification: { title, body },
-                data,
-                webpush: {
+            const accessToken = await this.getAccessToken();
+            const fcmEndpoint = `https://fcm.googleapis.com/v1/projects/${this.projectId}/messages:send`;
+
+            const message: any = {
+                message: {
+                    topic,
                     notification: {
-                        icon: '/icons/notification-icon.png',
-                        badge: '/icons/badge-icon.png',
+                        title,
+                        body,
+                    },
+                    android: {
+                        notification: {
+                            title,
+                            body,
+                            click_action: options?.clickAction,
+                            ...(options?.imageUrl && { image: options.imageUrl }),
+                        },
+                    },
+                    apns: {
+                        payload: {
+                            aps: {
+                                alert: {
+                                    title,
+                                    body,
+                                },
+                            },
+                        },
+                        ...(options?.imageUrl && {
+                            fcm_options: {
+                                image: options.imageUrl,
+                            },
+                        }),
+                    },
+                    webpush: {
+                        notification: {
+                            title,
+                            body,
+                            icon: '/icon-192x192.png',
+                            ...(options?.imageUrl && { image: options.imageUrl }),
+                        },
+                        fcm_options: {
+                            link: options?.clickAction || '/',
+                        },
                     },
                 },
             };
 
-            const response = await admin.messaging().send(message);
-            logger.info(`FCM topic notification sent successfully: ${response}`);
-            return response;
-        } catch (error) {
-            logger.error(`Failed to send FCM topic notification to ${topic}:`, error);
-            throw error;
+            if (data && Object.keys(data).length > 0) {
+                message.message.data = data;
+            }
+
+            logger.debug(`Sending FCM topic notification to: ${topic}`);
+
+            const response = await axios.post(fcmEndpoint, message, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${accessToken}`,
+                },
+                timeout: 10000,
+            });
+
+            logger.info(`FCM topic notification sent successfully to: ${topic}`, {
+                messageId: response.data.name,
+            });
+
+            return {
+                success: true,
+                messageId: response.data.name,
+            };
+        } catch (error: any) {
+            logger.error(`FCM topic notification failed for: ${topic}`, error.message);
+            throw new InternalServerError('Failed to send topic notification');
         }
+    }
+
+    public async sendTemplatedNotification(
+        token: string,
+        templateType: NotificationTemplateType,
+        variables: string[] = [],
+    ) {
+        const template = notificationTemplateMap[templateType];
+        if (!template) {
+            logger.error(`Notification template not found: ${templateType}`);
+            throw new InternalServerError('Notification template not found');
+        }
+
+        // Replace var in title and body
+        const title = this.replaceVariables(template.title, variables);
+        const body = this.replaceVariables(template.body, variables);
+
+        return await this.sendNotification(token, title, body, template.data, template.options);
     }
 
     /**
-     * Subscribe tokens to topic
+     * Replace template variables
      */
-    static async subscribeToTopic(
-        tokens: string[],
-        topic: string,
-    ): Promise<admin.messaging.MessagingTopicManagementResponse> {
-        try {
-            const response = await admin.messaging().subscribeToTopic(tokens, topic);
-            logger.info(`Subscribed ${response.successCount} tokens to topic: ${topic}`);
-            return response;
-        } catch (error) {
-            logger.error(`Failed to subscribe tokens to topic ${topic}:`, error);
-            throw error;
-        }
-    }
+    private replaceVariables(template: string, variables: string[]): string {
+        let result = template;
 
-    /**
-     * Unsubscribe tokens from topic
-     */
-    static async unsubscribeFromTopic(
-        tokens: string[],
-        topic: string,
-    ): Promise<admin.messaging.MessagingTopicManagementResponse> {
-        try {
-            const response = await admin.messaging().unsubscribeFromTopic(tokens, topic);
-            logger.info(`Unsubscribed ${response.successCount} tokens from topic: ${topic}`);
-            return response;
-        } catch (error) {
-            logger.error(`Failed to unsubscribe tokens from topic ${topic}:`, error);
-            throw error;
+        // Replace Placeholders
+        const placeholders = template.match(/\{#[^#]+#\}/g) || [];
+
+        for (let i = 0; i < Math.min(placeholders.length, variables.length); i++) {
+            result = result.replace(placeholders[i], variables[i]);
         }
+
+        return result;
     }
 }
 
-// Helper functions following your existing pattern
-export async function sendPasswordChangeConfirmationFCM(
-    tokens: string[],
-    userData: FCMNotificationData,
-): Promise<void> {
-    const fcmService = new FCMNotificationService('password-change-confirmation');
-    await fcmService.sendNotification({ ...userData, tokens });
-}
-
-export async function sendMpinChangeConfirmationFCM(tokens: string[], userData: FCMNotificationData): Promise<void> {
-    const fcmService = new FCMNotificationService('mpin-change-confirmation');
-    await fcmService.sendNotification({ ...userData, tokens });
-}
-
-export async function sendAccountLockedNotificationFCM(tokens: string[], userData: FCMNotificationData): Promise<void> {
-    const fcmService = new FCMNotificationService('account-locked');
-    await fcmService.sendNotification({ ...userData, tokens });
-}
-
-export async function sendLoginAlertFCM(tokens: string[], userData: FCMNotificationData): Promise<void> {
-    const fcmService = new FCMNotificationService('login-alert');
-    await fcmService.sendNotification({ ...userData, tokens });
-}
-
-export async function sendWelcomeFCM(tokens: string[], userData: FCMNotificationData): Promise<void> {
-    const fcmService = new FCMNotificationService('welcome');
-    await fcmService.sendNotification({ ...userData, tokens });
-}
-
-export async function sendWithdrawalProcessedFCM(tokens: string[], userData: FCMNotificationData): Promise<void> {
-    const fcmService = new FCMNotificationService('withdrawal-processed');
-    await fcmService.sendNotification({ ...userData, tokens });
-}
-
-export async function sendAccountSuccessfullyOpenedFCM(tokens: string[], userData: FCMNotificationData): Promise<void> {
-    const fcmService = new FCMNotificationService('account-successfully-opened');
-    await fcmService.sendNotification({ ...userData, tokens });
-}
-
-export async function sendDocumentsReceivedConfirmationFCM(
-    tokens: string[],
-    userData: FCMNotificationData,
-): Promise<void> {
-    const fcmService = new FCMNotificationService('documents-received-confirmation');
-    await fcmService.sendNotification({ ...userData, tokens });
-}
-
-export async function sendMarginShortfallAlertFCM(tokens: string[], userData: FCMNotificationData): Promise<void> {
-    const fcmService = new FCMNotificationService('margin-shortfall-alert');
-    await fcmService.sendNotification({ ...userData, tokens });
-}
-
-export async function sendPayoutRejectedFCM(tokens: string[], userData: FCMNotificationData): Promise<void> {
-    const fcmService = new FCMNotificationService('payout-rejected');
-    await fcmService.sendNotification({ ...userData, tokens });
-}
-
-export async function sendDocumentsRejectedNotificationFCM(
-    tokens: string[],
-    userData: FCMNotificationData,
-): Promise<void> {
-    const fcmService = new FCMNotificationService('documents-rejected-notification');
-    await fcmService.sendNotification({ ...userData, tokens });
-}
-
-export async function sendKycUpdateRequiredFCM(tokens: string[], userData: FCMNotificationData): Promise<void> {
-    const fcmService = new FCMNotificationService('kyc-update-required');
-    await fcmService.sendNotification({ ...userData, tokens });
-}
-
-export async function sendFundsAddedFCM(tokens: string[], userData: FCMNotificationData): Promise<void> {
-    const fcmService = new FCMNotificationService('funds-added');
-    await fcmService.sendNotification({ ...userData, tokens });
-}
-
-export async function sendAccountSuspensionNoticeFCM(tokens: string[], userData: FCMNotificationData): Promise<void> {
-    const fcmService = new FCMNotificationService('account-suspension-notice');
-    await fcmService.sendNotification({ ...userData, tokens });
-}
-
-export async function sendTradeExecutedFCM(tokens: string[], userData: FCMNotificationData): Promise<void> {
-    const fcmService = new FCMNotificationService('trade-executed');
-    await fcmService.sendNotification({ ...userData, tokens });
-}
-
-export async function sendMarketAlertFCM(tokens: string[], userData: FCMNotificationData): Promise<void> {
-    const fcmService = new FCMNotificationService('market-alert');
-    await fcmService.sendNotification({ ...userData, tokens });
-}
-
-export async function sendPriceAlertFCM(tokens: string[], userData: FCMNotificationData): Promise<void> {
-    const fcmService = new FCMNotificationService('price-alert');
-    await fcmService.sendNotification({ ...userData, tokens });
-}
-
-export { FCMNotificationService, FCMUtility, FCMNotificationData, FCMNotificationTemplate };
+export default new FcmService();

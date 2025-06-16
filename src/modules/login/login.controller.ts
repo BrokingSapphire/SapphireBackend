@@ -33,7 +33,7 @@ import {
     sendLoginAlert,
     sendMpinChangeConfirmation,
 } from '@app/services/notification.service';
-import { SmsTemplateType } from '@app/services/sms-templates/sms.types';
+import { SmsTemplateType } from '@app/services/notifications-types/sms.types';
 import smsService from '@app/services/sms.service';
 import logger from '@app/logger';
 
