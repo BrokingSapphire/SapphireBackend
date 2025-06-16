@@ -23,6 +23,7 @@ import {
     AccountType,
     ResendOtpType,
     SetupMpinType,
+    SetupPasswordType,
 } from './signup.types';
 import { CredentialsType, ResponseWithToken } from '@app/modules/common.types';
 import DigiLockerService from '@app/services/surepass/digilocker.service';
@@ -379,78 +380,6 @@ const getCheckpoint = async (req: Request<JwtType, GetCheckpointType>, res: Resp
         res.status(OK).json({
             data: { nominees: formattedNominees },
             message: 'Nominees fetched successfully',
-        });
-        // Add these cases to your getCheckpoint function, right before the final else block:
-    } else if (step === CheckpointStep.PASSWORD_SETUP) {
-        // Check if user has completed KYC and has client_id
-        const userCheckpoint = await db
-            .selectFrom('signup_checkpoints')
-            .select(['client_id'])
-            .where('email', '=', email)
-            .executeTakeFirstOrThrow();
-
-        if (!userCheckpoint.client_id) {
-            throw new ForbiddenError('Please complete KYC process first');
-        }
-
-        // Check if password is already set
-        const existingPassword = await db
-            .selectFrom('user_password_details')
-            .select('user_id')
-            .where('user_id', '=', userCheckpoint.client_id)
-            .executeTakeFirst();
-
-        res.status(OK).json({
-            data: {
-                client_id: userCheckpoint.client_id,
-                password_already_set: !!existingPassword,
-                requirements: {
-                    minLength: 8,
-                    maxLength: 64,
-                },
-            },
-            message: 'Password setup ready',
-        });
-    } else if (step === CheckpointStep.MPIN_SETUP) {
-        // Check if user has completed password setup
-        const userCheckpoint = await db
-            .selectFrom('signup_checkpoints')
-            .select(['client_id'])
-            .where('email', '=', email)
-            .executeTakeFirstOrThrow();
-
-        if (!userCheckpoint.client_id) {
-            throw new ForbiddenError('Please complete signup process first');
-        }
-
-        // Check if password is set (prerequisite for MPIN)
-        const existingPassword = await db
-            .selectFrom('user_password_details')
-            .select('user_id')
-            .where('user_id', '=', userCheckpoint.client_id)
-            .executeTakeFirst();
-
-        if (!existingPassword) {
-            throw new ForbiddenError('Please set password first');
-        }
-
-        // Check if MPIN is already set
-        const existingMpin = await db
-            .selectFrom('user_mpin')
-            .select('id')
-            .where('client_id', '=', userCheckpoint.client_id)
-            .executeTakeFirst();
-
-        res.status(OK).json({
-            data: {
-                client_id: userCheckpoint.client_id,
-                mpin_already_set: !!existingMpin,
-                requirements: {
-                    length: 4,
-                    type: 'numeric',
-                },
-            },
-            message: 'MPIN setup ready',
         });
     } else {
         res.status(NOT_FOUND).json({ message: 'Checkpoint data not found' });
@@ -1424,54 +1353,6 @@ const postCheckpoint = async (
                 signed_at: new Date().toISOString(),
             },
         });
-    } else if (step === CheckpointStep.PASSWORD_SETUP) {
-        const { password, confirm_password } = req.body;
-
-        if (password !== confirm_password) {
-            throw new BadRequestError('Passwords do not match');
-        }
-        const userCheckpoint = await db
-            .selectFrom('signup_checkpoints')
-            .select(['client_id', 'id'])
-            .where('email', '=', email)
-            .executeTakeFirstOrThrow();
-
-        if (!userCheckpoint.client_id) {
-            throw new ForbiddenError('Please complete KYC process first');
-        }
-        const existingPassword = await db
-            .selectFrom('user_password_details')
-            .select('user_id')
-            .where('user_id', '=', userCheckpoint.client_id)
-            .executeTakeFirst();
-
-        if (existingPassword) {
-            throw new BadRequestError('Password already set for this user');
-        }
-
-        const hashedPassword = await hashPassword(password, 'bcrypt');
-
-        const hashAlgoRecord = await db
-            .selectFrom('hashing_algorithm')
-            .select('id')
-            .where('name', '=', hashedPassword.hashAlgo)
-            .executeTakeFirstOrThrow();
-
-        await db.transaction().execute(async (tx) => {
-            await tx
-                .insertInto('user_password_details')
-                .values({
-                    user_id: userCheckpoint.client_id!,
-                    password_hash: hashedPassword.hashedPassword,
-                    password_salt: hashedPassword.salt,
-                    hash_algo_id: hashAlgoRecord.id,
-                })
-                .execute();
-        });
-
-        res.status(CREATED).json({
-            message: 'Password set successfully. Please set your MPIN.',
-        });
     }
 };
 
@@ -1532,6 +1413,62 @@ const setupMpin = async (
 
     res.status(CREATED).json({
         message: 'MPIN set successfully',
+    });
+};
+
+const setupPassword = async (
+    req: Request<JwtType, ParamsDictionary, DefaultResponseData, SetupPasswordType>,
+    res: Response,
+) => {
+    const { email } = req.auth!;
+    const { password, confirm_password } = req.body;
+
+    if (password !== confirm_password) {
+        throw new BadRequestError('Passwords do not match');
+    }
+
+    const userCheckpoint = await db
+        .selectFrom('signup_checkpoints')
+        .select(['client_id', 'id'])
+        .where('email', '=', email)
+        .executeTakeFirstOrThrow();
+
+    if (!userCheckpoint.client_id) {
+        throw new ForbiddenError('Please complete signup process first');
+    }
+
+    const existingPassword = await db
+        .selectFrom('user_password_details')
+        .select('user_id')
+        .where('user_id', '=', userCheckpoint.client_id)
+        .executeTakeFirst();
+
+    if (existingPassword) {
+        throw new BadRequestError('Password already set for this user');
+    }
+
+    const hashedPassword = await hashPassword(password, 'bcrypt');
+
+    const hashAlgoRecord = await db
+        .selectFrom('hashing_algorithm')
+        .select('id')
+        .where('name', '=', hashedPassword.hashAlgo)
+        .executeTakeFirstOrThrow();
+
+    await db.transaction().execute(async (tx) => {
+        await tx
+            .insertInto('user_password_details')
+            .values({
+                user_id: userCheckpoint.client_id!,
+                password_hash: hashedPassword.hashedPassword,
+                password_salt: hashedPassword.salt,
+                hash_algo_id: hashAlgoRecord.id,
+            })
+            .execute();
+    });
+
+    res.status(CREATED).json({
+        message: 'Password set successfully. Please set your MPIN.',
     });
 };
 
@@ -1794,4 +1731,5 @@ export {
     getIncomeProof,
     finalizeSignup,
     setupMpin,
+    setupPassword,
 };

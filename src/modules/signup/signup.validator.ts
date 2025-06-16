@@ -163,22 +163,6 @@ const CheckpointSchema = Joi.object({
             }),
         ),
     }),
-
-    password: Joi.alternatives().conditional('step', {
-        is: CheckpointStep.PASSWORD_SETUP,
-        then: Joi.string().min(8).max(64).required().messages({
-            'string.min': 'Password must be at least 8 characters',
-            'string.max': 'Password must not exceed 64 characters',
-            'any.required': 'Password is required',
-        }),
-    }),
-    confirm_password: Joi.alternatives().conditional('step', {
-        is: CheckpointStep.PASSWORD_SETUP,
-        then: Joi.string().valid(Joi.ref('password')).required().messages({
-            'any.only': 'Passwords do not match',
-            'any.required': 'Confirm password is required',
-        }),
-    }),
 });
 
 const SetupMpinSchema = Joi.object({
@@ -193,10 +177,23 @@ const SetupMpinSchema = Joi.object({
         'any.only': 'MPINs do not match',
         'any.required': 'Confirm MPIN is required',
     }),
-    redirect_url: Joi.alternatives().conditional('step', {
-        is: CheckpointStep.ESIGN_INITIALIZE,
-        then: Joi.string().uri().required(),
+});
+
+const SetupPasswordSchema = Joi.object({
+    password: Joi.string()
+        .min(8)
+        .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
+        .required()
+        .messages({
+            'string.min': 'Password must be at least 8 characters long',
+            'string.pattern.base':
+                'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character',
+            'any.required': 'Password is required',
+        }),
+    confirm_password: Joi.string().valid(Joi.ref('password')).required().messages({
+        'any.only': 'Passwords do not match',
+        'any.required': 'Confirm password is required',
     }),
 });
 
-export { RequestOtpSchema, ResendOtpSchema, VerifyOtpSchema, CheckpointSchema, SetupMpinSchema };
+export { RequestOtpSchema, ResendOtpSchema, VerifyOtpSchema, CheckpointSchema, SetupMpinSchema, SetupPasswordSchema };

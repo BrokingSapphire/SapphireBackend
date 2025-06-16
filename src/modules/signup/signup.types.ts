@@ -24,8 +24,6 @@ export enum CheckpointStep {
     ESIGN_INITIALIZE = 'esign_initialize',
     ESIGN_COMPLETE = 'esign_complete',
     INCOME_PROOF = 'income_proof',
-    PASSWORD_SETUP = 'password_setup',
-    MPIN_SETUP = 'mpin_setup',
 }
 
 export enum InvestmentSegment {
@@ -205,16 +203,16 @@ export type PostCheckpointType =
       }
     | {
           step: CheckpointStep.ESIGN_COMPLETE;
-      }
-    | {
-          step: CheckpointStep.PASSWORD_SETUP;
-          password: string;
-          confirm_password: string;
       };
 
 export type SetupMpinType = {
     mpin: string;
     confirm_mpin: string;
+};
+
+export type SetupPasswordType = {
+    password: string;
+    confirm_password: string;
 };
 
 export type UIDParams = {

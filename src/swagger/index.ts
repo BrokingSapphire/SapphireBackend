@@ -6,6 +6,7 @@ import {
     VerifyOtpSchema,
     CheckpointSchema,
     SetupMpinSchema,
+    SetupPasswordSchema,
 } from '@app/modules/signup/signup.validator';
 import { AccountType, CheckpointStep, ValidationType } from '@app/modules/signup/signup.types';
 import { env } from '@app/env';
@@ -14,6 +15,7 @@ const { swagger: requestOtpSwagger } = j2s(RequestOtpSchema);
 const { swagger: verifyOtpSwagger } = j2s(VerifyOtpSchema);
 const { swagger: checkpointSwagger } = j2s(CheckpointSchema);
 const { swagger: setupMpinSwagger } = j2s(SetupMpinSchema);
+const { swagger: setupPasswordSwagger } = j2s(SetupPasswordSchema);
 
 const checkpointSchemaDestructed = {
     [CheckpointStep.PAN]: {
@@ -224,6 +226,7 @@ const swaggerDocument = {
             VerifyOtp: verifyOtpSwagger,
             Checkpoint: checkpointSwagger,
             SetupMpinSchema: setupMpinSwagger,
+            SetupPasswordSchema: setupPasswordSwagger,
             ...Object.fromEntries(
                 Object.entries(checkpointSchemaDestructed).map(([key, value]) => [`Checkpoint-${key}`, value]),
             ),

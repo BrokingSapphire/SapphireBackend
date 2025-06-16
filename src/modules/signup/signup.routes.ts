@@ -5,6 +5,7 @@ import {
     ResendOtpSchema,
     VerifyOtpSchema,
     SetupMpinSchema,
+    SetupPasswordSchema,
 } from './signup.validator';
 import { validate } from '@app/middlewares';
 import {
@@ -21,6 +22,7 @@ import {
     resendOtp,
     verifyOtp,
     setupMpin,
+    setupPassword,
 } from './signup.controller';
 import { jwtMiddleware } from '@app/utils/jwt';
 
@@ -262,6 +264,32 @@ router.get('/income-proof', jwtMiddleware, getIncomeProof);
  *         description: Signup process incomplete or invalid
  */
 router.post('/finalize', jwtMiddleware, finalizeSignup);
+
+/**
+ * @swagger
+ * /setup-password:
+ *   post:
+ *     tags: [Signup]
+ *     summary: Setup password after signup finalization
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/SetupPasswordSchema'
+ *     responses:
+ *       201:
+ *         description: Password set successfully
+ *       401:
+ *         description: Unauthorized
+ *       400:
+ *         description: Invalid password or passwords do not match
+ *       403:
+ *         description: Please complete signup process first
+ */
+router.post('/setup-password', jwtMiddleware, validate(SetupPasswordSchema), setupPassword);
 
 /**
  * @swagger
