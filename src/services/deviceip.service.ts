@@ -60,9 +60,17 @@ export class DeviceTrackingService {
      */
 
     private extractClientIp(req: Request): string {
-        const ip = requestIp.getClientIp(req);
+        let ip = requestIp.getClientIp(req);
 
-        if (!ip || ip === '::1' || ip === '127.0.0.1') {
+        if (ip && ip.startsWith('::ffff:')) {
+            ip = ip.substring(7);
+            logger.debug(`Cleaned IPv6-wrapped IP: ${requestIp.getClientIp(req)} → ${ip}`);
+        }
+
+        if (ip === '::1') {
+            ip = '127.0.0.1';
+        }
+        if (!ip || ip === '127.0.0.1') {
             // Check various headers in order of reliability
             const headers = [
                 'cf-connecting-ip', // CloudFlare
@@ -76,7 +84,13 @@ export class DeviceTrackingService {
             for (const header of headers) {
                 const headerValue = req.get(header);
                 if (headerValue) {
-                    const firstIp = headerValue.split(',')[0].trim();
+                    let firstIp = headerValue.split(',')[0].trim();
+
+                    // Clean IPv6 wrapper from header values too
+                    if (firstIp.startsWith('::ffff:')) {
+                        firstIp = firstIp.substring(7);
+                    }
+
                     if (this.isValidIp(firstIp)) {
                         return firstIp;
                     }
