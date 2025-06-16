@@ -42,6 +42,7 @@ import { sendDocumentsReceivedConfirmation } from '@app/services/notification.se
 import s3Service from '@app/services/s3.service';
 import { SmsTemplateType } from '@app/services/notifications-types/sms.types';
 import smsService from '@app/services/sms.service';
+import { fileFromPath } from 'formdata-node/file-from-path';
 
 const requestOtp = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, RequestOtpType>,
@@ -88,7 +89,6 @@ const requestOtp = async (
 };
 
 // resendOTP
-
 const resendOtp = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, ResendOtpType>,
     res: Response,
@@ -557,13 +557,6 @@ const postCheckpoint = async (
         res.status(OK).json({ message: 'PAN verified' });
     } else if (step === CheckpointStep.AADHAAR_URI) {
         const { redirect } = req.body;
-
-        const checkpointData = await db
-            .selectFrom('signup_checkpoints')
-            .leftJoin('pan_detail', 'signup_checkpoints.pan_id', 'pan_detail.id')
-            .select(['signup_checkpoints.id', 'pan_detail.masked_aadhaar'])
-            .where('signup_checkpoints.email', '=', email)
-            .executeTakeFirstOrThrow();
 
         const digilocker = new DigiLockerService();
         const digiResponse = await digilocker.initialize({
@@ -1286,7 +1279,7 @@ const postCheckpoint = async (
 
         res.status(CREATED).json({ message: 'Nominees added.' });
     } else if (step === CheckpointStep.ESIGN_INITIALIZE) {
-        const { redirect_url, file_id } = req.body;
+        const { redirect_url } = req.body;
 
         const checkpointData = await db
             .selectFrom('signup_checkpoints')
@@ -1297,10 +1290,8 @@ const postCheckpoint = async (
             .executeTakeFirstOrThrow();
 
         const esignResponse = await ESignService.initialize({
-            file_id,
-            pdf_pre_uploaded: false,
+            pdf_pre_uploaded: true,
             expiry_minutes: 10,
-            sign_type: 'aadhaar',
             callback_url: redirect_url,
             config: {
                 accept_selfie: false,
@@ -1327,6 +1318,8 @@ const postCheckpoint = async (
             },
         });
 
+        await ESignService.uploadFile(esignResponse.data.data.client_id, await fileFromPath('documents/kyc.pdf'));
+
         const key = `esign:${email}`;
         await redisClient.set(key, esignResponse.data.data.client_id);
         await redisClient.expire(key, 10 * 60);
@@ -1334,8 +1327,6 @@ const postCheckpoint = async (
         res.status(OK).json({
             data: {
                 uri: esignResponse.data.data.url,
-                client_id: esignResponse.data.data.client_id,
-                token: esignResponse.data.data.token,
             },
             message: 'eSign session initialized',
         });
@@ -1382,7 +1373,6 @@ const postCheckpoint = async (
                 contentType: 'application/pdf',
                 metadata: {
                     'user-email': email,
-                    'client-id': clientId,
                     'original-filename': downloadResponse.data.data.file_name,
                     'document-type': 'esign-kyc',
                     'signed-date': new Date().toISOString(),
@@ -1424,15 +1414,11 @@ const postCheckpoint = async (
                 .where('id', '=', checkpoint.id)
                 .execute();
         });
-        const downloadUrl = s3Service.getPublicDownloadUrl(s3UploadResult.key);
 
         res.status(OK).json({
             message: 'eSign completed successfully',
             data: {
-                document_stored: true,
-                file_name: downloadResponse.data.data.file_name,
-                storage_location: 's3',
-                download_url: downloadUrl,
+                download_url: s3UploadResult.url,
                 signed_at: new Date().toISOString(),
             },
         });
