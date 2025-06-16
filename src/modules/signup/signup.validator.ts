@@ -163,6 +163,10 @@ const CheckpointSchema = Joi.object({
             }),
         ),
     }),
+    redirect_url: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.ESIGN_INITIALIZE,
+        then: Joi.string().uri().required(),
+    }),
 });
 
 const SetupMpinSchema = Joi.object({
