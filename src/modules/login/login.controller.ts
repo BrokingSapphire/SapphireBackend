@@ -45,7 +45,7 @@ const login = async (
     const clientId = 'clientId' in req.body ? req.body.clientId : undefined;
     const email = 'email' in req.body ? req.body.email : undefined;
 
-    const deviceInfo = deviceTrackingService.getDeviceInfo(req);
+    const deviceInfo = await deviceTrackingService.getDeviceInfo(req);
 
     logger.info(
         `Login attempt initiated - IP: ${deviceInfo.ip} | User: ${clientId || email} | UA: ${req.get('User-Agent')}`,
@@ -308,7 +308,7 @@ const verify2FA = async (
     }
 
     const session = JSON.parse(sessionStr);
-    const deviceInfo = deviceTrackingService.getDeviceInfo(req);
+    const deviceInfo = await deviceTrackingService.getDeviceInfo(req);
 
     if (session.isUsed) {
         throw new UnauthorizedError('Login session already used');
@@ -489,7 +489,7 @@ const verifyMpin = async (
     }
 
     const session = JSON.parse(sessionStr);
-    const deviceInfo = deviceTrackingService.getDeviceInfo(req);
+    const deviceInfo = await deviceTrackingService.getDeviceInfo(req);
 
     if (session.isUsed) {
         throw new UnauthorizedError('Login session already used');

@@ -1,8 +1,8 @@
 import requestIp from 'request-ip';
 import { UAParser } from 'ua-parser-js';
-import geoip from 'geoip-lite';
 import { Request } from 'express';
 import logger from '@app/logger';
+import axios from 'axios';
 
 export interface DeviceInfo {
     ip: string;
@@ -21,11 +21,13 @@ export interface DeviceInfo {
 }
 
 export class DeviceTrackingService {
-    public getDeviceInfo(req: Request): DeviceInfo {
+    private readonly IPINFO_TOKEN = process.env.IPINFO_TOKEN;
+
+    public async getDeviceInfo(req: Request): Promise<DeviceInfo> {
         try {
             const clientIp = this.extractClientIp(req);
             const deviceDetails = this.parseUserAgent(req.get('User-Agent') || '');
-            const locationInfo = this.getLocationFromIp(clientIp);
+            const locationInfo = await this.getLocationFromIp(clientIp);
 
             const deviceInfo: DeviceInfo = {
                 ip: clientIp,
@@ -87,7 +89,6 @@ export class DeviceTrackingService {
                 if (headerValue) {
                     let firstIp = headerValue.split(',')[0].trim();
 
-                    // Clean IPv6 wrapper from header values too
                     if (firstIp.startsWith('::ffff:')) {
                         firstIp = firstIp.substring(7);
                     }
@@ -123,34 +124,75 @@ export class DeviceTrackingService {
     /**
      * Get geographical information from IP address
      */
-    private getLocationFromIp(ip: string) {
-        logger.debug(`Starting geolocation lookup for IP: ${ip}`);
-
+    private async getLocationFromIp(ip: string): Promise<DeviceInfo['location']> {
+        // Handle localhost/private IPs
         if (!this.isValidIp(ip) || ip === 'unknown') {
-            return {};
+            return {
+                country: 'Local',
+                region: 'Local',
+                city: 'Local',
+            };
         }
 
         try {
-            logger.debug(`Looking up geolocation for public IP: ${ip}`);
-            const geo = geoip.lookup(ip);
+            logger.debug(`Looking up location for IP: ${ip} using ipinfo.io`);
 
-            logger.debug(`Geoip lookup result:`, geo);
+            // Use the standard API (supports both with/without token)
+            const url = this.IPINFO_TOKEN
+                ? `https://ipinfo.io/${ip}?token=${this.IPINFO_TOKEN}`
+                : `https://ipinfo.io/${ip}/json`;
 
-            if (!geo) {
-                return { country: 'Unknown' };
-            }
+            const response = await axios.get(url, {
+                timeout: 5000,
+                headers: {
+                    Accept: 'application/json',
+                    'User-Agent': 'Sapphire-Backend/1.0',
+                },
+            });
+
+            const data = response.data;
+
+            logger.debug(`IPinfo.io response:`, data);
 
             const result = {
-                country: geo.country || 'Unknown',
-                region: geo.region || 'Unknown',
-                city: geo.city || 'Unknown',
+                country: data.country || 'Unknown',
+                region: data.region || 'Unknown',
+                city: data.city || 'Unknown',
             };
 
             logger.debug(`Final location result:`, result);
             return result;
-        } catch (error) {
-            logger.warn('Error getting location from IP:', error);
-            return { country: 'Unknown' };
+        } catch (error: any) {
+            logger.error(` Error getting location from ipinfo.io for IP ${ip}:`);
+
+            // Fallback: try without token if token request failed
+            if (this.IPINFO_TOKEN && error.response?.status === 401) {
+                logger.warn('Token failed, trying without token...');
+                try {
+                    const fallbackResponse = await axios.get(`https://ipinfo.io/${ip}/json`, {
+                        timeout: 5000,
+                        headers: {
+                            Accept: 'application/json',
+                            'User-Agent': 'Sapphire-Backend/1.0',
+                        },
+                    });
+
+                    const fallbackData = fallbackResponse.data;
+                    return {
+                        country: fallbackData.country || 'Unknown',
+                        region: fallbackData.region || 'Unknown',
+                        city: fallbackData.city || 'Unknown',
+                    };
+                } catch (fallbackError: any) {
+                    logger.error('Fallback request also failed:', fallbackError.message);
+                }
+            }
+
+            return {
+                country: 'Unknown',
+                region: 'Unknown',
+                city: 'Unknown',
+            };
         }
     }
     /**

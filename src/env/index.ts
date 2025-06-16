@@ -53,4 +53,7 @@ export const env = {
         webVapidKey: process.env.FIREBASE_WEB_VAPID_KEY || 'vapid_key',
         senderId: process.env.FIREBASE_SENDER_ID || 'sender_id',
     },
+    ipinfo: {
+        token: process.env.IPINFO_TOKEN || 'private_key',
+    },
 };
