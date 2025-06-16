@@ -196,6 +196,10 @@ const CheckpointSchema = Joi.object({
             'any.required': 'Confirm MPIN is required',
         }),
     }),
+    redirect_url: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.ESIGN_INITIALIZE,
+        then: Joi.string().uri().required(),
+    }),
 });
 
 export { RequestOtpSchema, ResendOtpSchema, VerifyOtpSchema, CheckpointSchema };

@@ -36,6 +36,7 @@ export interface ESignConfig {
     allow_selfie_upload: boolean;
     accept_virtual_sign: boolean;
     track_location: boolean;
+    allow_download: boolean;
     auth_mode: string;
     reason: string;
     positions: ESignPositions;
