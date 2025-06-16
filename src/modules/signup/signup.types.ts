@@ -202,7 +202,6 @@ export type PostCheckpointType =
     | {
           step: CheckpointStep.ESIGN_INITIALIZE;
           redirect_url: string;
-          file_id: string;
       }
     | {
           step: CheckpointStep.ESIGN_COMPLETE;
