@@ -1389,20 +1389,38 @@ const setupMpin = async (
 
     const hashedMpin = await hashPassword(mpin, 'bcrypt');
 
-    const hashAlgoRecord = await db
-        .selectFrom('hashing_algorithm')
-        .select('id')
-        .where('name', '=', hashedMpin.hashAlgo)
-        .executeTakeFirstOrThrow();
-
     await db.transaction().execute(async (tx) => {
+        const hashAlgo = await db
+            .selectFrom('hashing_algorithm')
+            .select('id')
+            .where('name', '=', hashedMpin.hashAlgo)
+            .executeTakeFirstOrThrow();
+
+        let hashAlgoId;
+        if (!hashAlgo) {
+            const insertedHashAlgo = await tx
+                .insertInto('hashing_algorithm')
+                .values({
+                    name: 'bcrypt',
+                })
+                .returning('id')
+                .executeTakeFirst();
+
+            if (!insertedHashAlgo) {
+                throw new Error('Failed to insert hashing algorithm');
+            }
+            hashAlgoId = insertedHashAlgo.id;
+        } else {
+            hashAlgoId = hashAlgo.id;
+        }
+
         await tx
             .insertInto('user_mpin')
             .values({
                 client_id: userCheckpoint.client_id!,
                 mpin_hash: hashedMpin.hashedPassword,
                 mpin_salt: hashedMpin.salt,
-                hash_algo_id: hashAlgoRecord.id,
+                hash_algo_id: hashAlgoId,
                 created_at: new Date(),
                 updated_at: new Date(),
                 is_active: true,
@@ -1449,20 +1467,37 @@ const setupPassword = async (
 
     const hashedPassword = await hashPassword(password, 'bcrypt');
 
-    const hashAlgoRecord = await db
-        .selectFrom('hashing_algorithm')
-        .select('id')
-        .where('name', '=', hashedPassword.hashAlgo)
-        .executeTakeFirstOrThrow();
-
     await db.transaction().execute(async (tx) => {
+        const hashAlgo = await db
+            .selectFrom('hashing_algorithm')
+            .select('id')
+            .where('name', '=', hashedPassword.hashAlgo)
+            .executeTakeFirstOrThrow();
+        let hashAlgoId;
+        if (!hashAlgo) {
+            const insertedHashAlgo = await tx
+                .insertInto('hashing_algorithm')
+                .values({
+                    name: 'bcrypt',
+                })
+                .returning('id')
+                .executeTakeFirst();
+
+            if (!insertedHashAlgo) {
+                throw new Error('Failed to insert hashing algorithm');
+            }
+            hashAlgoId = insertedHashAlgo.id;
+        } else {
+            hashAlgoId = hashAlgo.id;
+        }
+
         await tx
             .insertInto('user_password_details')
             .values({
                 user_id: userCheckpoint.client_id!,
                 password_hash: hashedPassword.hashedPassword,
                 password_salt: hashedPassword.salt,
-                hash_algo_id: hashAlgoRecord.id,
+                hash_algo_id: hashAlgoId,
             })
             .execute();
     });
