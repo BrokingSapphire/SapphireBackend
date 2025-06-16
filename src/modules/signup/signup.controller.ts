@@ -1721,6 +1721,17 @@ const finalizeSignup = async (req: Request<JwtType>, res: Response) => {
         throw new ForbiddenError('Client ID already exists');
     }
 
+    const esignStatus = await db
+        .selectFrom('signup_verification_status')
+        .innerJoin('signup_checkpoints', 'signup_verification_status.id', 'signup_checkpoints.id')
+        .select('signup_verification_status.esign_status')
+        .where('signup_checkpoints.email', '=', email)
+        .executeTakeFirst();
+
+    if (esignStatus?.esign_status !== 'verified') {
+        throw new ForbiddenError('Please complete eSign process first');
+    }
+
     // TODO: Add more verification for fields
 
     const id = await new IdGenerator('user_id').nextValue();
