@@ -716,50 +716,6 @@ const finalizeVerification = async (req: Request, res: Response) => {
             })
             .execute();
 
-        // Get PAN number to use as password
-        const panDetail = await trx
-            .selectFrom('pan_detail')
-            .select('pan_number')
-            .where('id', '=', checkpoint.pan_id)
-            .executeTakeFirstOrThrow();
-
-        const hashAlgo = await trx
-            .selectFrom('hashing_algorithm')
-            .select('id')
-            .where('name', '=', 'bcrypt')
-            .executeTakeFirst();
-
-        let hashAlgoId;
-        if (!hashAlgo) {
-            const insertedHashAlgo = await trx
-                .insertInto('hashing_algorithm')
-                .values({
-                    name: 'bcrypt',
-                })
-                .returning('id')
-                .executeTakeFirst();
-
-            if (!insertedHashAlgo) {
-                throw new Error('Failed to insert hashing algorithm');
-            }
-            hashAlgoId = insertedHashAlgo.id;
-        } else {
-            hashAlgoId = hashAlgo.id;
-        }
-
-        const plainTextPassword = panDetail.pan_number;
-        const password = await hashPassword(plainTextPassword, 'bcrypt');
-
-        await trx
-            .insertInto('user_password_details')
-            .values({
-                user_id: checkpoint.client_id!,
-                password_hash: password.hashedPassword,
-                password_salt: password.salt,
-                hash_algo_id: hashAlgoId,
-            })
-            .execute();
-
         // Copy bank accounts
         await trx
             .insertInto('bank_to_user')
@@ -969,50 +925,6 @@ const autoFinalVerification = async (req: Request, res: Response) => {
                 past_actions: 'NO',
                 created_at: new Date(),
                 updated_at: new Date(),
-            })
-            .execute();
-
-        // Get PAN number to use as password
-        const panDetail = await trx
-            .selectFrom('pan_detail')
-            .select('pan_number')
-            .where('id', '=', checkpoint.pan_id)
-            .executeTakeFirstOrThrow();
-
-        const hashAlgo = await trx
-            .selectFrom('hashing_algorithm')
-            .select('id')
-            .where('name', '=', 'bcrypt')
-            .executeTakeFirst();
-
-        let hashAlgoId;
-        if (!hashAlgo) {
-            const insertedHashAlgo = await trx
-                .insertInto('hashing_algorithm')
-                .values({
-                    name: 'bcrypt',
-                })
-                .returning('id')
-                .executeTakeFirst();
-
-            if (!insertedHashAlgo) {
-                throw new Error('Failed to insert hashing algorithm');
-            }
-            hashAlgoId = insertedHashAlgo.id;
-        } else {
-            hashAlgoId = hashAlgo.id;
-        }
-
-        const plainTextPassword = panDetail.pan_number;
-        const password = await hashPassword(plainTextPassword, 'bcrypt');
-
-        await trx
-            .insertInto('user_password_details')
-            .values({
-                user_id: checkpoint.client_id!,
-                password_hash: password.hashedPassword,
-                password_salt: password.salt,
-                hash_algo_id: hashAlgoId,
             })
             .execute();
 
