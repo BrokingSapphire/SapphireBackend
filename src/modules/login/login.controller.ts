@@ -47,6 +47,29 @@ const login = async (
 
     const deviceInfo = deviceTrackingService.getDeviceInfo(req);
 
+    logger.info(
+        `Login attempt initiated - IP: ${deviceInfo.ip} | User: ${clientId || email} | UA: ${req.get('User-Agent')}`,
+        {
+            requestId: randomUUID(),
+            loginIdentifier: clientId || email,
+            loginType: clientId ? 'clientId' : 'email',
+            requestIp: deviceInfo.ip, // Use deviceInfo.ip consistently
+            forwardedFor: req.get('X-Forwarded-For'),
+            realIp: req.get('X-Real-IP'),
+            userAgent: req.get('User-Agent'),
+            browser: deviceInfo.device?.browser,
+            device: deviceInfo.device?.device,
+            deviceType: deviceInfo.device?.deviceType,
+            location: deviceInfo.location,
+            timestamp: new Date().toISOString(),
+            headers: {
+                host: req.get('Host'),
+                origin: req.get('Origin'),
+                referer: req.get('Referer'),
+            },
+        },
+    );
+
     const user = await db
         .selectFrom('user')
         .innerJoin('user_password_details', 'user.id', 'user_password_details.user_id')
@@ -74,9 +97,21 @@ const login = async (
         })
         .executeTakeFirstOrThrow();
 
+    // ADD THIS: Log user found
+    logger.info(`User found: ${user.email} (${user.id}) from IP: ${deviceInfo.ip}`);
+
     const authenticated = await verifyPassword(password, user);
 
     if (!authenticated) {
+        logger.warn(`LOGIN FAILED - Invalid password for user ${user.email} from IP ${deviceInfo.ip}`, {
+            userId: user.id,
+            userEmail: user.email,
+            requestIp: deviceInfo.ip,
+            deviceInfoIp: deviceInfo.ip,
+            userAgent: req.get('User-Agent'),
+            timestamp: new Date().toISOString(),
+        });
+
         await db
             .insertInto('user_login_history')
             .values({
@@ -97,6 +132,13 @@ const login = async (
             .execute();
         throw new UnauthorizedError('Invalid credentials');
     }
+
+    logger.info('Password verification successful', {
+        userId: user.id,
+        userEmail: user.email,
+        requestIp: deviceInfo.ip,
+        timestamp: new Date().toISOString(),
+    });
 
     const user2FA = await db
         .selectFrom('user_2fa')
@@ -124,12 +166,33 @@ const login = async (
         },
     };
 
+    // ADD THIS: Log session creation
+    logger.info('Login session created', {
+        sessionId: loginSessionId,
+        userId: user.id,
+        userEmail: user.email,
+        requestIp: deviceInfo.ip,
+        has2FA: !!user2FA && user2FA.method !== 'disabled',
+        twoFactorMethod: user2FA?.method || 'disabled',
+        timestamp: new Date().toISOString(),
+    });
+
     const redisKey = `login_session:${loginSessionId}`;
     await redisClient.set(redisKey, JSON.stringify(loginSession));
     await redisClient.expire(redisKey, 10 * 60);
 
     if (user2FA && user2FA.method !== 'disabled') {
         const method = user2FA.method as TwoFactorMethod;
+
+        // ADD THIS: Log 2FA method being used
+        logger.info('2FA required for login', {
+            sessionId: loginSessionId,
+            userId: user.id,
+            userEmail: user.email,
+            twoFactorMethod: method,
+            requestIp: deviceInfo.ip,
+            timestamp: new Date().toISOString(),
+        });
 
         if (method === TwoFactorMethod.SMS_OTP) {
             const phoneStr = String(user.phone);
@@ -144,10 +207,24 @@ const login = async (
             try {
                 if (otp) {
                     await smsService.sendTemplatedSms(phoneStr, SmsTemplateType.TWO_FACTOR_AUTHENTICATION_OTP, [otp]);
-                    logger.info(`2FA OTP SMS sent to ${user.phone}`);
+                    logger.info('2FA SMS OTP sent successfully', {
+                        sessionId: loginSessionId,
+                        userId: user.id,
+                        phoneNumber: phoneStr,
+                        requestIp: deviceInfo.ip,
+                        timestamp: new Date().toISOString(),
+                    });
                 }
             } catch (error) {
-                logger.error(`Failed to send 2FA OTP SMS: ${error}`);
+                logger.error('Failed to send 2FA OTP SMS', {
+                    sessionId: loginSessionId,
+                    userId: user.id,
+                    phoneNumber: phoneStr,
+                    requestIp: deviceInfo.ip,
+                    error: error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined,
+                    timestamp: new Date().toISOString(),
+                });
             }
 
             res.status(OK).json({
@@ -159,6 +236,14 @@ const login = async (
                 },
             });
         } else {
+            logger.info('2FA authenticator method initiated', {
+                sessionId: loginSessionId,
+                userId: user.id,
+                userEmail: user.email,
+                requestIp: deviceInfo.ip,
+                timestamp: new Date().toISOString(),
+            });
+
             const user2FADetails = await db
                 .selectFrom('user_2fa')
                 .select(['secret'])
@@ -190,6 +275,15 @@ const login = async (
         }
         return;
     }
+
+    logger.info('No 2FA required, proceeding to MPIN verification', {
+        sessionId: loginSessionId,
+        userId: user.id,
+        userEmail: user.email,
+        requestIp: deviceInfo.ip,
+        timestamp: new Date().toISOString(),
+    });
+
     res.status(OK).json({
         message: 'Password verified. Please enter your MPIN.',
         data: {
