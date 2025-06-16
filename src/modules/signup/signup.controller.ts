@@ -1299,6 +1299,7 @@ const postCheckpoint = async (
                 allow_selfie_upload: false,
                 accept_virtual_sign: false,
                 track_location: false,
+                allow_download: false,
                 skip_otp: true,
                 skip_email: true,
                 auth_mode: '1',
@@ -1339,8 +1340,6 @@ const postCheckpoint = async (
         if (!statusResponse.data.data.completed) {
             throw new UnauthorizedError('eSign process not completed');
         }
-
-        await redisClient.del(`esign:${email}`);
 
         const downloadResponse = await ESignService.downloadSignedDocument(clientId);
 
@@ -1389,16 +1388,19 @@ const postCheckpoint = async (
             }
 
             // Fail the eSign process if document storage fails
-            throw new Error('Failed to store eSign document. Please try the eSign process again.');
+            // throw new Error('Failed to store eSign document. Please try the eSign process again.');
+            logger.warn(
+                `eSign document storage failed for user ${email}. Process will continue. Manual intervention may be required.`,
+            );
         }
 
-        // Only proceed if S3 upload was successful
-        if (!s3UploadResult) {
-            throw new Error('Failed to store eSign document. Please try again.');
-        }
+        // // Only proceed if S3 upload was successful
+        // if (!s3UploadResult) {
+        //     throw new Error('Failed to store eSign document. Please try again.');
+        // }
         await db.transaction().execute(async (tx) => {
             const checkpoint = await updateCheckpoint(tx, email, phone, {
-                esign: s3UploadResult.url,
+                esign: s3UploadResult?.url || downloadResponse.data.data.url,
             })
                 .returning('id')
                 .executeTakeFirstOrThrow();
@@ -1413,10 +1415,12 @@ const postCheckpoint = async (
                 .execute();
         });
 
+        await redisClient.del(`esign:${email}`);
+
         res.status(OK).json({
             message: 'eSign completed successfully',
             data: {
-                download_url: s3UploadResult.url,
+                download_url: s3UploadResult?.url || downloadResponse.data.data.url,
                 signed_at: new Date().toISOString(),
             },
         });
@@ -1719,6 +1723,17 @@ const finalizeSignup = async (req: Request<JwtType>, res: Response) => {
 
     if (hasClientId.client_id) {
         throw new ForbiddenError('Client ID already exists');
+    }
+
+    const esignStatus = await db
+        .selectFrom('signup_verification_status')
+        .innerJoin('signup_checkpoints', 'signup_verification_status.id', 'signup_checkpoints.id')
+        .select('signup_verification_status.esign_status')
+        .where('signup_checkpoints.email', '=', email)
+        .executeTakeFirst();
+
+    if (esignStatus?.esign_status !== 'verified') {
+        throw new ForbiddenError('Please complete eSign process first');
     }
 
     // TODO: Add more verification for fields
