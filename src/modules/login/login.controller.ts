@@ -218,7 +218,7 @@ const login = async (
             const smsOtp = new PhoneOtpVerification(user.email, '2fa-login', phoneStr);
             await smsOtp.sendOtp();
 
-            const otpKey = `phone-otp:2fa-login:${user.phone}`;
+            const otpKey = `otp:phone-otp:2fa-login:${user.email}:${user.phone}`;
             const otp = await redisClient.get(otpKey);
 
             // Send SMS using the 2FA template
@@ -476,7 +476,7 @@ const Resend2FALoginOtp = async (
     const smsOtp = new PhoneOtpVerification(user2FA.email, '2fa-login' as any, user2FA.phone);
     await smsOtp.sendOtp();
 
-    const otpKey = `phone-otp:2fa-login:${user2FA.phone}`;
+    const otpKey = `otp:phone-otp:2fa-login:${user2FA.email}:${user2FA.phone}`;
     const otp = await redisClient.get(otpKey);
 
     try {
@@ -501,6 +501,14 @@ const verifyMpin = async (
     res: Response<ResponseWithToken>,
 ) => {
     const { mpin, sessionId } = req.body;
+
+    const formatName = (name: string): string => {
+        if (!name) return '';
+        return name
+            .split(' ')
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
+    };
 
     const redisKey = `login_session:${sessionId}`;
     const sessionStr = await redisClient.get(redisKey);
@@ -642,8 +650,9 @@ const verifyMpin = async (
         })
         .execute();
 
+    const formattedUserName = formatName(session.userName);
     await sendLoginAlert(session.email, {
-        userName: session.userName,
+        userName: formattedUserName,
         email: session.email,
         ip: req.ip || 'N/A',
         deviceType: req.get('User-Agent') || 'Unknown Device',
@@ -663,6 +672,14 @@ const resetPassword = async (
 ) => {
     const { userId } = req.auth!;
     const { currentPassword, newPassword } = req.body;
+
+    const formatName = (name: string): string => {
+        if (!name) return '';
+        return name
+            .split(' ')
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
+    };
 
     // Fetch user details
     const user = await db
@@ -715,8 +732,9 @@ const resetPassword = async (
 
     try {
         if (user.phone) {
+            const formattedName = formatName(user.first_name);
             await smsService.sendTemplatedSms(user.phone, SmsTemplateType.PASSWORD_CHANGE_CONFIRMATION, [
-                user.first_name,
+                formattedName,
             ]);
             logger.info(`Password change confirmation SMS sent to ${user.phone}`);
         }
@@ -767,7 +785,7 @@ const forgotPasswordInitiate = async (
     const emailOtp = new EmailOtpVerification(user.email, 'forgot-password');
     await emailOtp.sendOtp();
 
-    const otpKey = `email-otp:forgot-password:${user.email}`;
+    const otpKey = `otp:email-otp:forgot-password:${user.email}`;
     const otp = await redisClient.get(otpKey);
 
     // Send OTP via SMS if phone number and OTP are available
@@ -792,7 +810,7 @@ const forgotOTPverify = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, ForgotOTPVerifyRequestType>,
     res: Response,
 ) => {
-    const { requestId, emailOtp } = req.body;
+    const { requestId, otp } = req.body;
     const redisKey = `forgot_password:${requestId}`;
     const sessionStr = await redisClient.get(redisKey);
 
@@ -806,7 +824,7 @@ const forgotOTPverify = async (
     }
 
     const emailOtpInstance = new EmailOtpVerification(session.email, 'forgot-password');
-    await emailOtpInstance.verifyOtp(emailOtp);
+    await emailOtpInstance.verifyOtp(otp);
 
     session.isVerified = true;
     await redisClient.set(redisKey, JSON.stringify(session));
@@ -844,7 +862,7 @@ const resendForgotPasswordOtp = async (
     const emailOtp = new EmailOtpVerification(session.email, 'forgot-password');
     await emailOtp.sendOtp();
 
-    const otpKey = `email-otp:forgot-password:${session.email}`;
+    const otpKey = `otp:email-otp:forgot-password:${session.email}`;
     const otp = await redisClient.get(otpKey);
 
     // Send OTP via SMS if phone number and OTP are available
@@ -872,6 +890,14 @@ const forgotPasswordReset = async (
     res: Response,
 ) => {
     const { requestId, newPassword, confirmPassword } = req.body;
+
+    const formatName = (name: string): string => {
+        if (!name) return '';
+        return name
+            .split(' ')
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
+    };
 
     if (newPassword !== confirmPassword) {
         throw new UnauthorizedError('Passwords do not match');
@@ -924,8 +950,9 @@ const forgotPasswordReset = async (
     });
     try {
         if (user && user.phone) {
+            const formattedName = formatName(user.first_name || session.userName);
             await smsService.sendTemplatedSms(user.phone, SmsTemplateType.PASSWORD_CHANGE_CONFIRMATION, [
-                user.first_name || session.userName,
+                formattedName,
             ]);
             logger.info(`Password change confirmation SMS sent to ${user.phone}`);
         }
@@ -985,7 +1012,7 @@ const forgotMpinInitiate = async (
     const emailOtp = new EmailOtpVerification(user.email, 'forgot-mpin');
     await emailOtp.sendOtp();
 
-    const otpKey = `email-otp:forgot-mpin:${user.email}`;
+    const otpKey = `otp:email-otp:forgot-mpin:${user.email}`;
     const otp = await redisClient.get(otpKey);
 
     try {
@@ -1008,7 +1035,7 @@ const forgotMpinOtpVerify = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, ForgotMpinOtpVerifyRequestType>,
     res: Response,
 ) => {
-    const { requestId, emailOtp } = req.body;
+    const { requestId, otp } = req.body;
     const redisKey = `forgot_mpin:${requestId}`;
     const sessionStr = await redisClient.get(redisKey);
 
@@ -1022,7 +1049,7 @@ const forgotMpinOtpVerify = async (
     }
 
     const emailOtpInstance = new EmailOtpVerification(session.email, 'forgot-mpin');
-    await emailOtpInstance.verifyOtp(emailOtp);
+    await emailOtpInstance.verifyOtp(otp);
 
     session.isVerified = true;
     await redisClient.set(redisKey, JSON.stringify(session));
@@ -1050,8 +1077,27 @@ const resendForgotMpinOtp = async (
         throw new UnauthorizedError('Session already used');
     }
 
+    const user = await db
+        .selectFrom('user')
+        .innerJoin('phone_number', 'user.phone', 'phone_number.id')
+        .select(['phone_number.phone'])
+        .where('user.id', '=', session.userId)
+        .executeTakeFirst();
+
     const emailOtp = new EmailOtpVerification(session.email, 'forgot-mpin');
     await emailOtp.sendOtp();
+
+    const otpKey = `otp:email-otp:forgot-mpin:${session.email}`;
+    const otp = await redisClient.get(otpKey);
+
+    try {
+        if (user && user.phone && otp) {
+            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.FORGET_MPIN, [otp]);
+            logger.info(`MPIN reset OTP SMS resent to ${user.phone}`);
+        }
+    } catch (error) {
+        logger.error(`Failed to resend MPIN reset OTP SMS: ${error}`);
+    }
 
     await redisClient.expire(redisKey, 10 * 60);
 
@@ -1067,6 +1113,14 @@ const forgotMpinReset = async (
     res: Response,
 ) => {
     const { requestId, newMpin } = req.body;
+
+    const formatName = (name: string): string => {
+        if (!name) return '';
+        return name
+            .split(' ')
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
+    };
 
     const redisKey = `forgot_mpin:${requestId}`;
 
@@ -1128,9 +1182,8 @@ const forgotMpinReset = async (
 
     try {
         if (user && user.phone) {
-            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.PASSWORD_CHANGE_CONFIRMATION, [
-                user.first_name || session.userName,
-            ]);
+            const formattedName = formatName(user.first_name || session.userName);
+            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.MPIN_CHANGE_CONFIRMATION, [formattedName]);
             logger.info(`MPIN change confirmation SMS sent to ${user.phone}`);
         }
     } catch (error) {
