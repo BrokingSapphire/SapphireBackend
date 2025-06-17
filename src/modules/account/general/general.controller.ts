@@ -137,21 +137,11 @@ const updateUserSettings = async (
     res: Response<DefaultResponseData>,
 ) => {
     const { userId } = req.auth!;
-    const {
-        theme,
-        biometricAuthentication,
-        chartProvider,
-        orderNotifications,
-        tradeNotifications,
-        tradeRecommendations,
-        promotion,
-    } = req.body;
+    const { chartProvider, orderNotifications, tradeNotifications, tradeRecommendations, promotion } = req.body;
 
     await db
         .updateTable('user_preferences')
         .set({
-            theme,
-            biometric_authentication: biometricAuthentication,
             chart_provider: chartProvider,
             order_notifications: orderNotifications,
             trade_notifications: tradeNotifications,
@@ -173,15 +163,12 @@ const updateUserPermissions = async (
     res: Response<DefaultResponseData>,
 ) => {
     const { userId } = req.auth!;
-    const { internet, storage, location, smsReading, notification, biometric } = req.body;
+    const { internet, notification, biometric } = req.body;
 
     await db
         .updateTable('user_preferences')
         .set({
             internet_permission: internet,
-            storage_permission: storage,
-            location_permission: location,
-            sms_reading_permission: smsReading,
             notification_permission: notification,
             biometric_permission: biometric,
             updated_at: new Date(),

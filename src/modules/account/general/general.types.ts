@@ -1,4 +1,4 @@
-import { ChartProvider, Theme } from '@app/database/db';
+import { ChartProvider } from '@app/database/db';
 import { DefaultResponseData } from '@app/types';
 
 export enum ProfileSection {
@@ -68,8 +68,6 @@ export interface TwoFactorDisableRequest {
 }
 
 export interface UserSettings {
-    theme: Theme;
-    biometricAuthentication: boolean;
     twoFactorAuth: TwoFactorMethod;
     chartProvider: ChartProvider;
     orderNotifications: boolean;
@@ -80,9 +78,6 @@ export interface UserSettings {
 
 export interface UserPermissions {
     internet: boolean;
-    storage: boolean;
-    location: boolean;
-    smsReading: boolean;
     notification: boolean;
     biometric: boolean;
 }
