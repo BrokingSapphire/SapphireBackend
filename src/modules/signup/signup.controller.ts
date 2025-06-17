@@ -271,6 +271,29 @@ const getCheckpoint = async (req: Request<JwtType, GetCheckpointType>, res: Resp
             data: { aadhaar_no: `XXXXXXXX${masked_aadhaar_no}` },
             message: 'Aadhaar number fetched',
         });
+    } else if (step === CheckpointStep.AADHAAR_MISMATCH_DETAILS) {
+        const mismatchKey = `aadhaar_mismatch:${email}`;
+        const mismatchData = await redisClient.get(mismatchKey);
+
+        if (!mismatchData) {
+            res.status(NOT_FOUND).json({
+                message: 'No Aadhaar mismatch data found or expired',
+            });
+            return;
+        }
+
+        const parsedMismatchData = JSON.parse(mismatchData);
+        res.status(OK).json({
+            data: {
+                pan_masked_aadhaar: `XXXXXXXX${parsedMismatchData.pan_masked_aadhaar}`,
+                digilocker_masked_aadhaar: `XXXXXXXX${parsedMismatchData.digilocker_masked_aadhaar}`,
+                parser_data: {
+                    name: parsedMismatchData.parser_data.name,
+                    dob: parsedMismatchData.parser_data.dob,
+                },
+            },
+            message: 'Aadhaar mismatch details retrieved',
+        });
     } else if (step === CheckpointStep.INVESTMENT_SEGMENT) {
         const segments = await db
             .selectFrom('signup_checkpoints')
