@@ -835,6 +835,30 @@ const postCheckpoint = async (
             },
         });
     } else if (step === CheckpointStep.INVESTMENT_SEGMENT) {
+        const mismatchKey = `aadhaar_mismatch:${email}`;
+        const mismatchData = await redisClient.get(mismatchKey);
+
+        if (mismatchData) {
+            const parsedData = JSON.parse(mismatchData);
+            throw new ForbiddenError(
+                'Please complete Aadhaar mismatch verification first. PAN Aadhaar: XXXXXXXX' +
+                    parsedData.pan_masked_aadhaar +
+                    ', DigiLocker Aadhaar: XXXXXXXX' +
+                    parsedData.digilocker_masked_aadhaar,
+            );
+        }
+
+        // Also check if Aadhaar is completed in database
+        const aadhaarCompleted = await db
+            .selectFrom('signup_checkpoints')
+            .select('aadhaar_id')
+            .where('email', '=', email)
+            .executeTakeFirst();
+
+        if (!aadhaarCompleted?.aadhaar_id) {
+            throw new ForbiddenError('Please complete Aadhaar verification first');
+        }
+
         const { segments } = req.body;
         await db.transaction().execute(async (tx) => {
             const signupCheckpoint = await tx
