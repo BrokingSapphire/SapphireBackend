@@ -810,7 +810,7 @@ const forgotOTPverify = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, ForgotOTPVerifyRequestType>,
     res: Response,
 ) => {
-    const { requestId, emailOtp } = req.body;
+    const { requestId, otp } = req.body;
     const redisKey = `forgot_password:${requestId}`;
     const sessionStr = await redisClient.get(redisKey);
 
@@ -824,7 +824,7 @@ const forgotOTPverify = async (
     }
 
     const emailOtpInstance = new EmailOtpVerification(session.email, 'forgot-password');
-    await emailOtpInstance.verifyOtp(emailOtp);
+    await emailOtpInstance.verifyOtp(otp);
 
     session.isVerified = true;
     await redisClient.set(redisKey, JSON.stringify(session));
