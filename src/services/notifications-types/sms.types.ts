@@ -13,6 +13,7 @@ export enum SmsTemplateType {
     FUNDS_ADDED = 'FUNDS_ADDED',
     ACCOUNT_SUSPENSION_NOTICE = 'ACCOUNT_SUSPENSION_NOTICE',
     FORGET_MPIN = 'FORGET_MPIN',
+    MPIN_CHANGE_CONFIRMATION = 'MPIN_CHANGE_CONFIRMATION',
 }
 
 // mapping of SMS template types to their content
@@ -49,7 +50,7 @@ const templateContentMap: Record<SmsTemplateType, string> = {
         'Welcome to Sapphire! Your OTP for signup is {#otp#}. Do not share this OTP with anyone. It is valid for 10 minutes. Sapphire Broking',
 
     [SmsTemplateType.PASSWORD_CHANGE_CONFIRMATION]:
-        "Dear {#name#}, your Sapphire Broking password has been changed successfully. If this wasn't you, contact support immediately. Sapphire Broking",
+        "Dear {#name#}, your Sapphire Terminal password has been changed successfully. If this wasn't you, contact support immediately. Sapphire Broking",
 
     [SmsTemplateType.FUNDS_ADDED]:
         'Dear {#name#}, ₹{#amount#} has been successfully added to your trading account. Available balance: ₹{#balance#}. Sapphire Broking',
@@ -58,6 +59,8 @@ const templateContentMap: Record<SmsTemplateType, string> = {
         'Dear {#name#}, your account has been temporarily suspended due to {#reason#}. Contact support for assistance. Sapphire Broking',
     [SmsTemplateType.FORGET_MPIN]:
         'Your OTP to reset your Sapphire Terminal MPIN is {#otp#}. Do not share this OTP. It is valid for 10 minutes. Sapphire Broking',
+    [SmsTemplateType.MPIN_CHANGE_CONFIRMATION]:
+        "Dear {#name#}, your Sapphire Terminal MPIN has been changed successfully. If this wasn't you, contact support immediately. Sapphire Broking",
 };
 
 export default templateContentMap;

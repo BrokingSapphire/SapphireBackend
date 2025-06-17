@@ -502,6 +502,14 @@ const verifyMpin = async (
 ) => {
     const { mpin, sessionId } = req.body;
 
+    const formatName = (name: string): string => {
+        if (!name) return '';
+        return name
+            .split(' ')
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
+    };
+
     const redisKey = `login_session:${sessionId}`;
     const sessionStr = await redisClient.get(redisKey);
 
@@ -642,8 +650,9 @@ const verifyMpin = async (
         })
         .execute();
 
+    const formattedUserName = formatName(session.userName);
     await sendLoginAlert(session.email, {
-        userName: session.userName,
+        userName: formattedUserName,
         email: session.email,
         ip: req.ip || 'N/A',
         deviceType: req.get('User-Agent') || 'Unknown Device',
@@ -663,6 +672,14 @@ const resetPassword = async (
 ) => {
     const { userId } = req.auth!;
     const { currentPassword, newPassword } = req.body;
+
+    const formatName = (name: string): string => {
+        if (!name) return '';
+        return name
+            .split(' ')
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
+    };
 
     // Fetch user details
     const user = await db
@@ -715,8 +732,9 @@ const resetPassword = async (
 
     try {
         if (user.phone) {
+            const formattedName = formatName(user.first_name);
             await smsService.sendTemplatedSms(user.phone, SmsTemplateType.PASSWORD_CHANGE_CONFIRMATION, [
-                user.first_name,
+                formattedName,
             ]);
             logger.info(`Password change confirmation SMS sent to ${user.phone}`);
         }
@@ -873,6 +891,14 @@ const forgotPasswordReset = async (
 ) => {
     const { requestId, newPassword, confirmPassword } = req.body;
 
+    const formatName = (name: string): string => {
+        if (!name) return '';
+        return name
+            .split(' ')
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
+    };
+
     if (newPassword !== confirmPassword) {
         throw new UnauthorizedError('Passwords do not match');
     }
@@ -924,8 +950,9 @@ const forgotPasswordReset = async (
     });
     try {
         if (user && user.phone) {
+            const formattedName = formatName(user.first_name || session.userName);
             await smsService.sendTemplatedSms(user.phone, SmsTemplateType.PASSWORD_CHANGE_CONFIRMATION, [
-                user.first_name || session.userName,
+                formattedName,
             ]);
             logger.info(`Password change confirmation SMS sent to ${user.phone}`);
         }
@@ -1008,7 +1035,7 @@ const forgotMpinOtpVerify = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, ForgotMpinOtpVerifyRequestType>,
     res: Response,
 ) => {
-    const { requestId, emailOtp } = req.body;
+    const { requestId, otp } = req.body;
     const redisKey = `forgot_mpin:${requestId}`;
     const sessionStr = await redisClient.get(redisKey);
 
@@ -1022,7 +1049,7 @@ const forgotMpinOtpVerify = async (
     }
 
     const emailOtpInstance = new EmailOtpVerification(session.email, 'forgot-mpin');
-    await emailOtpInstance.verifyOtp(emailOtp);
+    await emailOtpInstance.verifyOtp(otp);
 
     session.isVerified = true;
     await redisClient.set(redisKey, JSON.stringify(session));
@@ -1087,6 +1114,14 @@ const forgotMpinReset = async (
 ) => {
     const { requestId, newMpin } = req.body;
 
+    const formatName = (name: string): string => {
+        if (!name) return '';
+        return name
+            .split(' ')
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
+    };
+
     const redisKey = `forgot_mpin:${requestId}`;
 
     const sessionStr = await redisClient.get(redisKey);
@@ -1147,9 +1182,8 @@ const forgotMpinReset = async (
 
     try {
         if (user && user.phone) {
-            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.PASSWORD_CHANGE_CONFIRMATION, [
-                user.first_name || session.userName,
-            ]);
+            const formattedName = formatName(user.first_name || session.userName);
+            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.MPIN_CHANGE_CONFIRMATION, [formattedName]);
             logger.info(`MPIN change confirmation SMS sent to ${user.phone}`);
         }
     } catch (error) {

@@ -54,7 +54,7 @@ export type ForgotMpinRequestType = EmailOrClientId;
 
 export type ForgotMpinOtpVerifyRequestType = {
     requestId: string;
-    emailOtp: string;
+    otp: string;
 };
 
 export type ResendForgotMpinOtpRequestType = {
