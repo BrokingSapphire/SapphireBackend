@@ -2,7 +2,7 @@ import { Router } from 'express';
 import signupRouter from './signup';
 import loginRouter from './login';
 import fundsRouter from './funds';
-import fcmRouter from './firebase-cloud-messaging';
+import fcmRouter from './firebaseCloudMessaging';
 import webhookRouter from './webhooks';
 import { db } from '@app/database';
 import { OK } from '@app/utils/httpstatus';
