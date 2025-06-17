@@ -3,11 +3,13 @@ import { decrypt, encrypt, generateSignature } from '@app/utils/atom-crypto';
 import { env } from '@app/env';
 import {
     CustomerDetails,
+    PaymentDetails,
     PaymentRequest,
     PaymentResponse,
     PayModeSpecificData,
 } from '@app/services/types/ntt-payment.types';
 import * as querystring from 'node:querystring';
+import { NonNullableFields } from '@app/types';
 
 const PAYMENT_URL = 'https://paynetzuat.atomtech.in/ots/payment/txn';
 
@@ -23,6 +25,7 @@ export class PaymentService {
         merchTxnId: string,
         clientId: string,
         customerDetails: Omit<CustomerDetails, 'billingInfo'>,
+        accountDetails: NonNullableFields<Pick<PaymentDetails, 'custAccNo' | 'custAccIfsc'>>,
         payMode: 'UP' | 'NB',
     ) {
         const payModeSpecificData: PayModeSpecificData =
@@ -76,8 +79,8 @@ export class PaymentService {
                     amount,
                     surchargeAmount: '0.00',
                     totalAmount: amount,
-                    custAccNo: null,
-                    custAccIfsc: null,
+                    custAccNo: accountDetails.custAccNo,
+                    custAccIfsc: accountDetails.custAccIfsc,
                     txnCurrency: 'INR',
                     clientCode: clientId,
                     remarks: null,

@@ -69,8 +69,18 @@ const depositFunds = async (req: Request<SessionJwtType>, res: Response): Promis
         .selectFrom('user')
         .innerJoin('phone_number', 'user.phone', 'phone_number.id')
         .innerJoin('user_name', 'user_name.id', 'user.name')
-        .select(['user_name.full_name', 'user_name.first_name', 'user.email', 'phone_number.phone'])
+        .innerJoin('bank_to_user', 'bank_to_user.user_id', 'user.id')
+        .innerJoin('bank_account', 'bank_account.id', 'bank_account.id')
+        .select([
+            'user_name.full_name',
+            'user_name.first_name',
+            'user.email',
+            'phone_number.phone',
+            'bank_account.account_no',
+            'bank_account.ifsc_code',
+        ])
         .where('user.id', '=', userId)
+        .where('bank_to_user.is_primary', '=', true)
         .executeTakeFirstOrThrow();
 
     const paymentResponse = await paymentService.createPaymentRequest(
@@ -82,6 +92,10 @@ const depositFunds = async (req: Request<SessionJwtType>, res: Response): Promis
             custLastName: null,
             custEmail: details.email,
             custMobile: details.phone,
+        },
+        {
+            custAccNo: details.account_no,
+            custAccIfsc: details.ifsc_code,
         },
         mode === 'UPI' ? 'UP' : 'NB',
     );
