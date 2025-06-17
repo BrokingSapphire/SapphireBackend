@@ -1,4 +1,4 @@
-import { DefaultResponseData, JwtPayloadWithoutWildcard } from '@app/types';
+import { JwtPayloadWithoutWildcard, ToDiscoUnion } from '@app/types';
 import { CredentialsType } from '../common.types';
 
 export type JwtType = JwtPayloadWithoutWildcard & {
@@ -15,7 +15,6 @@ export enum CheckpointStep {
     USER_DETAIL = 'user_detail',
     PERSONAL_DETAIL = 'personal_detail',
     OTHER_DETAIL = 'other_detail',
-    ACCOUNT_DETAIL = 'account_detail',
     BANK_VALIDATION_START = 'bank_validation_start',
     BANK_VALIDATION = 'bank_validation',
     SIGNATURE = 'signature',
@@ -101,29 +100,27 @@ export enum IncomeProofType {
     DEMAT_STATUS_HOLDINGS = 'demat_statement_10k_holdings',
 }
 
-export type RequestOtpType =
-    | {
-          type: CredentialsType.EMAIL;
-          email: string;
-      }
-    | {
-          type: CredentialsType.PHONE;
-          email: string;
-          phone: string;
-      };
+export type RequestOtpType = ToDiscoUnion<{
+    [CredentialsType.EMAIL]: {
+        email: string;
+    };
+    [CredentialsType.PHONE]: {
+        email: string;
+        phone: string;
+    };
+}>;
 
-export type VerifyOtpType =
-    | {
-          type: CredentialsType.EMAIL;
-          email: string;
-          otp: string;
-      }
-    | {
-          type: CredentialsType.PHONE;
-          email: string;
-          phone: string;
-          otp: string;
-      };
+export type VerifyOtpType = ToDiscoUnion<{
+    [CredentialsType.EMAIL]: {
+        email: string;
+        otp: string;
+    };
+    [CredentialsType.PHONE]: {
+        email: string;
+        phone: string;
+        otp: string;
+    };
+}>;
 
 export type ResendOtpType = RequestOtpType;
 
@@ -131,88 +128,73 @@ export type GetCheckpointType = {
     step: CheckpointStep;
 };
 
-export type PostCheckpointType =
-    | {
-          step: CheckpointStep.PAN;
-          pan_number: string;
-      }
-    | {
-          step: CheckpointStep.AADHAAR_URI;
-          redirect: string;
-      }
-    | {
-          step: CheckpointStep.AADHAAR;
-      }
-    | {
-          step: CheckpointStep.AADHAAR_MISMATCH_DETAILS;
-          full_name: string;
-          dob: string;
-      }
-    | {
-          step: CheckpointStep.INVESTMENT_SEGMENT;
-          segments: InvestmentSegment[];
-      }
-    | {
-          step: CheckpointStep.USER_DETAIL;
-          father_spouse_name: string;
-          mother_name: string;
-          maiden_name?: string;
-      }
-    | {
-          step: CheckpointStep.PERSONAL_DETAIL;
-          marital_status: MaritalStatus;
-          annual_income: AnnualIncome;
-          trading_exp: TradingExperience;
-          acc_settlement: AccountSettlement;
-      }
-    | {
-          step: CheckpointStep.OTHER_DETAIL;
-          occupation: Occupation;
-          politically_exposed: boolean;
-      }
-    | {
-          step: CheckpointStep.BANK_VALIDATION_START;
-          validation_type: ValidationType;
-      }
-    | {
-          step: CheckpointStep.BANK_VALIDATION;
-          validation_type: ValidationType.UPI;
-      }
-    | {
-          step: CheckpointStep.BANK_VALIDATION;
-          validation_type: ValidationType.BANK;
-          bank: {
-              account_number: string;
-              ifsc_code: string;
-              account_type: AccountType;
-          };
-      }
-    | {
-          step: CheckpointStep.SIGNATURE;
-      }
-    | {
-          step: CheckpointStep.IPV;
-      }
-    | {
-          step: CheckpointStep.INCOME_PROOF;
-          income_proof_type: IncomeProofType;
-      }
-    | {
-          step: CheckpointStep.ADD_NOMINEES;
-          nominees: {
-              name: string;
-              gov_id: string;
-              relation: NomineeRelation;
-              share: number;
-          }[];
-      }
-    | {
-          step: CheckpointStep.ESIGN_INITIALIZE;
-          redirect_url: string;
-      }
-    | {
-          step: CheckpointStep.ESIGN_COMPLETE;
-      };
+export type PostCheckpointType = ToDiscoUnion<
+    {
+        [CheckpointStep.PAN]: {
+            pan_number: string;
+        };
+        [CheckpointStep.AADHAAR_URI]: {
+            redirect: string;
+        };
+        [CheckpointStep.AADHAAR]: {};
+        [CheckpointStep.AADHAAR_MISMATCH_DETAILS]: {
+            full_name: string;
+            dob: string;
+        };
+        [CheckpointStep.INVESTMENT_SEGMENT]: {
+            segments: InvestmentSegment[];
+        };
+        [CheckpointStep.USER_DETAIL]: {
+            father_spouse_name: string;
+            mother_name: string;
+            maiden_name?: string;
+        };
+        [CheckpointStep.PERSONAL_DETAIL]: {
+            marital_status: MaritalStatus;
+            annual_income: AnnualIncome;
+            trading_exp: TradingExperience;
+            acc_settlement: AccountSettlement;
+        };
+        [CheckpointStep.OTHER_DETAIL]: {
+            occupation: Occupation;
+            politically_exposed: boolean;
+        };
+        [CheckpointStep.BANK_VALIDATION_START]: {
+            validation_type: ValidationType;
+        };
+        [CheckpointStep.BANK_VALIDATION]: ToDiscoUnion<
+            {
+                [ValidationType.BANK]: {
+                    bank: {
+                        account_type: AccountType;
+                        account_number: string;
+                        ifsc_code: string;
+                    };
+                };
+                [ValidationType.UPI]: {};
+            },
+            'validation_type'
+        >;
+        [CheckpointStep.SIGNATURE]: {};
+        [CheckpointStep.IPV]: {};
+        [CheckpointStep.INCOME_PROOF]: {
+            income_proof_type: IncomeProofType;
+        };
+        [CheckpointStep.ADD_NOMINEES]: {
+            nominees: {
+                name: string;
+                gov_id: string;
+                relation: NomineeRelation;
+                share: number;
+            }[];
+        };
+        [CheckpointStep.ESIGN_INITIALIZE]: {
+            redirect_url: string;
+        };
+        [CheckpointStep.ESIGN_COMPLETE]: {};
+    },
+    'step'
+>;
 
 export type SetupMpinType = {
     mpin: string;

@@ -29,6 +29,14 @@ export type NonNullableFields<T> = {
     [P in keyof T]: NonNullable<T[P]>;
 };
 
-type Pretty<T> = {
+export type Pretty<T> = {
     [K in keyof T]: T[K];
 } & {};
+
+export type ToDiscoUnion<T, N extends string = 'type'> = {
+    [K in keyof T]: Pretty<
+        {
+            [P in N]: K;
+        } & T[K]
+    >;
+}[keyof T];
