@@ -11,10 +11,14 @@ import { randomUUID } from 'crypto';
 import redisClient from '@app/services/redis.service';
 import { UnauthorizedError } from '@app/apiError';
 import {
+    CurrentSessionInfo,
+    CurrentSessionResponse,
     DeleteAccountInitiateRequest,
     DeleteAccountVerifyRequest,
+    DeviceInfo,
     KnowYourPartnerResponse,
     KnowYourPartnerType,
+    LocationInfo,
     NotificationSettings,
     TwoFactorDisableRequest,
     TwoFactorMethod,
@@ -47,6 +51,62 @@ const getKnowYourPartner = async (
     res.status(OK).json({
         message: 'Company support information retrieved successfully',
         data: partnerInfo,
+    });
+};
+
+const getCurrentUserSession = async (
+    req: Request<SessionJwtType, ParamsDictionary, CurrentSessionResponse, undefined>,
+    res: Response<CurrentSessionResponse>,
+) => {
+    const { userId } = req.auth!;
+
+    // Get the most recent active session for the user
+    const currentSession = await db
+        .selectFrom('user_sessions')
+        .select(['id', 'ip_address', 'device_info', 'location_data', 'session_start', 'last_activity', 'user_agent'])
+        .where('user_id', '=', userId)
+        .where('is_active', '=', true)
+        .orderBy('last_activity', 'desc')
+        .limit(1)
+        .executeTakeFirst();
+
+    if (!currentSession) {
+        throw new UnauthorizedError('No active session found');
+    }
+    const deviceInfo: DeviceInfo = currentSession.device_info
+        ? typeof currentSession.device_info === 'string'
+            ? JSON.parse(currentSession.device_info)
+            : (currentSession.device_info as DeviceInfo)
+        : {};
+
+    // Parse location data from JSON
+    const locationData: LocationInfo = currentSession.location_data
+        ? typeof currentSession.location_data === 'string'
+            ? JSON.parse(currentSession.location_data)
+            : (currentSession.location_data as LocationInfo)
+        : {};
+
+    const sessionData: CurrentSessionInfo = {
+        sessionId: currentSession.id,
+        ipAddress: currentSession.ip_address,
+        deviceInfo: {
+            browser: deviceInfo.browser,
+            device: deviceInfo.device,
+            deviceType: deviceInfo.deviceType,
+            userAgent: currentSession.user_agent || undefined,
+        },
+        locationData: {
+            city: locationData.city,
+            region: locationData.region,
+            country: locationData.country,
+        },
+        sessionStart: currentSession.session_start,
+        lastActivity: currentSession.last_activity,
+    };
+
+    res.status(OK).json({
+        message: 'Current session retrieved successfully',
+        data: sessionData,
     });
 };
 
@@ -657,4 +717,5 @@ export {
     verify2FASetup,
     disable2FA,
     send2FADisableOtp,
+    getCurrentUserSession,
 };

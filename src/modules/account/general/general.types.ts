@@ -113,3 +113,29 @@ export interface KnowYourPartnerType {
 export interface KnowYourPartnerResponse extends DefaultResponseData {
     data: KnowYourPartnerType;
 }
+
+export interface DeviceInfo {
+    browser?: string;
+    device?: string;
+    deviceType?: string;
+    userAgent?: string;
+}
+
+export interface LocationInfo {
+    city?: string;
+    region?: string;
+    country?: string;
+}
+
+export interface CurrentSessionInfo {
+    sessionId: number;
+    ipAddress: string;
+    deviceInfo: DeviceInfo;
+    locationData: LocationInfo;
+    sessionStart: Date;
+    lastActivity: Date;
+}
+
+export interface CurrentSessionResponse extends DefaultResponseData {
+    data: CurrentSessionInfo;
+}

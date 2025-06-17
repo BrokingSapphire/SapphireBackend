@@ -3,6 +3,7 @@
 import { Router } from 'express';
 import {
     disable2FA,
+    getCurrentUserSession,
     getKnowYourPartner,
     initiateAccountDeletion,
     resendAccountDeletionOtp,
@@ -25,6 +26,7 @@ router.put('/general/settings/permissions', updateUserPermissions);
 router.post('/general/settings/delete-account/initiate', initiateAccountDeletion);
 router.post('/general/settings/delete-account/verify', verifyAccountDeletionOtp);
 router.post('/general/settings/delete-account/resend-otp', resendAccountDeletionOtp);
+router.get('/general/settings/current-session', getCurrentUserSession);
 
 // 2FA
 router.post('/general/settings/2fa/setup', setup2FA);
