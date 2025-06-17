@@ -36,6 +36,7 @@ import { verifyPassword } from '@app/utils/passwords';
 import * as speakeasy from 'speakeasy';
 import * as QRCode from 'qrcode';
 import logger from '@app/logger';
+import SRNGenerator, { DEPARTMENT_CODES } from '@app/services/srn-generator';
 
 const getKnowYourPartner = async (
     req: Request<undefined, ParamsDictionary, KnowYourPartnerResponse, undefined>,
@@ -117,6 +118,9 @@ const updateOrderPreferences = async (
     const { userId } = req.auth!;
     const preferences = req.body;
 
+    const srnGenerator = new SRNGenerator('TRD');
+    const srn = srnGenerator.generateTimestampSRN();
+
     await db
         .updateTable('user_preferences')
         .set({
@@ -125,6 +129,15 @@ const updateOrderPreferences = async (
         })
         .where('user_id', '=', userId)
         .execute();
+
+    logger.info(`Order preferences updated for user ${userId} with SRN: ${srn}`, {
+        userId,
+        srn,
+        preferences,
+        department: DEPARTMENT_CODES.TRD,
+        action: 'ORDER_PREFERENCES_UPDATE',
+        timestamp: new Date().toISOString(),
+    });
 
     res.status(OK).json({
         message: 'Order preferences updated successfully',
@@ -137,21 +150,11 @@ const updateUserSettings = async (
     res: Response<DefaultResponseData>,
 ) => {
     const { userId } = req.auth!;
-    const {
-        theme,
-        biometricAuthentication,
-        chartProvider,
-        orderNotifications,
-        tradeNotifications,
-        tradeRecommendations,
-        promotion,
-    } = req.body;
+    const { chartProvider, orderNotifications, tradeNotifications, tradeRecommendations, promotion } = req.body;
 
     await db
         .updateTable('user_preferences')
         .set({
-            theme,
-            biometric_authentication: biometricAuthentication,
             chart_provider: chartProvider,
             order_notifications: orderNotifications,
             trade_notifications: tradeNotifications,
@@ -173,15 +176,12 @@ const updateUserPermissions = async (
     res: Response<DefaultResponseData>,
 ) => {
     const { userId } = req.auth!;
-    const { internet, storage, location, smsReading, notification, biometric } = req.body;
+    const { internet, notification, biometric } = req.body;
 
     await db
         .updateTable('user_preferences')
         .set({
             internet_permission: internet,
-            storage_permission: storage,
-            location_permission: location,
-            sms_reading_permission: smsReading,
             notification_permission: notification,
             biometric_permission: biometric,
             updated_at: new Date(),

@@ -18,6 +18,7 @@ import {
 } from './manage.types';
 import redisClient from '@app/services/redis.service';
 import { EmailOtpVerification } from '@app/services/otp.service';
+import SRNGenerator from '@app/services/srn-generator';
 
 const updateSegmentActivation = async (
     req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, Partial<SegmentActivationSettings>>,
@@ -25,6 +26,9 @@ const updateSegmentActivation = async (
 ) => {
     const { userId } = req.auth!;
     const { cashMutualFunds, futuresAndOptions, commodityDerivatives, debt, currency } = req.body;
+
+    const srnGenerator = new SRNGenerator('RMS');
+    const srn = srnGenerator.generateTimestampSRN();
 
     const currentSegments = await db
         .selectFrom('investment_segments_to_user')
@@ -61,6 +65,8 @@ const updateSegmentActivation = async (
         }
     });
 
+    // need to make a proper db for the srn -> link with all the issues of a particular client
+
     const finalSegments = await db
         .selectFrom('investment_segments_to_user')
         .select(['segment'])
@@ -83,6 +89,8 @@ const updateSegmentActivation = async (
             ...req.body,
             requiresIncomeProof,
             segmentsRequiringProof,
+            srn,
+            generatedAt: new Date().toISOString(),
         },
     });
 };
@@ -120,6 +128,9 @@ const addBankAccount = async (
 ) => {
     const { userId } = req.auth!;
     const { account_no, ifsc_code, account_type } = req.body;
+
+    const srnGenerator = new SRNGenerator('ACC');
+    const srn = srnGenerator.generateTimestampSRN();
 
     const existingAccount = await db
         .selectFrom('bank_account')
@@ -173,7 +184,11 @@ const addBankAccount = async (
 
     res.status(OK).json({
         message: 'Bank account added successfully',
-        data: req.body,
+        data: {
+            ...req.body,
+            srn,
+            generatedAt: new Date().toISOString(),
+        },
     });
 };
 
@@ -183,6 +198,9 @@ const removeBankAccount = async (
 ) => {
     const { userId } = req.auth!;
     const { bankAccountId } = req.body;
+
+    const srnGenerator = new SRNGenerator('ACC');
+    const srn = srnGenerator.generateTimestampSRN();
 
     const bankAccountLink = await db
         .selectFrom('bank_to_user')
@@ -202,7 +220,11 @@ const removeBankAccount = async (
 
     res.status(OK).json({
         message: 'Bank account removed successfully',
-        data: { bankAccountId },
+        data: {
+            ...req.body,
+            srn,
+            generatedAt: new Date().toISOString(),
+        },
     });
 };
 
@@ -212,6 +234,9 @@ const freezeDematAccount = async (
 ) => {
     const { userId } = req.auth!;
     const { action, reason } = req.body;
+
+    const srnGenerator = new SRNGenerator('RMS');
+    const srn = srnGenerator.generateTimestampSRN();
 
     let currentDematStatus = await db
         .selectFrom('user_demat_status')
@@ -299,6 +324,7 @@ const freezeDematAccount = async (
             data: {
                 action,
                 status: newStatus,
+                srn,
                 reason,
                 freezeUntil,
             },
@@ -316,6 +342,9 @@ const updateSettlementFrequency = async (
 ) => {
     const { userId } = req.auth!;
     const { sessionId, otp, frequency } = req.body;
+
+    const srnGenerator = new SRNGenerator('ACC'); // ACC = Accounts & Finance
+    const srn = srnGenerator.generateTimestampSRN();
 
     const redisKey = `settlement_frequency_change:${sessionId}`;
     const sessionStr = await redisClient.get(redisKey);
@@ -389,6 +418,8 @@ const updateSettlementFrequency = async (
         data: {
             settlementFrequency: frequency,
             updatedAt: currentTime,
+            srn,
+            generatedAt: currentTime.toISOString(),
         },
     });
 };
