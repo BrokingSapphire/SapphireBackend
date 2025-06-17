@@ -17,6 +17,7 @@ import { ParamsDictionary } from 'express-serve-static-core';
 import smsService from '@app/services/sms.service';
 import { SmsTemplateType } from '@app/services/notifications-types/sms.types';
 import logger from '@app/logger';
+import { format } from 'path';
 
 const assignOfficer = async (req: Request<SessionJwtType>, res: Response) => {
     const checkpointId = Number(req.params.checkpointId);
@@ -844,6 +845,15 @@ const finalizeVerification = async (req: Request, res: Response) => {
 const autoFinalVerification = async (req: Request, res: Response) => {
     const checkpointId = Number(req.params.checkpointId);
 
+    // format name for the first letter to be captial
+    const formatName = (name: string): string => {
+        if (!name) return '';
+        return name
+            .split(' ')
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
+    };
+
     const userContact = await db
         .selectFrom('signup_checkpoints')
         .innerJoin('phone_number', 'phone_number.id', 'signup_checkpoints.phone_id')
@@ -1036,8 +1046,9 @@ const autoFinalVerification = async (req: Request, res: Response) => {
 
     try {
         if (userContact && userContact.phone) {
+            const formattedName = formatName(userContact.first_name);
             await smsService.sendTemplatedSms(String(userContact.phone), SmsTemplateType.ACCOUNT_SUCCESSFULLY_OPENED, [
-                userContact.first_name,
+                formattedName,
             ]);
             logger.info(`Account activation SMS sent to ${userContact.phone}`);
         }
