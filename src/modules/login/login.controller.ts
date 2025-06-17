@@ -218,7 +218,7 @@ const login = async (
             const smsOtp = new PhoneOtpVerification(user.email, '2fa-login', phoneStr);
             await smsOtp.sendOtp();
 
-            const otpKey = `phone-otp:2fa-login:${user.phone}`;
+            const otpKey = `otp:phone-otp:2fa-login:${user.email}:${user.phone}`;
             const otp = await redisClient.get(otpKey);
 
             // Send SMS using the 2FA template
@@ -476,7 +476,7 @@ const Resend2FALoginOtp = async (
     const smsOtp = new PhoneOtpVerification(user2FA.email, '2fa-login' as any, user2FA.phone);
     await smsOtp.sendOtp();
 
-    const otpKey = `phone-otp:2fa-login:${user2FA.phone}`;
+    const otpKey = `otp:phone-otp:2fa-login:${user2FA.email}:${user2FA.phone}`;
     const otp = await redisClient.get(otpKey);
 
     try {
@@ -767,7 +767,7 @@ const forgotPasswordInitiate = async (
     const emailOtp = new EmailOtpVerification(user.email, 'forgot-password');
     await emailOtp.sendOtp();
 
-    const otpKey = `email-otp:forgot-password:${user.email}`;
+    const otpKey = `otp:email-otp:forgot-password:${user.email}`;
     const otp = await redisClient.get(otpKey);
 
     // Send OTP via SMS if phone number and OTP are available
@@ -844,7 +844,7 @@ const resendForgotPasswordOtp = async (
     const emailOtp = new EmailOtpVerification(session.email, 'forgot-password');
     await emailOtp.sendOtp();
 
-    const otpKey = `email-otp:forgot-password:${session.email}`;
+    const otpKey = `otp:email-otp:forgot-password:${session.email}`;
     const otp = await redisClient.get(otpKey);
 
     // Send OTP via SMS if phone number and OTP are available
@@ -985,7 +985,7 @@ const forgotMpinInitiate = async (
     const emailOtp = new EmailOtpVerification(user.email, 'forgot-mpin');
     await emailOtp.sendOtp();
 
-    const otpKey = `email-otp:forgot-mpin:${user.email}`;
+    const otpKey = `otp:email-otp:forgot-mpin:${user.email}`;
     const otp = await redisClient.get(otpKey);
 
     try {
@@ -1050,8 +1050,27 @@ const resendForgotMpinOtp = async (
         throw new UnauthorizedError('Session already used');
     }
 
+    const user = await db
+        .selectFrom('user')
+        .innerJoin('phone_number', 'user.phone', 'phone_number.id')
+        .select(['phone_number.phone'])
+        .where('user.id', '=', session.userId)
+        .executeTakeFirst();
+
     const emailOtp = new EmailOtpVerification(session.email, 'forgot-mpin');
     await emailOtp.sendOtp();
+
+    const otpKey = `otp:email-otp:forgot-mpin:${session.email}`;
+    const otp = await redisClient.get(otpKey);
+
+    try {
+        if (user && user.phone && otp) {
+            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.FORGET_MPIN, [otp]);
+            logger.info(`MPIN reset OTP SMS resent to ${user.phone}`);
+        }
+    } catch (error) {
+        logger.error(`Failed to resend MPIN reset OTP SMS: ${error}`);
+    }
 
     await redisClient.expire(redisKey, 10 * 60);
 
