@@ -1152,12 +1152,20 @@ const postCheckpoint = async (
             message: 'IPV started',
         });
     } else if (step === CheckpointStep.INCOME_PROOF) {
+        const { income_proof_type } = req.body;
+
+        await db.transaction().execute(async (tx) => {
+            await updateCheckpoint(tx, email, phone, {
+                income_proof_type,
+            }).execute();
+        });
+
         const uid = randomUUID();
         await redisClient.set(`signup_income_proof:${uid}`, email);
         await redisClient.expire(`signup_income_proof:${uid}`, 10 * 60);
 
         res.status(OK).json({
-            data: { uid },
+            data: { uid, income_proof_type },
             message: 'Income proof upload started',
         });
     } else if (step === CheckpointStep.ADD_NOMINEES) {
@@ -1692,9 +1700,9 @@ const putIncomeProof = async (req: Request<JwtType, UIDParams>, res: Response) =
 const getIncomeProof = async (req: Request<JwtType>, res: Response) => {
     const { email } = req.auth!;
 
-    const { income_proof: url } = await db
+    const { income_proof: url, income_proof_type } = await db
         .selectFrom('signup_checkpoints')
-        .select('income_proof')
+        .select(['income_proof', 'income_proof_type'])
         .where('email', '=', email)
         .executeTakeFirstOrThrow();
 
@@ -1702,7 +1710,7 @@ const getIncomeProof = async (req: Request<JwtType>, res: Response) => {
         res.status(NO_CONTENT).json({ message: 'Income proof not uploaded' });
     } else {
         res.status(OK).json({
-            data: { url },
+            data: { url, income_proof_type },
             message: 'Income proof uploaded.',
         });
     }

@@ -3,6 +3,7 @@ import {
     AccountSettlement,
     AnnualIncome,
     CheckpointStep,
+    IncomeProofType,
     InvestmentSegment,
     MaritalStatus,
     NomineeRelation,
@@ -166,6 +167,12 @@ const CheckpointSchema = Joi.object({
     redirect_url: Joi.alternatives().conditional('step', {
         is: CheckpointStep.ESIGN_INITIALIZE,
         then: Joi.string().uri().required(),
+    }),
+    income_proof_type: Joi.alternatives().conditional('step', {
+        is: CheckpointStep.INCOME_PROOF,
+        then: Joi.string()
+            .valid(...Object.values(IncomeProofType))
+            .required(),
     }),
 });
 

@@ -93,6 +93,14 @@ export enum NomineeRelation {
     OTHER = 'Other',
 }
 
+export enum IncomeProofType {
+    BANK_STATEMENT = 'bank_statement_6m_10k',
+    SALARY_SLIP = 'salary_slip_15k_monthly',
+    FORM_16 = 'form_16_120k_annual',
+    NET_WORTH_CERTIFICATE = 'net_worth_certificate_10l',
+    DEMAT_STATUS_HOLDINGS = 'demat_statement_10k_holdings',
+}
+
 export type RequestOtpType =
     | {
           type: CredentialsType.EMAIL;
@@ -187,6 +195,7 @@ export type PostCheckpointType =
       }
     | {
           step: CheckpointStep.INCOME_PROOF;
+          income_proof_type: IncomeProofType;
       }
     | {
           step: CheckpointStep.ADD_NOMINEES;
