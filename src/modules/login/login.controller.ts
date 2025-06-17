@@ -181,6 +181,24 @@ const login = async (
     await redisClient.set(redisKey, JSON.stringify(loginSession));
     await redisClient.expire(redisKey, 10 * 60);
 
+    const deviceLocationInfo = {
+        ip: deviceInfo.ip,
+        location: {
+            country: deviceInfo.location.country || 'Unknown',
+            region: deviceInfo.location.region || 'Unknown',
+            city: deviceInfo.location.city || 'Unknown',
+            formatted: deviceTrackingService.formatLocationString(deviceInfo.location),
+        },
+        device: {
+            browser: deviceInfo.device.browser || 'Unknown Browser',
+            device: deviceInfo.device.device || 'Unknown Device',
+            deviceType: deviceInfo.device.deviceType || 'desktop',
+            formatted: deviceTrackingService.formatDeviceString(deviceInfo.device),
+            userAgent: deviceInfo.device.userAgent,
+        },
+        timestamp: deviceInfo.timestamp,
+    };
+
     if (user2FA && user2FA.method !== 'disabled') {
         const method = user2FA.method as TwoFactorMethod;
 
@@ -233,6 +251,7 @@ const login = async (
                     sessionId: loginSessionId,
                     nextStep: '2fa',
                     twoFactorMethod: method,
+                    deviceInfo: deviceLocationInfo,
                 },
             });
         } else {
@@ -270,6 +289,7 @@ const login = async (
                     twoFactorMethod: method,
                     qrCodeUrl,
                     manualEntryKey: user2FADetails?.secret,
+                    deviceInfo: deviceLocationInfo,
                 },
             });
         }
@@ -289,6 +309,7 @@ const login = async (
         data: {
             sessionId: loginSessionId,
             nextStep: 'mpin',
+            deviceInfo: deviceLocationInfo,
         },
     });
 };
