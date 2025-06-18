@@ -45,6 +45,7 @@ import s3Service from '@app/services/s3.service';
 import { SmsTemplateType } from '@app/services/notifications-types/sms.types';
 import smsService from '@app/services/sms.service';
 import { fileFromPath } from 'formdata-node/file-from-path';
+import { NotNull } from 'kysely';
 
 const requestOtp = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, RequestOtpType>,
@@ -403,6 +404,32 @@ const getCheckpoint = async (req: Request<JwtType, GetCheckpointType>, res: Resp
         res.status(OK).json({
             data: { nominees: formattedNominees },
             message: 'Nominees fetched successfully',
+        });
+    } else if (step === CheckpointStep.ESIGN_COMPLETE) {
+        const { esign } = await db
+            .selectFrom('signup_checkpoints')
+            .select('esign')
+            .where('email', '=', email)
+            .where('esign', 'is not', null)
+            .$narrowType<{ esign: NotNull }>()
+            .executeTakeFirstOrThrow();
+
+        res.status(OK).json({
+            data: { url: esign },
+            message: 'Esign fetched successfully',
+        });
+    } else if (step === CheckpointStep.INCOME_PROOF) {
+        const incomeProof = await db
+            .selectFrom('signup_checkpoints')
+            .select('income_proof')
+            .where('email', '=', email)
+            .where('income_proof', 'is not', null)
+            .$narrowType<{ income_proof: NotNull }>()
+            .executeTakeFirstOrThrow();
+
+        res.status(OK).json({
+            data: { url: incomeProof.income_proof },
+            message: 'Income proof fetched successfully',
         });
     } else {
         res.status(NOT_FOUND).json({ message: 'Checkpoint data not found' });
