@@ -31,7 +31,7 @@ import ESignService from '@app/services/surepass/esign.service';
 import AadhaarXMLParser from '@app/utils/aadhaar-xml.parser';
 import { sign } from '@app/utils/jwt';
 import axios from 'axios';
-import { insertAddressGetId, insertNameGetId, updateCheckpoint } from '@app/database/transactions';
+import { insertAddressGetId, insertNameGetId, Name, updateCheckpoint } from '@app/database/transactions';
 import splitName from '@app/utils/split-name';
 import PanService from '@app/services/surepass/pan.service';
 import { CREATED, NO_CONTENT, NOT_ACCEPTABLE, NOT_FOUND, OK } from '@app/utils/httpstatus';
@@ -482,7 +482,8 @@ const postCheckpoint = async (
         }
 
         await db.transaction().execute(async (tx) => {
-            const nameId = await insertNameGetId(tx, splitName(panResponse.data.data.full_name));
+            const name = splitName(panResponse.data.data.full_name);
+            const nameId = await insertNameGetId(tx, name);
 
             const address = panResponse.data.data.address;
             const permanentAddressId = await insertAddressGetId(tx, {
@@ -528,6 +529,25 @@ const postCheckpoint = async (
                 .set({ pan_status: 'pending', updated_at: new Date() })
                 .where('id', '=', checkpoint.id)
                 .execute();
+
+            const fatherExist = await tx
+                .selectFrom('signup_checkpoints')
+                .select('father_spouse_name')
+                .where('email', '=', email)
+                .executeTakeFirstOrThrow();
+
+            if (!fatherExist.father_spouse_name && name.middleName) {
+                const fatherNameId = await insertNameGetId(tx, {
+                    firstName: name.middleName,
+                    middleName: null,
+                    lastName: name.lastName,
+                });
+                await tx
+                    .updateTable('signup_checkpoints')
+                    .set({ father_spouse_name: fatherNameId })
+                    .where('email', '=', email)
+                    .execute();
+            }
 
             if (exists) {
                 await tx.deleteFrom('pan_detail').where('id', '=', exists.id).execute();
