@@ -323,8 +323,6 @@ const getCheckpoint = async (req: Request<JwtType, GetCheckpointType>, res: Resp
                 'maiden.full_name as maiden_name',
             ])
             .where('email', '=', email)
-            .where('father_spouse_name', 'is not', null)
-            .where('mother_name', 'is not', null)
             .executeTakeFirstOrThrow();
 
         res.status(OK).json({
