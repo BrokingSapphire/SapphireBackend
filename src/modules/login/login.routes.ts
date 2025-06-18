@@ -14,6 +14,7 @@ import {
     ForgotMpinOtpVerifySchema,
     ForgotMpinInitiateSchema,
     MpinVerifySchema,
+    SetupMpinSchema,
 } from './login.validator';
 import {
     login,
@@ -29,6 +30,7 @@ import {
     forgotMpinOtpVerify,
     resendForgotMpinOtp,
     forgotMpinReset,
+    setupMpin,
 } from './login.controller';
 import { jwtMiddleware } from '@app/utils/jwt';
 
@@ -475,5 +477,29 @@ router.post('/forgot-mpin/resend-otp', validate(ResendForgotMpinOtpSchema), rese
  *         description: OTP not verified or session expired
  */
 router.post('/forgot-mpin/reset', validate(ForgotMpinResetSchema), forgotMpinReset);
+
+/**
+ * @swagger
+ * /setup-mpin:
+ *   post:
+ *     tags: [Login]
+ *     summary: Create MPIN for users who didn't set it during signup
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/CreateMpinSchema'
+ *     responses:
+ *       201:
+ *         description: MPIN created successfully
+ *       400:
+ *         description: Invalid MPIN or MPINs do not match or MPIN already exists
+ *       401:
+ *         description: Unauthorized - invalid or missing token
+ */
+router.post('/setup-mpin', jwtMiddleware, validate(SetupMpinSchema), setupMpin);
 
 export default router;

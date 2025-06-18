@@ -1,4 +1,4 @@
-import { DefaultResponseData, Pretty } from '@app/types';
+import { Pretty } from '@app/types';
 
 export type EmailOrClientId =
     | {
@@ -73,4 +73,10 @@ export type Verify2FARequestType = {
 
 export type Send2FALoginOtpRequestType = {
     sessionId: string;
+};
+
+export type CreateMpinRequestType = {
+    sessionId: string;
+    mpin: string;
+    confirm_mpin: string;
 };

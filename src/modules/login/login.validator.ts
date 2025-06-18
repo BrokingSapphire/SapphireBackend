@@ -155,3 +155,18 @@ export const ForgotMpinResetSchema = Joi.object({
             'string.length': 'New MPIN must be exactly 4 digits',
         }),
 });
+
+export const SetupMpinSchema = Joi.object({
+    sessionId: Joi.string().required(),
+    mpin: Joi.string()
+        .pattern(/^[0-9]{4}$/)
+        .required()
+        .messages({
+            'string.pattern.base': 'MPIN must be 4 digits',
+            'any.required': 'MPIN is required',
+        }),
+    confirm_mpin: Joi.string().valid(Joi.ref('mpin')).required().messages({
+        'any.only': 'MPINs do not match',
+        'any.required': 'Confirm MPIN is required',
+    }),
+});

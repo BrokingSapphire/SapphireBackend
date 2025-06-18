@@ -3,10 +3,10 @@ import { Response, DefaultResponseData, Request } from '@app/types.d';
 import redisClient from '@app/services/redis.service';
 import { EmailOtpVerification } from '@app/services/otp.service';
 import { randomUUID } from 'crypto';
-import { UnauthorizedError } from '@app/apiError';
+import { UnauthorizedError, BadRequestError } from '@app/apiError';
 import { db } from '@app/database';
 import { sign } from '@app/utils/jwt';
-import { OK } from '@app/utils/httpstatus';
+import { OK, CREATED } from '@app/utils/httpstatus';
 import * as speakeasy from 'speakeasy';
 import * as QRCode from 'qrcode';
 import {
@@ -22,6 +22,7 @@ import {
     NewMpinRequestType,
     ResendForgotMpinOtpRequestType,
     Verify2FARequestType,
+    CreateMpinRequestType,
 } from './login.types';
 import { TwoFactorMethod } from '../account/general/general.types';
 import { ResponseWithToken, SessionJwtType } from '@app/modules/common.types';
@@ -293,6 +294,33 @@ const login = async (
                 },
             });
         }
+        return;
+    }
+
+    const userMpin = await db
+        .selectFrom('user_mpin')
+        .innerJoin('hashing_algorithm', 'user_mpin.hash_algo_id', 'hashing_algorithm.id')
+        .select(['user_mpin.is_active', 'user_mpin.failed_attempts', 'hashing_algorithm.name as hashAlgo'])
+        .where('user_mpin.client_id', '=', user.id)
+        .executeTakeFirst();
+
+    if (!userMpin || !userMpin.is_active) {
+        logger.info('MPIN not set for user', {
+            sessionId: loginSessionId,
+            userId: user.id,
+            userEmail: user.email,
+            requestIp: deviceInfo.ip,
+            timestamp: new Date().toISOString(),
+        });
+
+        res.status(OK).json({
+            message: 'Password verified. Please set your MPIN.',
+            data: {
+                sessionId: loginSessionId,
+                nextStep: 'set-mpin',
+                deviceInfo: deviceLocationInfo,
+            },
+        });
         return;
     }
 
@@ -865,7 +893,6 @@ const resendForgotPasswordOtp = async (
     const otpKey = `otp:email-otp:forgot-password:${session.email}`;
     const otp = await redisClient.get(otpKey);
 
-    // Send OTP via SMS if phone number and OTP are available
     try {
         if (user && user.phone && otp) {
             await smsService.sendTemplatedSms(user.phone, SmsTemplateType.TERMINAL_PWD_RESET_OTP, [otp]);
@@ -1193,6 +1220,90 @@ const forgotMpinReset = async (
     res.status(OK).json({ message: 'MPIN reset successful' });
 };
 
+const setupMpin = async (
+    req: Request<undefined, ParamsDictionary, DefaultResponseData, CreateMpinRequestType>,
+    res: Response,
+) => {
+    const { sessionId, mpin, confirm_mpin } = req.body;
+
+    if (mpin !== confirm_mpin) {
+        throw new BadRequestError('MPINs do not match');
+    }
+
+    const redisKey = `login_session:${sessionId}`;
+    const sessionStr = await redisClient.get(redisKey);
+    if (!sessionStr) {
+        throw new UnauthorizedError('Login session expired or invalid');
+    }
+
+    const session = JSON.parse(sessionStr);
+    const clientId = session.userId;
+
+    // Check if MPIN already exists
+    const existingMpin = await db
+        .selectFrom('user_mpin')
+        .select('id')
+        .where('client_id', '=', clientId)
+        .executeTakeFirst();
+
+    if (existingMpin) {
+        throw new BadRequestError('MPIN already exists for this user');
+    }
+
+    // Check if user exists and get user info
+    const user = await db.selectFrom('user').select(['id', 'email']).where('id', '=', clientId).executeTakeFirst();
+
+    if (!user) {
+        throw new UnauthorizedError('User not found');
+    }
+
+    const hashedMpin = await hashPassword(mpin, 'bcrypt');
+
+    await db.transaction().execute(async (tx) => {
+        const hashAlgo = await db
+            .selectFrom('hashing_algorithm')
+            .select('id')
+            .where('name', '=', hashedMpin.hashAlgo)
+            .executeTakeFirst();
+
+        let hashAlgoId;
+        if (!hashAlgo) {
+            const insertedHashAlgo = await tx
+                .insertInto('hashing_algorithm')
+                .values({
+                    name: 'bcrypt',
+                })
+                .returning('id')
+                .executeTakeFirst();
+
+            if (!insertedHashAlgo) {
+                throw new Error('Failed to insert hashing algorithm');
+            }
+            hashAlgoId = insertedHashAlgo.id;
+        } else {
+            hashAlgoId = hashAlgo.id;
+        }
+
+        await tx
+            .insertInto('user_mpin')
+            .values({
+                client_id: clientId,
+                mpin_hash: hashedMpin.hashedPassword,
+                mpin_salt: hashedMpin.salt,
+                hash_algo_id: hashAlgoId,
+                created_at: new Date(),
+                updated_at: new Date(),
+                is_active: true,
+                failed_attempts: 0,
+            })
+            .execute();
+    });
+
+    res.status(CREATED).json({
+        message: 'MPIN set successfully',
+    });
+};
+
 export {
     login,
     verifyMpin,
@@ -1207,4 +1318,5 @@ export {
     forgotMpinReset,
     verify2FA,
     Resend2FALoginOtp,
+    setupMpin,
 };
