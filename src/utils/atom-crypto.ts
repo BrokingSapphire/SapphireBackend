@@ -9,7 +9,7 @@ export function encrypt(plainText: string, key: string): string {
     const derivedKey = crypto.pbkdf2Sync(key, salt, PSWD_ITERATIONS, KEY_SIZE / 8, 'sha512');
     const cipher = crypto.createCipheriv('aes-256-cbc', derivedKey, IV_BYTES);
     const encrypted = Buffer.concat([cipher.update(plainText, 'utf8'), cipher.final()]);
-    return encrypted.toString('hex').toUpperCase(); // Directly convert to hex
+    return encrypted.toString('hex'); // Directly convert to hex
 }
 
 export function decrypt(encryptedText: string, key: string): string {
@@ -23,5 +23,5 @@ export function decrypt(encryptedText: string, key: string): string {
 
 export function generateSignature(hashKey: string, params: string[]): string {
     const data = params.join('');
-    return crypto.createHmac('sha512', hashKey).update(data, 'utf8').digest('hex').toUpperCase();
+    return crypto.createHmac('SHA512', hashKey).update(data, 'utf8').digest('hex');
 }
