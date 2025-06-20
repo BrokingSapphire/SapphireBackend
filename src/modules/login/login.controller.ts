@@ -500,18 +500,20 @@ const Resend2FALoginOtp = async (
         throw new UnauthorizedError('SMS OTP is not enabled for this account');
     }
 
+    const otpKey = `otp:phone-otp:2fa-login:${user2FA.email}:${user2FA.phone}`;
+    const existingOtp = await redisClient.get(otpKey);
+
+    if (!existingOtp) {
+        throw new BadRequestError('No active OTP session found. Please request a new OTP.');
+    }
+
     // Send SMS OTP
     const smsOtp = new PhoneOtpVerification(user2FA.email, '2fa-login' as any, user2FA.phone);
-    await smsOtp.sendOtp();
-
-    const otpKey = `otp:phone-otp:2fa-login:${user2FA.email}:${user2FA.phone}`;
-    const otp = await redisClient.get(otpKey);
+    await smsOtp.resendExistingOtp();
 
     try {
-        if (otp) {
-            await smsService.sendTemplatedSms(user2FA.phone, SmsTemplateType.TWO_FACTOR_AUTHENTICATION_OTP, [otp]);
-            logger.info(`2FA OTP SMS resent to ${user2FA.phone}`);
-        }
+        await smsService.sendTemplatedSms(user2FA.phone, SmsTemplateType.TWO_FACTOR_AUTHENTICATION_OTP, [existingOtp]);
+        logger.info(`2FA OTP SMS resent to ${user2FA.phone} - using existing OTP`);
     } catch (error) {
         logger.error(`Failed to resend 2FA OTP SMS: ${error}`);
     }
@@ -880,6 +882,13 @@ const resendForgotPasswordOtp = async (
         throw new UnauthorizedError('Session already used');
     }
 
+    const emailOtpKey = `otp:email-otp:forgot-password:${session.email}`;
+    const existingEmailOtp = await redisClient.get(emailOtpKey);
+
+    if (!existingEmailOtp) {
+        throw new BadRequestError('No active OTP session found. Please request a new OTP.');
+    }
+
     const user = await db
         .selectFrom('user')
         .innerJoin('phone_number', 'user.phone', 'phone_number.id')
@@ -888,15 +897,12 @@ const resendForgotPasswordOtp = async (
         .executeTakeFirst();
 
     const emailOtp = new EmailOtpVerification(session.email, 'forgot-password');
-    await emailOtp.sendOtp();
-
-    const otpKey = `otp:email-otp:forgot-password:${session.email}`;
-    const otp = await redisClient.get(otpKey);
+    await emailOtp.resendExistingOtp();
 
     try {
-        if (user && user.phone && otp) {
-            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.TERMINAL_PWD_RESET_OTP, [otp]);
-            logger.info(`Password reset OTP SMS resent to ${user.phone}`);
+        if (user && user.phone && existingEmailOtp) {
+            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.TERMINAL_PWD_RESET_OTP, [existingEmailOtp]);
+            logger.info(`Password reset OTP SMS resent to ${user.phone} - using existing OTP`);
         }
     } catch (error) {
         logger.error(`Failed to resend password reset OTP SMS: ${error}`);
@@ -1104,6 +1110,13 @@ const resendForgotMpinOtp = async (
         throw new UnauthorizedError('Session already used');
     }
 
+    const emailOtpKey = `otp:email-otp:forgot-mpin:${session.email}`;
+    const existingEmailOtp = await redisClient.get(emailOtpKey);
+
+    if (!existingEmailOtp) {
+        throw new BadRequestError('No active OTP session found. Please request a new OTP.');
+    }
+
     const user = await db
         .selectFrom('user')
         .innerJoin('phone_number', 'user.phone', 'phone_number.id')
@@ -1112,15 +1125,12 @@ const resendForgotMpinOtp = async (
         .executeTakeFirst();
 
     const emailOtp = new EmailOtpVerification(session.email, 'forgot-mpin');
-    await emailOtp.sendOtp();
-
-    const otpKey = `otp:email-otp:forgot-mpin:${session.email}`;
-    const otp = await redisClient.get(otpKey);
+    await emailOtp.resendExistingOtp();
 
     try {
-        if (user && user.phone && otp) {
-            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.FORGET_MPIN, [otp]);
-            logger.info(`MPIN reset OTP SMS resent to ${user.phone}`);
+        if (user && user.phone && existingEmailOtp) {
+            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.FORGET_MPIN, [existingEmailOtp]);
+            logger.info(`MPIN reset OTP SMS resent to ${user.phone} - using existing OTP`);
         }
     } catch (error) {
         logger.error(`Failed to resend MPIN reset OTP SMS: ${error}`);

@@ -45,7 +45,7 @@ export const ForgotPasswordInitiateSchema = Joi.object({
 
 export const ForgotOTPVerifySchema = Joi.object({
     requestId: Joi.string().required(),
-    emailOtp: Joi.string()
+    otp: Joi.string()
         .required()
         .length(6)
         .pattern(/^[0-9]{6}$/),
