@@ -500,6 +500,6 @@ router.post('/forgot-mpin/reset', validate(ForgotMpinResetSchema), forgotMpinRes
  *       401:
  *         description: Unauthorized - invalid or missing token
  */
-router.post('/setup-mpin', jwtMiddleware, validate(SetupMpinSchema), setupMpin);
+router.post('/setup-mpin', validate(SetupMpinSchema), setupMpin);
 
 export default router;

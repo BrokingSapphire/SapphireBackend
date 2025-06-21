@@ -14,7 +14,9 @@ export const LoginRequestSchema = EmailOrClientIdSchema.keys({
     password: Joi.string().required(),
 });
 
-export const ResendLoginOtpSchema = EmailOrClientIdSchema;
+export const ResendLoginOtpSchema = Joi.object({
+    sessionId: Joi.string().required(),
+});
 
 export const LoginOtpVerifySchema = EmailOrClientIdSchema.keys({
     otp: Joi.string()
@@ -129,7 +131,7 @@ export const ForgotMpinInitiateSchema = EmailOrClientIdSchema;
 
 export const ForgotMpinOtpVerifySchema = Joi.object({
     requestId: Joi.string().required(),
-    emailOtp: Joi.string()
+    otp: Joi.string()
         .required()
         .length(DEFAULT_OTP_LENGTH)
         .pattern(/^[0-9]{6}$/)

@@ -38,6 +38,14 @@ import { SmsTemplateType } from '@app/services/notifications-types/sms.types';
 import smsService from '@app/services/sms.service';
 import logger from '@app/logger';
 
+const formatName = (name: string): string => {
+    if (!name) return '';
+    return name
+        .split(' ')
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(' ');
+};
+
 const login = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, LoginRequestType>,
     res: Response,
@@ -45,6 +53,14 @@ const login = async (
     const { password } = req.body;
     const clientId = 'clientId' in req.body ? req.body.clientId : undefined;
     const email = 'email' in req.body ? req.body.email : undefined;
+
+    if (!password) {
+        throw new BadRequestError('Password is required');
+    }
+
+    if (!clientId && !email) {
+        throw new BadRequestError('Either clientId or email is required');
+    }
 
     const deviceInfo = await deviceTrackingService.getDeviceInfo(req);
 
@@ -54,7 +70,7 @@ const login = async (
             requestId: randomUUID(),
             loginIdentifier: clientId || email,
             loginType: clientId ? 'clientId' : 'email',
-            requestIp: deviceInfo.ip, // Use deviceInfo.ip consistently
+            requestIp: deviceInfo.ip,
             forwardedFor: req.get('X-Forwarded-For'),
             realIp: req.get('X-Real-IP'),
             userAgent: req.get('User-Agent'),
@@ -89,17 +105,22 @@ const login = async (
         ])
         .$call((qb) => {
             if (clientId) {
-                qb.where('user.id', '=', clientId);
+                return qb.where('user.id', '=', clientId);
             } else if (email) {
-                qb.where('user.email', '=', email);
+                return qb.where('user.email', '=', email);
             }
-
             return qb;
         })
-        .executeTakeFirstOrThrow();
+        .executeTakeFirst();
 
-    // ADD THIS: Log user found
-    logger.info(`User found: ${user.email} (${user.id}) from IP: ${deviceInfo.ip}`);
+    // Check if user exists
+    if (!user) {
+        throw new UnauthorizedError('Invalid credentials');
+    }
+
+    if (clientId && user.id !== clientId) {
+        throw new UnauthorizedError('Invalid credentials');
+    }
 
     const authenticated = await verifyPassword(password, user);
 
@@ -141,6 +162,7 @@ const login = async (
         timestamp: new Date().toISOString(),
     });
 
+    // Rest of your existing code remains the same...
     const user2FA = await db
         .selectFrom('user_2fa')
         .select(['method'])
@@ -152,7 +174,7 @@ const login = async (
         sessionId: loginSessionId,
         userId: user.id,
         email: user.email,
-        userName: user.first_name,
+        userName: formatName(user.first_name),
         clientId: clientId || undefined,
         passwordVerified: true,
         twoFactorVerified: false,
@@ -167,7 +189,6 @@ const login = async (
         },
     };
 
-    // ADD THIS: Log session creation
     logger.info('Login session created', {
         sessionId: loginSessionId,
         userId: user.id,
@@ -203,7 +224,6 @@ const login = async (
     if (user2FA && user2FA.method !== 'disabled') {
         const method = user2FA.method as TwoFactorMethod;
 
-        // ADD THIS: Log 2FA method being used
         logger.info('2FA required for login', {
             sessionId: loginSessionId,
             userId: user.id,
@@ -222,7 +242,6 @@ const login = async (
             const otpKey = `otp:phone-otp:2fa-login:${user.email}:${user.phone}`;
             const otp = await redisClient.get(otpKey);
 
-            // Send SMS using the 2FA template
             try {
                 if (otp) {
                     await smsService.sendTemplatedSms(phoneStr, SmsTemplateType.TWO_FACTOR_AUTHENTICATION_OTP, [otp]);
@@ -253,6 +272,7 @@ const login = async (
                     nextStep: '2fa',
                     twoFactorMethod: method,
                     firstName: user.first_name,
+                    maskedPhone: phoneStr.replace(/(\d{6})(\d{4})/, '******$2'),
                     deviceInfo: deviceLocationInfo,
                 },
             });
@@ -533,7 +553,7 @@ const Resend2FALoginOtp = async (
     res.status(OK).json({
         message: 'OTP sent for 2FA verification',
         data: {
-            maskedPhone: user2FA.phone.replace(/(\d{2})(\d{6})(\d{2})/, '$1******$3'),
+            maskedPhone: user2FA.phone.replace(/(\d{6})(\d{4})/, '******$2'),
         },
     });
 };
@@ -543,14 +563,6 @@ const verifyMpin = async (
     res: Response<ResponseWithToken>,
 ) => {
     const { mpin, sessionId } = req.body;
-
-    const formatName = (name: string): string => {
-        if (!name) return '';
-        return name
-            .split(' ')
-            .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-            .join(' ');
-    };
 
     const redisKey = `login_session:${sessionId}`;
     const sessionStr = await redisClient.get(redisKey);
@@ -715,14 +727,6 @@ const resetPassword = async (
 ) => {
     const { userId } = req.auth!;
     const { currentPassword, newPassword } = req.body;
-
-    const formatName = (name: string): string => {
-        if (!name) return '';
-        return name
-            .split(' ')
-            .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-            .join(' ');
-    };
 
     // Fetch user details
     const user = await db
@@ -938,14 +942,6 @@ const forgotPasswordReset = async (
     res: Response,
 ) => {
     const { requestId, newPassword, confirmPassword } = req.body;
-
-    const formatName = (name: string): string => {
-        if (!name) return '';
-        return name
-            .split(' ')
-            .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-            .join(' ');
-    };
 
     if (newPassword !== confirmPassword) {
         throw new UnauthorizedError('Passwords do not match');
@@ -1165,14 +1161,6 @@ const forgotMpinReset = async (
     res: Response,
 ) => {
     const { requestId, newMpin } = req.body;
-
-    const formatName = (name: string): string => {
-        if (!name) return '';
-        return name
-            .split(' ')
-            .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-            .join(' ');
-    };
 
     const redisKey = `forgot_mpin:${requestId}`;
 
