@@ -895,13 +895,6 @@ const resendForgotPasswordOtp = async (
         throw new UnauthorizedError('Session already used');
     }
 
-    const emailOtpKey = `otp:email-otp:forgot-password:${session.email}`;
-    const existingEmailOtp = await redisClient.get(emailOtpKey);
-
-    if (!existingEmailOtp) {
-        throw new BadRequestError('No active OTP session found. Please request a new OTP.');
-    }
-
     const user = await db
         .selectFrom('user')
         .innerJoin('phone_number', 'user.phone', 'phone_number.id')
@@ -909,13 +902,22 @@ const resendForgotPasswordOtp = async (
         .where('user.id', '=', session.userId)
         .executeTakeFirst();
 
+    const emailOtpKey = `otp:email-otp:forgot-password:${session.email}`;
+    const existingOtp = await redisClient.get(emailOtpKey);
+
+    if (!existingOtp) {
+        throw new BadRequestError('No active OTP session found. Please request a new OTP.');
+    }
+
     const emailOtp = new EmailOtpVerification(session.email, 'forgot-password');
     await emailOtp.resendExistingOtp();
 
+    const currentOtp = await redisClient.get(emailOtpKey);
+
     try {
-        if (user && user.phone && existingEmailOtp) {
-            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.TERMINAL_PWD_RESET_OTP, [existingEmailOtp]);
-            logger.info(`Password reset OTP SMS resent to ${user.phone} - using existing OTP`);
+        if (user && user.phone && currentOtp) {
+            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.TERMINAL_PWD_RESET_OTP, [currentOtp]);
+            logger.info(`Password reset OTP SMS resent to ${user.phone} - OTP: ${currentOtp}`);
         }
     } catch (error) {
         logger.error(`Failed to resend password reset OTP SMS: ${error}`);
