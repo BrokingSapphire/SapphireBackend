@@ -252,6 +252,7 @@ const login = async (
                     sessionId: loginSessionId,
                     nextStep: '2fa',
                     twoFactorMethod: method,
+                    firstName: user.first_name,
                     deviceInfo: deviceLocationInfo,
                 },
             });
@@ -288,6 +289,7 @@ const login = async (
                     sessionId: loginSessionId,
                     nextStep: '2fa',
                     twoFactorMethod: method,
+                    firstName: user.first_name,
                     qrCodeUrl,
                     manualEntryKey: user2FADetails?.secret,
                     deviceInfo: deviceLocationInfo,
@@ -318,6 +320,7 @@ const login = async (
             data: {
                 sessionId: loginSessionId,
                 nextStep: 'set-mpin',
+                firstName: user.first_name,
                 deviceInfo: deviceLocationInfo,
             },
         });
@@ -337,6 +340,7 @@ const login = async (
         data: {
             sessionId: loginSessionId,
             nextStep: 'mpin',
+            firstName: user.first_name,
             deviceInfo: deviceLocationInfo,
         },
     });
@@ -434,6 +438,13 @@ const verify2FA = async (
         throw new UnauthorizedError('Invalid 2FA token');
     }
 
+    const userInfo = await db
+        .selectFrom('user')
+        .innerJoin('user_name', 'user.name', 'user_name.id')
+        .select(['user_name.first_name'])
+        .where('user.id', '=', session.userId)
+        .executeTakeFirst();
+
     session.twoFactorVerified = true;
     await redisClient.set(redisKey, JSON.stringify(session));
 
@@ -442,6 +453,7 @@ const verify2FA = async (
         data: {
             sessionId,
             nextStep: 'mpin',
+            firstName: userInfo?.first_name,
         },
     });
     await db
@@ -692,7 +704,8 @@ const verifyMpin = async (
     res.status(OK).json({
         message: 'Login successful',
         token,
-    });
+        firstName: session.userName,
+    } as any);
 };
 
 // reset password
@@ -1249,6 +1262,13 @@ const setupMpin = async (
     const session = JSON.parse(sessionStr);
     const clientId = session.userId;
 
+    const userInfo = await db
+        .selectFrom('user')
+        .innerJoin('user_name', 'user.name', 'user_name.id')
+        .select(['user_name.first_name'])
+        .where('user.id', '=', clientId)
+        .executeTakeFirst();
+
     // Check if MPIN already exists
     const existingMpin = await db
         .selectFrom('user_mpin')
@@ -1311,7 +1331,8 @@ const setupMpin = async (
 
     res.status(CREATED).json({
         message: 'MPIN set successfully',
-    });
+        firstName: userInfo?.first_name,
+    } as any);
 };
 
 export {
