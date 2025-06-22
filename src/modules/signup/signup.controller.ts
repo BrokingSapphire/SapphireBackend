@@ -130,19 +130,6 @@ const resendOtp = async (
             throw new BadRequestError('Phone number already exists');
         }
 
-        const checkpointExists = await db
-            .selectFrom('signup_checkpoints')
-            .innerJoin('phone_number', 'signup_checkpoints.phone_id', 'phone_number.id')
-            .select('signup_checkpoints.email')
-            .where('phone_number.phone', '=', phone)
-            .executeTakeFirst();
-
-        if (checkpointExists) {
-            if (checkpointExists.email !== email) {
-                throw new BadRequestError('Phone number already exists');
-            }
-        }
-
         if (!(await redisClient.get(`email-verified:${email}`))) {
             throw new UnauthorizedError('Email not verified');
         }
