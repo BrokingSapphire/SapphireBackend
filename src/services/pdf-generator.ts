@@ -1,8 +1,11 @@
+// src/services/pdf-generator.ts
+
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import logger from '@app/logger';
+import { customFormFields, defaultPageSections } from './notifications-types/pdf.types';
 
 export interface PDFGenerationResult {
     success: boolean;
@@ -563,6 +566,215 @@ class PDFGenerationService {
             filledRequiredFields,
             completionPercentage,
         };
+    }
+}
+
+// Sample test data for testing PDF generation
+const testUserData = {
+    // Basic Information
+    formNo: 'CLI001',
+    clientId: 'TEST_CLIENT_001',
+    date: new Date().toLocaleDateString('en-GB'),
+
+    // Name Information
+    firstName: 'RAJESH',
+    middleName: 'KUMAR',
+    lastName: 'SHARMA',
+    fatherSpouseFirstName: 'RAMESH',
+    fatherSpouseMiddleName: 'CHANDRA',
+    fatherSpouseLastName: 'SHARMA',
+    motherFirstName: 'SUNITA',
+    motherMiddleName: '',
+    motherLastName: 'SHARMA',
+
+    // Personal Details
+    dob: '15/03/1985',
+    userProvidedDob: '15/03/1985',
+    gender: 'Male',
+    maritalStatus: 'Married',
+    nationality: 'INDIAN',
+    countryOfCitizenship: 'INDIA',
+    countryOfResidence: 'INDIA',
+    residentialStatus: 'Resident Individual',
+
+    // Contact Information
+    email: 'rajesh.sharma@test.com',
+    phone: '9876543210',
+    officeTelNum: '011-12345678',
+    residenceTelNum: '011-87654321',
+
+    // Permanent Address
+    permanentLine1: 'House No. 123, Gandhi Nagar',
+    permanentLine2: 'Near City Hospital',
+    permanentLine3: 'Sector 4',
+    permanentCity: 'Muzaffarnagar',
+    permanentState: 'Uttar Pradesh',
+    permanentPinCode: '251001',
+    permanentCountry: 'INDIA',
+    permanentAddressType: 'Residential',
+
+    // Correspondence Address
+    sameAsPermanent: true,
+
+    // PAN & Aadhaar
+    panNumber: 'ABCDE1234F',
+    panDocument: 'pan_document.pdf',
+    panDocumentIssuer: 'Income Tax Department',
+    panCategory: 'Individual',
+    panStatus: 'Valid',
+    aadhaarLinked: 'YES',
+    maskedAadhaar: 'XXXXXXXX5678',
+    maskedAadhaarNo: 'XXXXXXXX5678',
+    co: 'S/O Ramesh Chandra Sharma',
+    postOffice: 'Muzaffarnagar',
+
+    // Banking
+    accountNo: '123456789012',
+    ifscCode: 'SBIN0001234',
+    accountType: 'savings',
+    isPrimaryBank: true,
+    bankVerification: 'verified',
+
+    // Demat
+    boId: '1234567890123456',
+    dpId: 'IN300214',
+    depository: 'CDSL',
+    dpName: 'CDSL-DP Services',
+    clientName: 'RAJESH KUMAR SHARMA',
+
+    // Financial Information
+    annualIncome: '5_10_Lakh',
+    occupation: 'private sector',
+    tradingExp: '1-5',
+    incomeProofType: 'salary_slip_15k_monthly',
+    incomeProof: 'salary_slip.pdf',
+
+    // Investment Preferences
+    investmentSegments: ['Cash', 'F&O'],
+    accountSettlement: 'Monthly',
+    dpAccountSettlement: 'Monthly',
+    fundsSettlementFrequency: '30_days',
+
+    // Trading Facilities
+    internetTradingFacility: 'YES',
+    marginTradingFacility: 'NO',
+    disFacility: 'YES',
+    bsdaFacility: 'NO',
+    annualReportType: 'Electronic',
+    contractNoteType: 'Electronic',
+    emailWithRegistrar: 'YES',
+
+    // Compliance
+    userAccountType: 'Individual',
+    businessCategorization: 'D2C',
+    clientCategoryCommercialNonCommercial: 'Trader',
+    isPoliticallyExposed: 'NO',
+    isUsPerson: 'NO',
+    pastActions: 'NO',
+
+    // Declarations
+    emailDeclaration: 'Self',
+    mobileDeclaration: 'Self',
+
+    // Nominees
+    nominee1Name: 'PRIYA SHARMA',
+    nominee1Relationship: 'Spouse',
+    nominee1Share: 60,
+    nominee1GovtId: 'AADHAAR-XXXX5432',
+    nominee2Name: 'ARJUN SHARMA',
+    nominee2Relationship: 'Son',
+    nominee2Share: 40,
+    nominee2GovtId: 'AADHAAR-XXXX9876',
+
+    // User Preferences
+    chartProvider: 'TradingView',
+    biometricPermission: true,
+    internetPermission: true,
+    notificationPermission: true,
+    orderNotifications: true,
+    tradeNotifications: true,
+    promotionNotifications: false,
+    tradeRecommendations: true,
+
+    // Documents
+    signature: 'signature_doc.png',
+    esign: 'esign_doc.xml',
+    ipv: 'ipv_video.mp4',
+    profilePicture: 'profile_pic.jpg',
+};
+/**
+ * Test function to generate PDF with hardcoded data
+ */
+export async function testPDFGeneration(): Promise<PDFGenerationResult> {
+    console.log(' Starting PDF generation test...');
+    console.log('Test data prepared with client:', testUserData.clientId);
+
+    try {
+        const pdfService = new PDFGenerationService();
+        const result = await pdfService.generatePDF(
+            testUserData,
+            customFormFields,
+            testUserData.clientId,
+            defaultPageSections,
+        );
+
+        if (result.success) {
+            console.log('PDF generated successfully!');
+            console.log(`File: ${result.fileName}`);
+            console.log(`Path: ${result.filePath}`);
+            console.log(`Pages: ${result.pages}`);
+            console.log(`Total fields: ${result.fieldsTotal}`);
+            console.log(`Fields filled: ${result.fieldsFilled}`);
+            if (result.fieldsTotal && result.fieldsFilled) {
+                console.log(`Completion: ${Math.round((result.fieldsFilled / result.fieldsTotal) * 100)}%`);
+            }
+        } else {
+            console.error('PDF generation failed:', result.error);
+        }
+
+        return result;
+    } catch (error) {
+        console.error('Test failed with error:', error);
+        throw error;
+    }
+}
+
+/**
+ * Test function with real database data
+ */
+export async function testPDFGenerationFromDB(email: string): Promise<PDFGenerationResult> {
+    console.log('Starting PDF generation test with database data...');
+    console.log(`Fetching data for email: ${email}`);
+
+    try {
+        const PDFDataFetcherService = await import('./pdf-data-fetcher.service');
+
+        // Fetch real data from database
+        const userData = await PDFDataFetcherService.default.fetchSignupDataForPDF(email);
+        console.log(`Successfully fetched data for client: ${userData.clientId}`);
+
+        // Generate PDF with real data
+        const pdfService = new PDFGenerationService();
+        const result = await pdfService.generatePDF(userData, customFormFields, userData.clientId, defaultPageSections);
+
+        if (result.success) {
+            console.log('PDF generated successfully with database data!');
+            console.log(`File: ${result.fileName}`);
+            console.log(`Path: ${result.filePath}`);
+            console.log(`Pages: ${result.pages}`);
+            console.log(`Total fields: ${result.fieldsTotal}`);
+            console.log(`Fields filled: ${result.fieldsFilled}`);
+            if (result.fieldsTotal && result.fieldsFilled) {
+                console.log(`Completion: ${Math.round((result.fieldsFilled / result.fieldsTotal) * 100)}%`);
+            }
+        } else {
+            console.error('PDF generation failed:', result.error);
+        }
+
+        return result;
+    } catch (error) {
+        console.error('Database test failed:', error);
+        throw error;
     }
 }
 

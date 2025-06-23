@@ -23,7 +23,7 @@ const templateContentMap: Record<SmsTemplateType, string> = {
         'Dear {#name#}, your withdrawal request of ₹{#amount#} has been processed. Expected credit within {#time#} hours. Sapphire Broking',
 
     [SmsTemplateType.ACCOUNT_SUCCESSFULLY_OPENED]:
-        'Dear {#name#}, your Sapphire account is now active! Start trading now: terminal.sapphirebroking.com Sapphire Broking',
+        'Dear {#name#}, your Sapphire account is now active! Start trading now: terminal.sapphirebroking.com. Sapphire Broking',
 
     [SmsTemplateType.DOCUMENTS_RECEIVED_CONFIRMATION]:
         'Dear {#name#}, we have received your documents for account opening. Your account will be activated within 12 to 24 working hours. Sapphire Broking',
