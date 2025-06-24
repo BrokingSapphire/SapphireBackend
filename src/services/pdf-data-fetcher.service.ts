@@ -387,10 +387,6 @@ class PDFDataFetcherService {
     public async fetchCompletedUserDataForPDF(clientId: string): Promise<UserData> {
         try {
             logger.info(`Fetching completed user data for PDF generation: ${clientId}`);
-
-            // This method can be implemented if you need to generate PDFs for completed users
-            // For now, we'll focus on the signup checkpoint data as that's what you're primarily using
-
             throw new Error('Method not implemented - use fetchSignupDataForPDF for signup process data');
         } catch (error: any) {
             logger.error(`Error fetching completed user data for PDF generation: ${clientId}`, error);

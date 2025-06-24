@@ -1478,7 +1478,7 @@ export const customFormFields: FormField[] = [
     },
 ];
 
-// ===== PAGE SECTIONS CONFIGURATION =====
+// Page-Configuration for the form
 
 export const defaultPageSections: Record<number, PageSection[]> = {
     0: [
