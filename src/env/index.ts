@@ -31,6 +31,8 @@ export const env = {
     aws: {
         region: process.env.AWS_REGION || 'region',
         s3_bucket: process.env.AWS_S3_BUCKET || 'bucket',
+        access_key_id: process.env.AWS_ACCESS_KEY_ID || 'access_key_id',
+        secret_access_key: process.env.AWS_SECRET_ACCESS_KEY || 'a',
     },
     ntt: {
         userId: process.env.NTT_USER_ID || '123456',

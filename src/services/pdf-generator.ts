@@ -1,21 +1,18 @@
 // src/services/pdf-generator.ts
 
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import logger from '@app/logger';
 import { customFormFields, defaultPageSections } from './notifications-types/pdf.types';
 import AOFService from './aof.service';
+import s3Service from '@app/services/s3.service';
 
 export interface PDFGenerationResult {
     success: boolean;
     aofNumber?: string;
+    s3Key?: string;
+    s3Url?: string;
     filePath?: string;
     fileName?: string;
-    fieldsTotal?: number;
-    fieldsFilled?: number;
-    pages?: number;
     error?: string;
 }
 
@@ -79,29 +76,17 @@ class PDFGenerationService {
         pageSections?: Record<number, { title: string; fields: string[] }[]>,
     ): Promise<PDFGenerationResult> {
         try {
-            const currentFilename = process.argv[1];
-            const currentDirname = path.dirname(currentFilename);
             const aofService = new AOFService();
             const aofNumber = await aofService.generateNextAOFNumber();
 
-            // Generate filename based on clientId or fallback to default
-            const outputFileName = clientId
-                ? `${aofNumber}_${clientId}_${new Date().toISOString().split('T')[0]}.pdf`
-                : `${aofNumber}_${new Date().toISOString().split('T')[0]}.pdf`;
-
-            // Create client-specific directory if clientId is provided
-            let outputDir = __dirname;
-            if (clientId) {
-                outputDir = path.join(__dirname, 'client-documents', clientId);
-                if (!fs.existsSync(outputDir)) {
-                    fs.mkdirSync(outputDir, { recursive: true });
-                }
-            }
+            const sanitizedEmail = userData.email
+                ? userData.email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '_')
+                : 'unknown';
+            const outputFileName = `${sanitizedEmail}_${aofNumber}.pdf`;
 
             logger.info('Starting PDF generation', {
                 clientId,
                 outputFileName,
-                outputDir,
                 totalFields: formFields.length,
                 userDataKeys: Object.keys(userData).length,
             });
@@ -161,32 +146,30 @@ class PDFGenerationService {
 
             // Save PDF
             const pdfBytes = await pdfDoc.save();
-            const outputPath = path.join(outputDir, outputFileName);
 
-            fs.writeFileSync(outputPath, pdfBytes);
-
-            // Count filled fields
-            const userDataKeys = Object.keys(userData).filter(
-                (key) => userData[key] !== null && userData[key] !== undefined && userData[key] !== '',
-            );
+            const s3UploadResult = await s3Service.uploadFromBuffer(Buffer.from(pdfBytes), outputFileName, {
+                folder: `aof-documents`,
+                contentType: 'application/pdf',
+                metadata: {
+                    'aof-number': aofNumber,
+                    'user-email': userData.email || 'unknown',
+                },
+            });
 
             logger.info('PDF generated successfully', {
                 clientId,
                 aofNumber,
                 fileName: outputFileName,
-                fieldsTotal: formFields.length,
-                fieldsFilled: userDataKeys.length,
-                pages: totalPages,
+                s3Key: s3UploadResult.key,
+                s3Url: s3UploadResult.url,
             });
 
             return {
                 success: true,
                 aofNumber,
-                filePath: outputPath,
+                s3Key: s3UploadResult.key,
+                s3Url: s3UploadResult.url,
                 fileName: outputFileName,
-                fieldsTotal: formFields.length,
-                fieldsFilled: userDataKeys.length,
-                pages: totalPages,
             };
         } catch (error: any) {
             logger.error('Error generating PDF:', error);
@@ -727,13 +710,6 @@ export async function testPDFGeneration(): Promise<PDFGenerationResult> {
         if (result.success) {
             logger.info('PDF generated successfully!');
             logger.info(`File: ${result.fileName}`);
-            logger.info(`Path: ${result.filePath}`);
-            logger.info(`Pages: ${result.pages}`);
-            logger.info(`Total fields: ${result.fieldsTotal}`);
-            logger.info(`Fields filled: ${result.fieldsFilled}`);
-            if (result.fieldsTotal && result.fieldsFilled) {
-                logger.info(`Completion: ${Math.round((result.fieldsFilled / result.fieldsTotal) * 100)}%`);
-            }
         } else {
             logger.error('PDF generation failed:', result.error);
         }
@@ -766,13 +742,6 @@ export async function testPDFGenerationFromDB(email: string): Promise<PDFGenerat
         if (result.success) {
             logger.info('PDF generated successfully with database data!');
             logger.info(`File: ${result.fileName}`);
-            logger.info(`Path: ${result.filePath}`);
-            logger.info(`Pages: ${result.pages}`);
-            logger.info(`Total fields: ${result.fieldsTotal}`);
-            logger.info(`Fields filled: ${result.fieldsFilled}`);
-            if (result.fieldsTotal && result.fieldsFilled) {
-                logger.info(`Completion: ${Math.round((result.fieldsFilled / result.fieldsTotal) * 100)}%`);
-            }
         } else {
             logger.error('PDF generation failed:', result.error);
         }

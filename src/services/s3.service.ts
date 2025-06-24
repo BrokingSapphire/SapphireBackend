@@ -18,6 +18,10 @@ class S3Service {
     constructor() {
         this.s3Client = new S3Client({
             region: env.aws.region,
+            credentials: {
+                accessKeyId: env.aws.access_key_id,
+                secretAccessKey: env.aws.secret_access_key,
+            },
         });
         this.bucket = env.aws.s3_bucket;
     }
