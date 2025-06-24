@@ -3,50 +3,40 @@
 import { db } from '@app/database';
 import logger from '@app/logger';
 import { UserData } from './notifications-types/pdf.types';
+import AOFService from './aof.service';
+import PDFGenerationService from './pdf-generator';
+import { customFormFields, defaultPageSections } from './notifications-types/pdf.types';
 
 /**
  * Service to fetch user data from signup_checkpoints and format it for PDF generation
  */
 class PDFDataFetcherService {
     /**
-     * Fetch user data from signup_checkpoints table (similar to your signup controller pattern)
-     * @param email - The email to fetch data for
-     * @returns Promise<UserData> - Formatted user data for PDF
+     * Fetch user data from signup_checkpoints table
      */
     public async fetchSignupDataForPDF(email: string): Promise<UserData> {
         try {
             logger.info(`Fetching signup checkpoint data for PDF generation: ${email}`);
 
-            // Main signup data query with all necessary joins (following your signup controller pattern)
             const signupData = await db
                 .selectFrom('signup_checkpoints')
-                // Join user name
                 .leftJoin('user_name as user_name_table', 'signup_checkpoints.name', 'user_name_table.id')
-                // Join father/spouse name
                 .leftJoin(
                     'user_name as father_spouse_name_table',
                     'signup_checkpoints.father_spouse_name',
                     'father_spouse_name_table.id',
                 )
-                // Join mother name
                 .leftJoin('user_name as mother_name_table', 'signup_checkpoints.mother_name', 'mother_name_table.id')
-                // Join maiden name
                 .leftJoin('user_name as maiden_name_table', 'signup_checkpoints.maiden_name', 'maiden_name_table.id')
-                // Join user provided name (for mismatch cases)
                 .leftJoin(
                     'user_name as user_provided_name_table',
                     'signup_checkpoints.user_provided_name',
                     'user_provided_name_table.id',
                 )
-                // Join phone number
                 .innerJoin('phone_number', 'signup_checkpoints.phone_id', 'phone_number.id')
-                // Join PAN details
                 .leftJoin('pan_detail', 'signup_checkpoints.pan_id', 'pan_detail.id')
-                // Join Aadhaar details
                 .leftJoin('aadhaar_detail', 'signup_checkpoints.aadhaar_id', 'aadhaar_detail.id')
-                // Join CO name
                 .leftJoin('user_name as co_name_table', 'aadhaar_detail.co', 'co_name_table.id')
-                // Join permanent address
                 .leftJoin(
                     'address as permanent_address',
                     'signup_checkpoints.permanent_address_id',
@@ -56,7 +46,6 @@ class PDFDataFetcherService {
                 .leftJoin('state as permanent_state', 'permanent_city.state_id', 'permanent_state.id')
                 .leftJoin('country as permanent_country', 'permanent_state.country_id', 'permanent_country.iso')
                 .leftJoin('postal_code as permanent_postal', 'permanent_address.postal_id', 'permanent_postal.id')
-                // Join correspondence address
                 .leftJoin(
                     'address as correspondence_address',
                     'signup_checkpoints.correspondence_address_id',
@@ -74,7 +63,6 @@ class PDFDataFetcherService {
                     'correspondence_address.postal_id',
                     'correspondence_postal.id',
                 )
-                // Join demat account
                 .leftJoin('demat_account', 'signup_checkpoints.demat_account_id', 'demat_account.id')
                 .leftJoin('user_name as demat_client_name', 'demat_account.client_name', 'demat_client_name.id')
                 .select([
@@ -170,7 +158,7 @@ class PDFDataFetcherService {
                 .where('signup_checkpoints.email', '=', email)
                 .executeTakeFirstOrThrow();
 
-            // Fetch bank account from checkpoint (following your pattern)
+            // Fetch bank account from checkpoint
             const bankAccount = await db
                 .selectFrom('bank_to_checkpoint')
                 .innerJoin('bank_account', 'bank_to_checkpoint.bank_account_id', 'bank_account.id')
@@ -185,7 +173,7 @@ class PDFDataFetcherService {
                 .where('signup_checkpoints.email', '=', email)
                 .executeTakeFirst();
 
-            // Fetch investment segments from checkpoint (following your pattern)
+            // Fetch investment segments from checkpoint
             const investmentSegments = await db
                 .selectFrom('investment_segments_to_checkpoint')
                 .innerJoin(
@@ -197,7 +185,7 @@ class PDFDataFetcherService {
                 .where('signup_checkpoints.email', '=', email)
                 .execute();
 
-            // Fetch nominees from checkpoint (following your pattern)
+            // Fetch nominees from checkpoint
             const nominees = await db
                 .selectFrom('nominees_to_checkpoint')
                 .innerJoin('signup_checkpoints', 'nominees_to_checkpoint.checkpoint_id', 'signup_checkpoints.id')
@@ -212,10 +200,10 @@ class PDFDataFetcherService {
                 .where('signup_checkpoints.email', '=', email)
                 .execute();
 
-            // Format data for PDF generation (mapping directly from checkpoint data)
+            // Format data for PDF generation
             const formattedData: UserData = {
                 // Basic Information
-                formNo: 'CLI001',
+                formNo: await new AOFService().generateNextAOFNumber(),
                 clientId: signupData.clientId || 'PENDING',
                 date: new Date().toLocaleDateString('en-GB'), // DD/MM/YYYY format
 
@@ -314,7 +302,7 @@ class PDFDataFetcherService {
                 dpAccountSettlement: 'Monthly', // Default for signup
                 fundsSettlementFrequency: '30_days', // Default for signup
 
-                // Trading Facilities (set defaults for signup)
+                // Trading Facilities
                 internetTradingFacility: 'YES',
                 marginTradingFacility: 'NO',
                 disFacility: 'YES',
@@ -324,14 +312,14 @@ class PDFDataFetcherService {
                 emailWithRegistrar: 'YES',
 
                 // Compliance
-                userAccountType: 'Individual', // Default for signup
-                businessCategorization: 'D2C', // Default for signup
-                clientCategoryCommercialNonCommercial: 'Trader', // Default
+                userAccountType: 'Individual',
+                businessCategorization: 'D2C',
+                clientCategoryCommercialNonCommercial: 'Trader',
                 isPoliticallyExposed: signupData.isPoliticallyExposed ? 'YES' : 'NO',
-                isUsPerson: 'NO', // Default
-                pastActions: 'NO', // Default
+                isUsPerson: 'NO',
+                pastActions: 'NO',
 
-                // Declarations (set defaults for signup)
+                // Declarations
                 emailDeclaration: 'Self',
                 mobileDeclaration: 'Self',
 
@@ -380,9 +368,7 @@ class PDFDataFetcherService {
     }
 
     /**
-     * Fetch user data from completed user table (for finalized accounts)
-     * @param clientId - The client ID to fetch data for
-     * @returns Promise<UserData> - Formatted user data for PDF
+     * Fetch user data from completed user table
      */
     public async fetchCompletedUserDataForPDF(clientId: string): Promise<UserData> {
         try {
@@ -395,19 +381,12 @@ class PDFDataFetcherService {
     }
 
     /**
-     * Generate PDF for a user based on their email (signup checkpoint data)
-     * @param email - User email
-     * @param outputFileName - Optional custom filename
-     * @returns Promise with PDF generation result
+     * Generate PDF for a user based on their email
      */
     public async generateUserPDF(email: string, outputFileName?: string) {
         const userData = await this.fetchSignupDataForPDF(email);
 
-        // Import your PDF generation service
-        const PDFGenerationService = await import('./pdf-generator');
-        const { customFormFields, defaultPageSections } = await import('./notifications-types/pdf.types');
-
-        return PDFGenerationService.default.generatePDF(
+        return PDFGenerationService.generatePDF(
             userData,
             customFormFields,
             userData.clientId || undefined,

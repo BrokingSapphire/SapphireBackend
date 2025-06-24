@@ -6,9 +6,11 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import logger from '@app/logger';
 import { customFormFields, defaultPageSections } from './notifications-types/pdf.types';
+import AOFService from './aof.service';
 
 export interface PDFGenerationResult {
     success: boolean;
+    aofNumber?: string;
     filePath?: string;
     fileName?: string;
     fieldsTotal?: number;
@@ -77,13 +79,15 @@ class PDFGenerationService {
         pageSections?: Record<number, { title: string; fields: string[] }[]>,
     ): Promise<PDFGenerationResult> {
         try {
-            const currentFilename = process.argv[1]; // The file being executed
+            const currentFilename = process.argv[1];
             const currentDirname = path.dirname(currentFilename);
+            const aofService = new AOFService();
+            const aofNumber = await aofService.generateNextAOFNumber();
 
             // Generate filename based on clientId or fallback to default
             const outputFileName = clientId
-                ? `CLI_${clientId}_${new Date().toISOString().split('T')[0]}.pdf`
-                : `CLI001_${new Date().toISOString().split('T')[0]}.pdf`;
+                ? `${aofNumber}_${clientId}_${new Date().toISOString().split('T')[0]}.pdf`
+                : `${aofNumber}_${new Date().toISOString().split('T')[0]}.pdf`;
 
             // Create client-specific directory if clientId is provided
             let outputDir = __dirname;
@@ -168,7 +172,7 @@ class PDFGenerationService {
 
             logger.info('PDF generated successfully', {
                 clientId,
-                filePath: outputPath,
+                aofNumber,
                 fileName: outputFileName,
                 fieldsTotal: formFields.length,
                 fieldsFilled: userDataKeys.length,
@@ -177,6 +181,7 @@ class PDFGenerationService {
 
             return {
                 success: true,
+                aofNumber,
                 filePath: outputPath,
                 fileName: outputFileName,
                 fieldsTotal: formFields.length,
