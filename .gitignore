@@ -46,3 +46,6 @@ tmp/
 
 # Firebase cloud messaging JSON
 firebasecloudmessaging.json
+
+# PDF-folder
+src/services/client-documents/

@@ -712,8 +712,8 @@ const testUserData = {
  * Test function to generate PDF with hardcoded data
  */
 export async function testPDFGeneration(): Promise<PDFGenerationResult> {
-    console.log(' Starting PDF generation test...');
-    console.log('Test data prepared with client:', testUserData.clientId);
+    logger.info(' Starting PDF generation test...');
+    logger.info('Test data prepared with client:', testUserData.clientId);
 
     try {
         const pdfService = new PDFGenerationService();
@@ -725,22 +725,22 @@ export async function testPDFGeneration(): Promise<PDFGenerationResult> {
         );
 
         if (result.success) {
-            console.log('PDF generated successfully!');
-            console.log(`File: ${result.fileName}`);
-            console.log(`Path: ${result.filePath}`);
-            console.log(`Pages: ${result.pages}`);
-            console.log(`Total fields: ${result.fieldsTotal}`);
-            console.log(`Fields filled: ${result.fieldsFilled}`);
+            logger.info('PDF generated successfully!');
+            logger.info(`File: ${result.fileName}`);
+            logger.info(`Path: ${result.filePath}`);
+            logger.info(`Pages: ${result.pages}`);
+            logger.info(`Total fields: ${result.fieldsTotal}`);
+            logger.info(`Fields filled: ${result.fieldsFilled}`);
             if (result.fieldsTotal && result.fieldsFilled) {
-                console.log(`Completion: ${Math.round((result.fieldsFilled / result.fieldsTotal) * 100)}%`);
+                logger.info(`Completion: ${Math.round((result.fieldsFilled / result.fieldsTotal) * 100)}%`);
             }
         } else {
-            console.error('PDF generation failed:', result.error);
+            logger.error('PDF generation failed:', result.error);
         }
 
         return result;
     } catch (error) {
-        console.error('Test failed with error:', error);
+        logger.error('Test failed with error:', error);
         throw error;
     }
 }
@@ -749,37 +749,37 @@ export async function testPDFGeneration(): Promise<PDFGenerationResult> {
  * Test function with real database data
  */
 export async function testPDFGenerationFromDB(email: string): Promise<PDFGenerationResult> {
-    console.log('Starting PDF generation test with database data...');
-    console.log(`Fetching data for email: ${email}`);
+    logger.info('Starting PDF generation test with database data...');
+    logger.info(`Fetching data for email: ${email}`);
 
     try {
         const PDFDataFetcherService = await import('./pdf-data-fetcher.service');
 
         // Fetch real data from database
         const userData = await PDFDataFetcherService.default.fetchSignupDataForPDF(email);
-        console.log(`Successfully fetched data for client: ${userData.clientId}`);
+        logger.info(`Successfully fetched data for client: ${userData.clientId}`);
 
         // Generate PDF with real data
         const pdfService = new PDFGenerationService();
         const result = await pdfService.generatePDF(userData, customFormFields, userData.clientId, defaultPageSections);
 
         if (result.success) {
-            console.log('PDF generated successfully with database data!');
-            console.log(`File: ${result.fileName}`);
-            console.log(`Path: ${result.filePath}`);
-            console.log(`Pages: ${result.pages}`);
-            console.log(`Total fields: ${result.fieldsTotal}`);
-            console.log(`Fields filled: ${result.fieldsFilled}`);
+            logger.info('PDF generated successfully with database data!');
+            logger.info(`File: ${result.fileName}`);
+            logger.info(`Path: ${result.filePath}`);
+            logger.info(`Pages: ${result.pages}`);
+            logger.info(`Total fields: ${result.fieldsTotal}`);
+            logger.info(`Fields filled: ${result.fieldsFilled}`);
             if (result.fieldsTotal && result.fieldsFilled) {
-                console.log(`Completion: ${Math.round((result.fieldsFilled / result.fieldsTotal) * 100)}%`);
+                logger.info(`Completion: ${Math.round((result.fieldsFilled / result.fieldsTotal) * 100)}%`);
             }
         } else {
-            console.error('PDF generation failed:', result.error);
+            logger.error('PDF generation failed:', result.error);
         }
 
         return result;
     } catch (error) {
-        console.error('Database test failed:', error);
+        logger.error('Database test failed:', error);
         throw error;
     }
 }
