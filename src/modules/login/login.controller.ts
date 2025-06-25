@@ -766,7 +766,7 @@ const resetPassword = async (
     await sendPasswordChangeConfirmation(user.email, {
         userName: user.first_name,
         email: user.email,
-        ip: req.ip || req.connection.remoteAddress || 'N/A',
+        ip: req.ip || req.socket.remoteAddress || 'N/A',
         deviceType: req.get('User-Agent') || 'Unknown Device',
         location: 'Unknown Location', // You can add geolocation if needed
     });
