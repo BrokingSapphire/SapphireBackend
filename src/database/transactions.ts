@@ -19,6 +19,12 @@ export interface Name {
     lastName: string | null;
 }
 
+export interface HashedCredential {
+    hashedPassword: string;
+    salt: string;
+    hashAlgo: string;
+}
+
 export async function insertNameGetId<T extends Kysely<DB>>(tx: T, name: Name): Promise<number>;
 
 export async function insertNameGetId<T extends Kysely<DB>>(tx: T, name: Name[]): Promise<number[]>;
@@ -158,4 +164,81 @@ export function updateCheckpoint<T extends Kysely<DB>>(
         .where(({ eb, selectFrom }) =>
             eb('phone_id', '=', selectFrom('phone_number').select('phone_number.id').where('phone', '=', phone)),
         );
+}
+
+async function getOrCreateHashAlgorithm<T extends Kysely<DB>>(tx: T, hashAlgo: string): Promise<number> {
+    const existingHashAlgo = await tx
+        .selectFrom('hashing_algorithm')
+        .select('id')
+        .where('name', '=', hashAlgo)
+        .executeTakeFirst();
+
+    if (existingHashAlgo) {
+        return existingHashAlgo.id;
+    }
+
+    const insertedHashAlgo = await tx
+        .insertInto('hashing_algorithm')
+        .values({ name: hashAlgo })
+        .returning('id')
+        .executeTakeFirst();
+
+    if (!insertedHashAlgo) {
+        throw new Error('Failed to insert hashing algorithm');
+    }
+
+    return insertedHashAlgo.id;
+}
+
+export async function insertCredentialDetails<T extends Kysely<DB>>(
+    tx: T,
+    userId: string,
+    hashedCredential: HashedCredential,
+    credentialType: 'password' | 'mpin',
+): Promise<void> {
+    const hashAlgoId = await getOrCreateHashAlgorithm(tx, hashedCredential.hashAlgo);
+
+    if (credentialType === 'password') {
+        await tx
+            .insertInto('user_password_details')
+            .values({
+                user_id: userId,
+                password_hash: hashedCredential.hashedPassword,
+                password_salt: hashedCredential.salt,
+                hash_algo_id: hashAlgoId,
+            })
+            .onConflict((oc) =>
+                oc.column('user_id').doUpdateSet({
+                    password_hash: hashedCredential.hashedPassword,
+                    password_salt: hashedCredential.salt,
+                    hash_algo_id: hashAlgoId,
+                }),
+            )
+            .execute();
+    } else {
+        await tx
+            .insertInto('user_mpin')
+            .values({
+                client_id: userId,
+                mpin_hash: hashedCredential.hashedPassword,
+                mpin_salt: hashedCredential.salt,
+                hash_algo_id: hashAlgoId,
+                created_at: new Date(),
+                updated_at: new Date(),
+                is_active: true,
+                failed_attempts: 0,
+            })
+            .onConflict((oc) =>
+                oc.column('client_id').doUpdateSet({
+                    mpin_hash: hashedCredential.hashedPassword,
+                    mpin_salt: hashedCredential.salt,
+                    hash_algo_id: hashAlgoId,
+                    failed_attempts: 0,
+                    last_failed_attempt: null,
+                    is_active: true,
+                    updated_at: new Date(),
+                }),
+            )
+            .execute();
+    }
 }

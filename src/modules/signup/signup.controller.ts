@@ -31,7 +31,12 @@ import ESignService from '@app/services/surepass/esign.service';
 import AadhaarXMLParser from '@app/utils/aadhaar-xml.parser';
 import { sign } from '@app/utils/jwt';
 import axios from 'axios';
-import { insertAddressGetId, insertNameGetId, Name, updateCheckpoint } from '@app/database/transactions';
+import {
+    insertAddressGetId,
+    insertNameGetId,
+    insertCredentialDetails,
+    updateCheckpoint,
+} from '@app/database/transactions';
 import splitName from '@app/utils/split-name';
 import PanService from '@app/services/surepass/pan.service';
 import { CREATED, NO_CONTENT, NOT_ACCEPTABLE, NOT_FOUND, OK } from '@app/utils/httpstatus';
@@ -1464,43 +1469,7 @@ const setupMpin = async (
     const hashedMpin = await hashPassword(mpin, 'bcrypt');
 
     await db.transaction().execute(async (tx) => {
-        const hashAlgo = await db
-            .selectFrom('hashing_algorithm')
-            .select('id')
-            .where('name', '=', hashedMpin.hashAlgo)
-            .executeTakeFirst();
-
-        let hashAlgoId;
-        if (!hashAlgo) {
-            const insertedHashAlgo = await tx
-                .insertInto('hashing_algorithm')
-                .values({
-                    name: 'bcrypt',
-                })
-                .returning('id')
-                .executeTakeFirst();
-
-            if (!insertedHashAlgo) {
-                throw new Error('Failed to insert hashing algorithm');
-            }
-            hashAlgoId = insertedHashAlgo.id;
-        } else {
-            hashAlgoId = hashAlgo.id;
-        }
-
-        await tx
-            .insertInto('user_mpin')
-            .values({
-                client_id: userCheckpoint.client_id!,
-                mpin_hash: hashedMpin.hashedPassword,
-                mpin_salt: hashedMpin.salt,
-                hash_algo_id: hashAlgoId,
-                created_at: new Date(),
-                updated_at: new Date(),
-                is_active: true,
-                failed_attempts: 0,
-            })
-            .execute();
+        await insertCredentialDetails(tx, userCheckpoint.client_id!.toString(), hashedMpin, 'mpin');
     });
 
     res.status(CREATED).json({
@@ -1542,38 +1511,7 @@ const setupPassword = async (
     const hashedPassword = await hashPassword(password, 'bcrypt');
 
     await db.transaction().execute(async (tx) => {
-        const hashAlgo = await db
-            .selectFrom('hashing_algorithm')
-            .select('id')
-            .where('name', '=', hashedPassword.hashAlgo)
-            .executeTakeFirst();
-        let hashAlgoId;
-        if (!hashAlgo) {
-            const insertedHashAlgo = await tx
-                .insertInto('hashing_algorithm')
-                .values({
-                    name: 'bcrypt',
-                })
-                .returning('id')
-                .executeTakeFirst();
-
-            if (!insertedHashAlgo) {
-                throw new Error('Failed to insert hashing algorithm');
-            }
-            hashAlgoId = insertedHashAlgo.id;
-        } else {
-            hashAlgoId = hashAlgo.id;
-        }
-
-        await tx
-            .insertInto('user_password_details')
-            .values({
-                user_id: userCheckpoint.client_id!,
-                password_hash: hashedPassword.hashedPassword,
-                password_salt: hashedPassword.salt,
-                hash_algo_id: hashAlgoId,
-            })
-            .execute();
+        await insertCredentialDetails(tx, userCheckpoint.client_id!.toString(), hashedPassword, 'password');
     });
 
     res.status(CREATED).json({

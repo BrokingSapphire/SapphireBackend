@@ -5,6 +5,7 @@ import { EmailOtpVerification } from '@app/services/otp.service';
 import { randomUUID } from 'crypto';
 import { UnauthorizedError, BadRequestError } from '@app/apiError';
 import { db } from '@app/database';
+import { insertCredentialDetails } from '@app/database/transactions';
 import { sign } from '@app/utils/jwt';
 import { OK, CREATED } from '@app/utils/httpstatus';
 import * as speakeasy from 'speakeasy';
@@ -758,14 +759,7 @@ const resetPassword = async (
 
     // Update the user's password
     await db.transaction().execute(async (tx) => {
-        await tx
-            .updateTable('user_password_details')
-            .set({
-                password_hash: hashedPassword.hashedPassword,
-                password_salt: hashedPassword.salt,
-            })
-            .where('user_id', '=', userId)
-            .execute();
+        await insertCredentialDetails(tx, userId, hashedPassword, 'password');
     });
 
     // Send password change confirmation email using notification service
@@ -969,14 +963,7 @@ const forgotPasswordReset = async (
     // hash the password
     const hashed = await hashPassword(newPassword, 'bcrypt');
     await db.transaction().execute(async (tx) => {
-        await tx
-            .updateTable('user_password_details')
-            .set({
-                password_hash: hashed.hashedPassword,
-                password_salt: hashed.salt,
-            })
-            .where('user_id', '=', session.userId)
-            .execute();
+        await insertCredentialDetails(tx, session.userId, hashed, 'password');
     });
 
     // mark the session as used
@@ -1184,26 +1171,8 @@ const forgotMpinReset = async (
     // Hash the new MPIN
     const hashedMpin = await hashPassword(newMpin, 'bcrypt');
 
-    const hashAlgoRecord = await db
-        .selectFrom('hashing_algorithm')
-        .select('id')
-        .where('name', '=', hashedMpin.hashAlgo)
-        .executeTakeFirstOrThrow();
-
     await db.transaction().execute(async (tx) => {
-        await tx
-            .updateTable('user_mpin')
-            .set({
-                mpin_hash: hashedMpin.hashedPassword,
-                mpin_salt: hashedMpin.salt,
-                hash_algo_id: hashAlgoRecord.id,
-                failed_attempts: 0,
-                last_failed_attempt: null,
-                is_active: true,
-                updated_at: new Date(),
-            })
-            .where('client_id', '=', session.userId)
-            .execute();
+        await insertCredentialDetails(tx, session.userId, hashedMpin, 'mpin');
     });
 
     // Mark the session as used
@@ -1280,43 +1249,7 @@ const setupMpin = async (
     const hashedMpin = await hashPassword(mpin, 'bcrypt');
 
     await db.transaction().execute(async (tx) => {
-        const hashAlgo = await db
-            .selectFrom('hashing_algorithm')
-            .select('id')
-            .where('name', '=', hashedMpin.hashAlgo)
-            .executeTakeFirst();
-
-        let hashAlgoId;
-        if (!hashAlgo) {
-            const insertedHashAlgo = await tx
-                .insertInto('hashing_algorithm')
-                .values({
-                    name: 'bcrypt',
-                })
-                .returning('id')
-                .executeTakeFirst();
-
-            if (!insertedHashAlgo) {
-                throw new Error('Failed to insert hashing algorithm');
-            }
-            hashAlgoId = insertedHashAlgo.id;
-        } else {
-            hashAlgoId = hashAlgo.id;
-        }
-
-        await tx
-            .insertInto('user_mpin')
-            .values({
-                client_id: clientId,
-                mpin_hash: hashedMpin.hashedPassword,
-                mpin_salt: hashedMpin.salt,
-                hash_algo_id: hashAlgoId,
-                created_at: new Date(),
-                updated_at: new Date(),
-                is_active: true,
-                failed_attempts: 0,
-            })
-            .execute();
+        await insertCredentialDetails(tx, clientId, hashedMpin, 'mpin');
     });
 
     res.status(CREATED).json({
