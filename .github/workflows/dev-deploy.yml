@@ -1,5 +1,6 @@
 name: Deploy to EC2 Dev
 on:
+  workflow_dispatch:
   push:
     branches: [ dev ]
 jobs:
@@ -42,7 +43,7 @@ jobs:
           REMOTE_HOST: ${{ secrets.EC2_DEV_HOST }}
           REMOTE_USER: ${{ secrets.EC2_DEV_USER }}
           TARGET: ${{ secrets.REMOTE_TARGET }}
-          EXCLUDE: "/dist/, /node_modules/"
+          EXCLUDE: "/dist/, /node_modules/, /.git/, /.github/, /.husky/, /tests/"
           SCRIPT_BEFORE: |
             whoami
             mkdir -p ${{ secrets.REMOTE_TARGET }}
@@ -56,9 +57,9 @@ jobs:
               curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
               export NVM_DIR="$HOME/.nvm"
               [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+              nvm install 20
+              nvm use 20
             fi
-            nvm install 20
-            nvm use 20
 
             if ! command -v yarn &> /dev/null; then
               echo "Installing Yarn..."
