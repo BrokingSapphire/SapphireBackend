@@ -1,12 +1,5 @@
 // src/services/notification-types/pdf.types.ts
 
-/**
- * PDF Generation Types and Interfaces
- * Complete type definitions for the PDF generation service
- */
-
-// ===== CORE INTERFACES =====
-
 export interface PDFGenerationResult {
     success: boolean;
     filePath?: string;

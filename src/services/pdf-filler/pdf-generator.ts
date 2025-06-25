@@ -2,8 +2,8 @@
 
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import logger from '@app/logger';
-import { customFormFields, defaultPageSections } from './notifications-types/pdf.types';
-import AOFService from './aof.service';
+import { customFormFields, defaultPageSections } from './pdf.types';
+import AOFService from '../aof.service';
 import s3Service from '@app/services/s3.service';
 
 export interface PDFGenerationResult {

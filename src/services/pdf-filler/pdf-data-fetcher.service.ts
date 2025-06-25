@@ -2,10 +2,10 @@
 
 import { db } from '@app/database';
 import logger from '@app/logger';
-import { UserData } from './notifications-types/pdf.types';
-import AOFService from './aof.service';
+import { UserData } from './pdf.types';
+import AOFService from '../aof.service';
 import PDFGenerationService from './pdf-generator';
-import { customFormFields, defaultPageSections } from './notifications-types/pdf.types';
+import { customFormFields, defaultPageSections } from './pdf.types';
 
 /**
  * Service to fetch user data from signup_checkpoints and format it for PDF generation
