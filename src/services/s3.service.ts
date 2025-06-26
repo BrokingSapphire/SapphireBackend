@@ -5,11 +5,12 @@ import {
     HeadObjectCommand,
     ListObjectsV2Command,
     CopyObjectCommand,
+    GetObjectCommand,
 } from '@aws-sdk/client-s3';
 import { env } from '@app/env';
 import { createReadStream } from 'fs';
 import { Readable } from 'stream';
-import { UploadOptions, UploadResult, FileInfo } from './types/s3.types';
+import { UploadOptions, UploadResult, FileInfo, DownloadResult } from './types/s3.types';
 
 class S3Service {
     private readonly s3Client: S3Client;
@@ -24,6 +25,91 @@ class S3Service {
             },
         });
         this.bucket = env.aws.s3_bucket;
+    }
+
+    /**
+     * Download a file from S3 as a buffer
+     */
+
+    async downloadFileAsBuffer(key: string): Promise<DownloadResult> {
+        const command = new GetObjectCommand({
+            Bucket: this.bucket,
+            Key: key,
+        });
+
+        const response = await this.s3Client.send(command);
+
+        if (!response.Body) {
+            throw new Error('No body in S3 response');
+        }
+
+        // converting from stream to buffer
+        const buffer = await this.streamToBuffer(response.Body as Readable);
+
+        return {
+            buffer,
+            contentType: response.ContentType,
+            size: buffer.length,
+            lastModified: response.LastModified,
+            metadata: response.Metadata,
+        };
+    }
+
+    /**
+     * Download a file from S3 by URL (extracts key from URL)
+     */
+
+    async downloadFileByUrl(url: string): Promise<DownloadResult> {
+        const key = this.extractKeyFromUrl(url);
+        if (!key) {
+            throw new Error(`Could not extract S3 key from URL: ${url}`);
+        }
+        return this.downloadFileAsBuffer(key);
+    }
+    /**
+     * Extract S3 key from various URL formats
+     */
+    private extractKeyFromUrl(url: string): string | null {
+        if (url.startsWith('s3://')) {
+            const match = url.match(/^s3:\/\/[^\/]+\/(.+)$/);
+            return match ? match[1] : null;
+        }
+
+        const urlObj = new URL(url);
+
+        if (urlObj.hostname.includes('s3')) {
+            if (urlObj.hostname.startsWith('s3.')) {
+                const pathParts = urlObj.pathname.split('/').filter((part) => part.length > 0);
+                if (pathParts.length >= 2) {
+                    return pathParts.slice(1).join('/');
+                }
+            } else {
+                return urlObj.pathname.substring(1);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Convert readable stream to buffer
+     */
+    private async streamToBuffer(stream: Readable): Promise<Buffer> {
+        return new Promise((resolve, reject) => {
+            const chunks: Buffer[] = [];
+
+            stream.on('data', (chunk) => {
+                chunks.push(Buffer.from(chunk));
+            });
+
+            stream.on('end', () => {
+                resolve(Buffer.concat(chunks));
+            });
+
+            stream.on('error', (error) => {
+                reject(error);
+            });
+        });
     }
 
     /**

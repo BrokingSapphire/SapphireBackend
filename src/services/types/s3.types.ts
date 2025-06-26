@@ -22,3 +22,11 @@ export interface FileInfo {
     contentType?: string;
     metadata?: Record<string, string>;
 }
+
+export interface DownloadResult {
+    buffer: Buffer;
+    contentType?: string;
+    size: number;
+    lastModified?: Date;
+    metadata?: Record<string, string>;
+}
