@@ -603,8 +603,7 @@ const postCheckpoint = async (
 
                 const panDocumentBuffer = Buffer.from(panResponse.data);
                 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-                const sanitizedEmail = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '_');
-                const filename = `pan_verification_${sanitizedEmail}_${timestamp}.pdf`;
+                const filename = `pan_verification_${email}_${timestamp}.pdf`;
 
                 const panS3UploadResult = await s3Service.uploadFromBuffer(panDocumentBuffer, filename, {
                     folder: `pan-documents/${new Date().getFullYear()}/${(new Date().getMonth() + 1).toString().padStart(2, '0')}`,
@@ -729,7 +728,7 @@ const postCheckpoint = async (
                 .returning('id')
                 .executeTakeFirstOrThrow();
 
-            const checkpoint = await updateCheckpoint(tx, email, phone, {
+            const updateData = {
                 aadhaar_id: aadhaarId.id,
                 permanent_address_id: permanentAddressId,
                 correspondence_address_id: permanentAddressId,
@@ -739,7 +738,9 @@ const postCheckpoint = async (
                           pan_document_issuer: panDocumentData.issuer,
                       }
                     : {}),
-            })
+            };
+
+            const checkpoint = await updateCheckpoint(tx, email, phone, updateData)
                 .returning('id')
                 .executeTakeFirstOrThrow();
 
@@ -748,14 +749,29 @@ const postCheckpoint = async (
                 .set({
                     aadhaar_status: 'pending',
                     address_status: 'pending',
-                    pan_document_status: panDocumentData !== null ? 'verified' : undefined,
+                    pan_document_status: panDocumentData ? 'verified' : undefined,
                 })
                 .where('id', '=', checkpoint.id)
                 .execute();
+
+            const verifyUpdate = await tx
+                .selectFrom('signup_checkpoints')
+                .select(['pan_document', 'pan_document_issuer'])
+                .where('email', '=', email)
+                .executeTakeFirst();
+
+            if (panDocumentData && !verifyUpdate?.pan_document) {
+                logger.error(`CRITICAL: PAN document URL was not saved to database for ${email}`);
+                throw new Error('Failed to save PAN document URL to database');
+            }
         });
 
         res.status(OK).json({
             message: 'Aadhaar verified',
+            data: {
+                panDocumentStored: !!panDocumentData,
+                panDocumentUrl: panDocumentData?.s3_url,
+            },
         });
     } else if (step === CheckpointStep.AADHAAR_MISMATCH_DETAILS) {
         const { full_name, dob } = req.body;
