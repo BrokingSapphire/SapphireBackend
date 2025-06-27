@@ -51,6 +51,7 @@ import { SmsTemplateType } from '@app/services/notifications-types/sms.types';
 import smsService from '@app/services/sms.service';
 import { fileFromPath } from 'formdata-node/file-from-path';
 import { NotNull } from 'kysely';
+import { generateMergedPDFAsync } from '@app/services/pdf-filler/generate-merge-pdf.service';
 
 const requestOtp = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, RequestOtpType>,
@@ -1414,7 +1415,17 @@ const postCheckpoint = async (
                 .execute();
         });
 
-        res.status(CREATED).json({ message: 'Nominees added.' });
+        logger.info(`Nominees completed for ${email}, starting automatic PDF generation`);
+
+        // Trigger PDF generation asynchronously
+        generateMergedPDFAsync(email);
+
+        res.status(CREATED).json({
+            message: 'Nominees added.',
+            data: {
+                pdfGenerationTriggered: true,
+            },
+        });
     } else if (step === CheckpointStep.ESIGN_INITIALIZE) {
         const { redirect_url } = req.body;
 
