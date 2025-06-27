@@ -52,6 +52,7 @@ import smsService from '@app/services/sms.service';
 import { fileFromPath } from 'formdata-node/file-from-path';
 import { NotNull } from 'kysely';
 import { generateMergedPDFAsync } from '@app/services/pdf-filler/generate-merge-pdf.service';
+import { compareNormalizedNames } from '@app/utils/lower-name';
 
 const requestOtp = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, RequestOtpType>,
@@ -915,10 +916,14 @@ const postCheckpoint = async (
             const normalizedBankName = bankData.bank_verified_name.trim().toLowerCase().replace(/\s+/g, ' ');
 
             if (normalizedUserName !== normalizedBankName) {
-                shouldSetDoubt = true;
-                logger.warn(
-                    `Bank name mismatch for user ${email}: User provided: "${full_name}", Bank verified: "${bankData.bank_verified_name}"`,
-                );
+                if (!compareNormalizedNames(full_name, bankData.bank_verified_name)) {
+                    shouldSetDoubt = true;
+                    logger.warn(
+                        `Bank name mismatch for user ${email}: User provided: "${full_name}", Bank verified: "${bankData.bank_verified_name}"`,
+                    );
+                } else {
+                    logger.info(`Bank name verification successful for user ${email}: Names match`);
+                }
             } else {
                 logger.info(`Bank name verification successful for user ${email}: Names match`);
             }
