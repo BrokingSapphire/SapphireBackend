@@ -120,7 +120,25 @@ class PDFMergerService {
                 }
             }
 
-            // Step 3: Add Income Proof document
+            // Step 3: Add Aadhaar verification document
+
+            const aadhaarDoc = additionalDocuments.find((doc) => doc.type === 'aadhaar-verification');
+            if (aadhaarDoc) {
+                try {
+                    const aadhaarPdf = await PDFDocument.load(aadhaarDoc.buffer);
+                    const aadhaarPages = await mergedPdf.copyPages(aadhaarPdf, aadhaarPdf.getPageIndices());
+
+                    aadhaarPages.forEach((page) => mergedPdf.addPage(page));
+                    totalPages += aadhaarPages.length;
+                    mergedDocuments.push('Aadhaar Verification');
+
+                    logger.info(`Added Aadhaar verification: ${aadhaarPages.length} pages`);
+                } catch (error) {
+                    logger.error(`Failed to merge Aadhaar document for ${email}:`, error);
+                }
+            }
+
+            // Step 4: Add Income Proof document
             const incomeDoc = additionalDocuments.find((doc) => doc.type === 'income-proof');
             if (incomeDoc) {
                 try {
@@ -137,7 +155,7 @@ class PDFMergerService {
                 }
             }
 
-            // Step 4: Add metadata to merged PDF
+            // Step 5: Add metadata to merged PDF
             mergedPdf.setTitle('Complete Account Opening Form with Supporting Documents');
             mergedPdf.setSubject('Client Onboarding Documentation');
             mergedPdf.setCreator('AOF Generation Service');
@@ -196,7 +214,7 @@ class PDFMergerService {
      */
     public async mergeSpecificDocuments(
         email: string,
-        documentTypes: ('pan-verification' | 'income-proof')[],
+        documentTypes: ('pan-verification' | 'income-proof' | 'aadhaar-verification')[],
         options: MergeOptions = {},
     ): Promise<MergedPDFResult> {
         try {
