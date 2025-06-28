@@ -29,6 +29,7 @@ import { CredentialsType, ResponseWithToken } from '@app/modules/common.types';
 import DigiLockerService from '@app/services/surepass/digilocker.service';
 import ESignService from '@app/services/surepass/esign.service';
 import AadhaarXMLParser from '@app/utils/aadhaar-xml.parser';
+import { AadhaarConverter } from '@app/utils/aadhaar-xml-to-pdf';
 import { sign } from '@app/utils/jwt';
 import axios from 'axios';
 import {
@@ -53,6 +54,8 @@ import { fileFromPath } from 'formdata-node/file-from-path';
 import { NotNull } from 'kysely';
 import { generateMergedPDFAsync } from '@app/services/pdf-filler/generate-merge-pdf.service';
 import { compareNormalizedNames } from '@app/utils/lower-name';
+import { UpdateObjectExpression } from 'kysely/dist/cjs/parser/update-set-parser';
+import { DB } from '@app/database/db';
 
 const requestOtp = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, RequestOtpType>,
@@ -594,6 +597,78 @@ const postCheckpoint = async (
         const parser = new AadhaarXMLParser(file.data);
         parser.load();
 
+        // Convert Aadhaar XML to HTML buffer and upload to S3
+        let aadhaarDocumentData: {
+            s3_key: string;
+            s3_url: string;
+            filename: string;
+            mime_type: string;
+            file_size: number;
+        } | null = null;
+
+        try {
+            logger.info(`Converting Aadhaar XML to PDF for user ${email}`);
+
+            // Create AadhaarConverter instance
+            const converter = new AadhaarConverter();
+
+            // Convert XML to PDF buffer
+            const pdfBuffer = await converter.convertXmlToPdfBuffer(file.data);
+
+            // Generate unique filename
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const sanitizedEmail = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '_');
+            const filename = `aadhaar_${sanitizedEmail}_${timestamp}.pdf`;
+
+            // Upload PDF to S3
+            const aadhaarS3UploadResult = await s3Service.uploadFromBuffer(pdfBuffer, filename, {
+                folder: `aadhaar-documents/${new Date().getFullYear()}/${(new Date().getMonth() + 1).toString().padStart(2, '0')}`,
+                contentType: 'application/pdf',
+                metadata: {
+                    'user-email': email,
+                    'client-id': clientId,
+                    'document-type': 'aadhaar-verification-record',
+                    source: 'digilocker',
+                    'downloaded-date': new Date().toISOString(),
+                    'file-size': pdfBuffer.length.toString(),
+                    'original-mime-type': downloadLink.data.data.mime_type,
+                    'digilocker-file-id': aadhaar.file_id,
+                    'aadhaar-uid': parser.uid(),
+                    'aadhaar-name': parser.name(),
+                },
+                cacheControl: 'private, max-age=31536000',
+            });
+
+            // Validate S3 upload result
+            if (!aadhaarS3UploadResult || !aadhaarS3UploadResult.url || !aadhaarS3UploadResult.key) {
+                throw new Error('S3 upload failed - invalid response from upload service');
+            }
+
+            // Prepare Aadhaar document data for database storage
+            aadhaarDocumentData = {
+                s3_key: aadhaarS3UploadResult.key,
+                s3_url: aadhaarS3UploadResult.url,
+                filename,
+                mime_type: 'application/pdf',
+                file_size: pdfBuffer.length,
+            };
+
+            // Validate aadhaar document data before proceeding
+            if (!aadhaarDocumentData.s3_url || aadhaarDocumentData.s3_url.length === 0) {
+                throw new Error('Invalid S3 URL generated for Aadhaar document');
+            }
+        } catch (error: any) {
+            logger.error(`Critical error processing Aadhaar document for user ${email}:`, {
+                error: error.message,
+                stack: error.stack,
+                documentName: aadhaar.name,
+                fileId: aadhaar.file_id,
+            });
+            logger.warn(
+                `Continuing Aadhaar verification without PDF document storage for user ${email} - manual review required`,
+            );
+        }
+
         // Initialize PAN document processing result
         let panDocumentData: {
             s3_key: string;
@@ -738,6 +813,7 @@ const postCheckpoint = async (
                 pan_masked_aadhaar: panMaskedAadhaar,
                 digilocker_masked_aadhaar: digilockerMaskedAadhaar,
                 pan_document_data: panDocumentData,
+                aadhaar_document_data: aadhaarDocumentData,
             };
 
             await redisClient.set(mismatchKey, JSON.stringify(mismatchData));
@@ -754,7 +830,6 @@ const postCheckpoint = async (
                     requires_additional_verification: true,
                     pan_masked_aadhaar: `XXXXXXXX${panMaskedAadhaar}`,
                     digilocker_masked_aadhaar: `XXXXXXXX${digilockerMaskedAadhaar}`,
-                    pan_document: panDocumentData?.s3_url || undefined,
                 },
             });
             return;
@@ -818,7 +893,7 @@ const postCheckpoint = async (
                 .executeTakeFirstOrThrow();
 
             // Prepare update data with PAN document information
-            const updateData: any = {
+            const updateData: UpdateObjectExpression<DB, 'signup_checkpoints', 'signup_checkpoints'> = {
                 aadhaar_id: aadhaarId.id,
                 permanent_address_id: permanentAddressId,
                 correspondence_address_id: permanentAddressId,
@@ -835,6 +910,17 @@ const postCheckpoint = async (
                 });
             }
 
+            // Add Aadhaar document data if available
+            if (aadhaarDocumentData) {
+                updateData.aadhaar_document = aadhaarDocumentData.s3_url;
+
+                logger.info(`Adding Aadhaar document data to update for user ${email}`, {
+                    s3Url: aadhaarDocumentData.s3_url,
+                    s3Key: aadhaarDocumentData.s3_key,
+                    fileSize: aadhaarDocumentData.file_size,
+                });
+            }
+
             // Update checkpoint with all data
             const checkpoint = await updateCheckpoint(tx, email, phone, updateData)
                 .returning('id')
@@ -843,6 +929,7 @@ const postCheckpoint = async (
             logger.info(`Checkpoint updated successfully for user ${email}`, {
                 checkpointId: checkpoint.id,
                 hasPanDocument: !!panDocumentData,
+                hasAadhaarDocument: !!aadhaarDocumentData,
             });
 
             // Update verification status
@@ -854,6 +941,10 @@ const postCheckpoint = async (
 
             if (panDocumentData) {
                 verificationStatusUpdate.pan_document_status = 'verified';
+            }
+
+            if (aadhaarDocumentData) {
+                verificationStatusUpdate.aadhaar_document_status = 'verified';
             }
 
             await tx
@@ -873,18 +964,38 @@ const postCheckpoint = async (
                     throw new Error('Failed to save PAN document URL to database - transaction will be rolled back');
                 }
             }
+
+            if (aadhaarDocumentData) {
+                const verifyAadhaarUpdate = await tx
+                    .selectFrom('signup_checkpoints')
+                    .select('id')
+                    .where('email', '=', email)
+                    .executeTakeFirst();
+
+                if (!verifyAadhaarUpdate?.id) {
+                    throw new Error(
+                        'Failed to verify Aadhaar document storage in database - transaction will be rolled back',
+                    );
+                }
+
+                logger.info(`Aadhaar document verification successful for user ${email}`, {
+                    aadhaarDocumentUrl: aadhaarDocumentData.s3_url,
+                });
+            }
         });
 
         logger.info(`Aadhaar verification completed successfully for user ${email}`, {
             hasPanDocument: !!panDocumentData,
             panDocumentUrl: panDocumentData?.s3_url,
+            hasAadhaarDocument: !!aadhaarDocumentData,
+            aadhaarDocumentUrl: aadhaarDocumentData?.s3_url,
         });
 
         res.status(OK).json({
             message: 'Aadhaar verified',
             data: {
                 panDocumentStored: !!panDocumentData,
-                panDocumentUrl: panDocumentData?.s3_url,
+                aadhaarDocumentStored: !!aadhaarDocumentData,
             },
         });
     } else if (step === CheckpointStep.AADHAAR_MISMATCH_DETAILS) {
