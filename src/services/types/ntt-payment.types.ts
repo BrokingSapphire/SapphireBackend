@@ -103,9 +103,9 @@ export interface PaymentResponse {
         };
         payModeSpecificData: {
             subChannel: string[];
-            bankDetails?: {
+            bankDetails: {
                 otsBankId?: number;
-                bankTxnId?: string;
+                bankTxnId: string;
                 otsBankName?: string;
             };
         };

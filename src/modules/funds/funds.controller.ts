@@ -5,10 +5,7 @@ import { CREATED, OK } from '@app/utils/httpstatus';
 import { PaymentService } from '@app/services/ntt-pg.service';
 import { env } from '@app/env';
 import { BalanceTransactionStatus, DepositTransactionType } from '@app/database/db';
-import { InternalServerError } from '@app/apiError';
-import logger from '@app/logger';
 import { SessionJwtType } from '../common.types';
-import { sendFundsAdded } from '@app/services/notification.service';
 
 /**
  * Get user funds
@@ -62,7 +59,7 @@ const depositFunds = async (req: Request<SessionJwtType>, res: Response): Promis
 
     const merchantTxnId = generateReferenceNo(userId);
     const paymentService = new PaymentService(
-        `${req.protocol}://${req.hostname}${env.apiPath}/webhook/deposit/callback`,
+        `${req.protocol}://${req.hostname}:${req.socket.localPort}${env.apiPath}/webhook/deposit/callback`,
     );
 
     const details = await db
@@ -83,7 +80,7 @@ const depositFunds = async (req: Request<SessionJwtType>, res: Response): Promis
         .where('bank_to_user.is_primary', '=', true)
         .executeTakeFirstOrThrow();
 
-    const paymentResponse = await paymentService.createPaymentRequest(
+    const paymentUrl = await paymentService.createPaymentRequest(
         amount.toFixed(2),
         merchantTxnId,
         userId,
@@ -100,23 +97,10 @@ const depositFunds = async (req: Request<SessionJwtType>, res: Response): Promis
         mode === 'UPI' ? 'UP' : 'NB',
     );
 
-    if (paymentResponse.status !== OK) {
-        logger.error(paymentResponse);
-        throw new InternalServerError('Error with payment response: Returned non 200 response.');
-    }
-
-    const [data, isValid] = paymentService.processResponse(paymentResponse.data);
-    logger.debug(JSON.stringify(data));
-    // if (!isValid) {
-    //     logger.error(data);
-    //     throw new InternalServerError('Invalid payment response received.');
-    // }
-
     res.status(OK).json({
-        message: 'Deposit request sent successfully',
+        message: 'Deposit url generated successfully',
         data: {
-            data,
-            valid: isValid,
+            url: paymentUrl,
         },
     });
 };

@@ -1,16 +1,14 @@
-import { BadRequestError, InternalServerError } from '@app/apiError';
+import { InternalServerError } from '@app/apiError';
 import { db } from '@app/database';
-import { env } from '@app/env';
 import logger from '@app/logger';
 import { PaymentService } from '@app/services/ntt-pg.service';
 import { Request } from '@app/types';
 import { OK } from '@app/utils/httpstatus';
 import { Response } from 'express';
+import { sendFundsAdded } from '@app/services/notification.service';
 
 const depositCallback = async (req: Request, res: Response): Promise<void> => {
-    const { merchId, encData } = req.params;
-
-    if (merchId !== env.ntt.userId) throw new BadRequestError('Invalid merchant id');
+    const { encData } = req.body;
 
     const paymentService = new PaymentService(String());
     const [response, isValid] = paymentService.decryptAndValidateResponse(encData);
@@ -50,9 +48,34 @@ const depositCallback = async (req: Request, res: Response): Promise<void> => {
                 .execute();
         });
 
-    res.status(OK).json({
-        message: 'Recieved successfully.',
+    const data = await db
+        .selectFrom('user')
+        .innerJoin('user_name', 'user.name', 'user_name.id')
+        .innerJoin('user_balance', 'user_balance.user_id', 'user.id')
+        .select(['user.email', 'user_name.first_name', 'available_cash'])
+        .where('user.id', '=', response.payInstrument.payDetails.clientCode!)
+        .executeTakeFirstOrThrow();
+
+    const date = new Date(response.payInstrument.payDetails.txnCompleteDate.replace(' ', 'T'));
+    await sendFundsAdded(data.email, {
+        email: data.email,
+        userName: data.first_name,
+        amount: response.payInstrument.payDetails.totalAmount.toFixed(2),
+        availableBalance: data.available_cash.toFixed(2),
+        date: date.toLocaleDateString(),
+        time: date.toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+        }),
     });
+
+    if (req.query.redirect) {
+        res.redirect(req.query.redirect as string);
+    } else {
+        res.status(OK).json({
+            message: 'Received successfully.',
+        });
+    }
 };
 
 export { depositCallback };

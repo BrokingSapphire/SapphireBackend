@@ -6,12 +6,18 @@ import {
     PaymentDetails,
     PaymentRequest,
     PaymentResponse,
-    PayModeSpecificData,
 } from '@app/services/types/ntt-payment.types';
 import * as querystring from 'node:querystring';
 import { NonNullableFields } from '@app/types';
+import logger from '@app/logger';
 
 const PAYMENT_URL = 'https://paynetzuat.atomtech.in/ots/payment/txn';
+const PAY_MODE = 'SS';
+const CURRENCY = 'INR';
+const VERSION = 'OTSv1.1';
+const CHANNEL = 'ECOMM';
+const API = 'SALE';
+const STAGE = 1;
 
 export class PaymentService {
     constructor(
@@ -26,43 +32,27 @@ export class PaymentService {
         clientId: string,
         customerDetails: Omit<CustomerDetails, 'billingInfo'>,
         accountDetails: NonNullableFields<Pick<PaymentDetails, 'custAccNo' | 'custAccIfsc'>>,
-        payMode: 'UP' | 'NB',
+        payType: 'UP' | 'NB',
     ) {
-        const payModeSpecificData: PayModeSpecificData =
-            payMode === 'UP'
-                ? {
-                      subChannel: ['UP'],
-                      bankDetails: { payeeVPA: env.ntt.uatVpa },
-                      emiDetails: null,
-                      multiProdDetails: null,
-                      cardDetails: null,
-                  }
-                : {
-                      subChannel: ['NB'],
-                      bankDetails: { otsBankId: env.ntt.uatBankId },
-                      emiDetails: null,
-                      multiProdDetails: null,
-                      cardDetails: null,
-                  };
-
+        logger.info(this.returnUrl);
         const signature = generateSignature(env.ntt.hashRequestKey, [
             env.ntt.userId,
             env.ntt.transactionPassword,
             merchTxnId,
-            'SL',
+            PAY_MODE,
             amount,
-            'INR',
-            '1',
+            CURRENCY,
+            STAGE.toString(),
         ]);
 
         const paymentRequest: PaymentRequest = {
             payInstrument: {
                 headDetails: {
-                    version: 'OTSv1.1',
-                    payMode: 'SL',
-                    channel: 'ECOMM',
-                    api: 'SALE',
-                    stage: 1,
+                    version: VERSION,
+                    payMode: PAY_MODE,
+                    channel: CHANNEL,
+                    api: API,
+                    stage: STAGE,
                     platform: 'WEB',
                 },
                 merchDetails: {
@@ -81,7 +71,7 @@ export class PaymentService {
                     totalAmount: amount,
                     custAccNo: accountDetails.custAccNo,
                     custAccIfsc: accountDetails.custAccIfsc,
-                    txnCurrency: 'INR',
+                    txnCurrency: CURRENCY,
                     clientCode: clientId,
                     remarks: null,
                     signature,
@@ -91,7 +81,16 @@ export class PaymentService {
                     cancelUrl: this.cancelUrl ?? null,
                     notificationUrl: this.notificationUrl ?? null,
                 },
-                payModeSpecificData,
+                payModeSpecificData: {
+                    subChannel: [payType],
+                    bankDetails: {
+                        otsBankId: payType === 'NB' ? env.ntt.uatBankId : undefined,
+                        payeeVPA: payType === 'UP' ? env.ntt.uatVpa : undefined,
+                    },
+                    emiDetails: null,
+                    multiProdDetails: null,
+                    cardDetails: null,
+                },
                 extras: {
                     udf1: null,
                     udf2: null,
@@ -106,23 +105,16 @@ export class PaymentService {
             },
         };
 
-        return this.processPaymentRequest(paymentRequest);
+        return this.getPaymentUrl(paymentRequest);
     }
 
-    private async processPaymentRequest(paymentRequest: PaymentRequest) {
-        try {
-            const encryptedRequest = {
-                merchId: env.ntt.userId,
-                encData: encrypt(JSON.stringify(paymentRequest), env.ntt.aesRequestKey),
-            };
+    private async getPaymentUrl(paymentRequest: PaymentRequest) {
+        const encryptedRequest = {
+            merchId: env.ntt.userId,
+            encData: encrypt(JSON.stringify(paymentRequest), env.ntt.aesRequestKey),
+        };
 
-            return await axios(PAYMENT_URL, {
-                method: 'GET',
-                params: encryptedRequest,
-            });
-        } catch (error) {
-            throw new Error(`Payment request failed: ${error instanceof Error ? error.message : String(error)}`);
-        }
+        return `${PAYMENT_URL}?${querystring.stringify(encryptedRequest)}`;
     }
 
     processResponse(data: string): [PaymentResponse, boolean] {
@@ -150,10 +142,10 @@ export class PaymentService {
             merchDetails.merchId.toString(),
             payDetails.atomTxnId.toString(),
             merchDetails.merchTxnId,
-            payDetails.totalAmount.toString(),
+            payDetails.totalAmount.toFixed(2),
             responseDetails.statusCode,
             payModeSpecificData.subChannel[0],
-            payModeSpecificData.bankDetails?.bankTxnId || '',
+            payModeSpecificData.bankDetails.bankTxnId,
         ]);
 
         return expectedSignature === payDetails.signature;
