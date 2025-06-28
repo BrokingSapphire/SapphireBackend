@@ -4,7 +4,7 @@ import { db } from '@app/database';
 import logger from '@app/logger';
 import pdfMergerService from '@app/services/pdf-filler/pdf-merger.service';
 
-export async function generateMergedPDFAsync(email: string): Promise<void> {
+export async function generateMergedPDFAsync(email: string): Promise<string | null> {
     const sanitizedEmail = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '_');
     const timestamp = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
     const customFileName = `complete_aof_${sanitizedEmail}_${timestamp}.pdf`;
@@ -56,6 +56,7 @@ export async function generateMergedPDFAsync(email: string): Promise<void> {
             mergedDocuments: result.mergedDocuments,
         });
         await logPDFGenerationForESign(email, result);
+        return result.s3Url!;
     } else {
         logger.error(`Automatic PDF generation failed for ${email}:`, result.error);
 
@@ -66,6 +67,8 @@ export async function generateMergedPDFAsync(email: string): Promise<void> {
             })
             .where('email', '=', email)
             .execute();
+
+        return null;
     }
 }
 

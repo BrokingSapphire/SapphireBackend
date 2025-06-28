@@ -1531,16 +1531,8 @@ const postCheckpoint = async (
                 .execute();
         });
 
-        logger.info(`Nominees completed for ${email}, starting automatic PDF generation`);
-
-        // Trigger PDF generation asynchronously
-        generateMergedPDFAsync(email);
-
         res.status(CREATED).json({
             message: 'Nominees added.',
-            data: {
-                pdfGenerationTriggered: true,
-            },
         });
     } else if (step === CheckpointStep.PAN_VERIFICATION_RECORD) {
         const uid = randomUUID();
@@ -1549,7 +1541,7 @@ const postCheckpoint = async (
 
         res.status(OK).json({
             data: { uid },
-            message: 'PAN verification record upload started',
+            message: 'PAN verification record upload initiated',
         });
     } else if (step === CheckpointStep.ESIGN_INITIALIZE) {
         const { redirect_url } = req.body;
@@ -1561,6 +1553,8 @@ const postCheckpoint = async (
             .select(['signup_checkpoints.id', 'user_name.full_name'])
             .where('signup_checkpoints.email', '=', email)
             .executeTakeFirstOrThrow();
+
+        const url = await generateMergedPDFAsync(email);
 
         const esignResponse = await ESignService.initialize({
             pdf_pre_uploaded: true,
@@ -1592,7 +1586,7 @@ const postCheckpoint = async (
             },
         });
 
-        await ESignService.uploadFile(esignResponse.data.data.client_id, await fileFromPath('documents/kyc.pdf'));
+        await ESignService.uploadFileFromUrl(esignResponse.data.data.client_id, url!);
 
         const key = `esign:${email}`;
         await redisClient.set(key, esignResponse.data.data.client_id);
