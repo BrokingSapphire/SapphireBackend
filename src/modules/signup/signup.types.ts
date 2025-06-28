@@ -20,6 +20,7 @@ export enum CheckpointStep {
     SIGNATURE = 'signature',
     IPV = 'ipv',
     ADD_NOMINEES = 'add_nominees',
+    PAN_VERIFICATION_RECORD = 'pan_verification_record',
     ESIGN_INITIALIZE = 'esign_initialize',
     ESIGN_COMPLETE = 'esign_complete',
     INCOME_PROOF = 'income_proof',
@@ -188,6 +189,7 @@ export type PostCheckpointType = ToDiscoUnion<
                 share: number;
             }[];
         };
+        [CheckpointStep.PAN_VERIFICATION_RECORD]: {};
         [CheckpointStep.ESIGN_INITIALIZE]: {
             redirect_url: string;
         };

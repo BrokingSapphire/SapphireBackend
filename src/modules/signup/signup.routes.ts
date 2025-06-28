@@ -13,10 +13,12 @@ import {
     getCheckpoint,
     getIncomeProof,
     getIpv,
+    getPanVerificationRecord,
     getSignature,
     postCheckpoint,
     putIncomeProof,
     putIpv,
+    putPanVerificationRecord,
     putSignature,
     requestOtp,
     resendOtp,
@@ -316,5 +318,72 @@ router.post('/setup-password', jwtMiddleware, validate(SetupPasswordSchema), set
  *         description: Please complete signup process first
  */
 router.post('/setup-mpin', jwtMiddleware, validate(SetupMpinSchema), setupMpin);
+
+/**
+ * @swagger
+ * /pan-verification-record/{uid}:
+ *   put:
+ *     tags: [Signup]
+ *     summary: Upload PAN verification record
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: uid
+ *         in: path
+ *         required: true
+ *         description: Upload session ID
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               pdf:
+ *                 type: string
+ *                 format: binary
+ *                 description: PAN verification record PDF file
+ *     responses:
+ *       201:
+ *         description: PAN verification record uploaded successfully
+ *       401:
+ *         description: Unauthorized or upload session expired
+ *       422:
+ *         description: Invalid file or upload error
+ */
+router.put('/pan-verification-record/:uid', jwtMiddleware, putPanVerificationRecord);
+
+/**
+ * @swagger
+ * /pan-verification-record:
+ *   get:
+ *     tags: [Signup]
+ *     summary: Get PAN verification record information
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: PAN verification record information retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     url:
+ *                       type: string
+ *                       description: URL of the uploaded PAN verification record
+ *                 message:
+ *                   type: string
+ *       204:
+ *         description: PAN verification record not uploaded
+ *       401:
+ *         description: Unauthorized
+ */
+router.get('/pan-verification-record', jwtMiddleware, getPanVerificationRecord);
 
 export default router;

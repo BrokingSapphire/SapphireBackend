@@ -1542,6 +1542,15 @@ const postCheckpoint = async (
                 pdfGenerationTriggered: true,
             },
         });
+    } else if (step === CheckpointStep.PAN_VERIFICATION_RECORD) {
+        const uid = randomUUID();
+        await redisClient.set(`signup_pan_verification:${uid}`, email);
+        await redisClient.expire(`signup_pan_verification:${uid}`, 10 * 60);
+
+        res.status(OK).json({
+            data: { uid },
+            message: 'PAN verification record upload started',
+        });
     } else if (step === CheckpointStep.ESIGN_INITIALIZE) {
         const { redirect_url } = req.body;
 
@@ -1951,6 +1960,82 @@ const getIncomeProof = async (req: Request<JwtType>, res: Response) => {
     }
 };
 
+const putPanVerificationRecord = async (req: Request<JwtType, UIDParams>, res: Response) => {
+    const { uid } = req.params;
+    const { email, phone } = req.auth!;
+
+    const value = await redisClient.get(`signup_pan_verification:${uid}`);
+    if (!value || value !== email) {
+        throw new UnauthorizedError('PAN verification record upload not authorized or expired.');
+    }
+
+    let uploadResult;
+    try {
+        uploadResult = await pdfUploadHandler(req, res);
+    } catch (e: any) {
+        throw new UnprocessableEntityError(e.message);
+    }
+
+    await db.transaction().execute(async (tx) => {
+        const checkpoint = await updateCheckpoint(tx, email, phone, {
+            pan_document: uploadResult.file.location,
+        })
+            .returning('id')
+            .executeTakeFirstOrThrow();
+
+        await tx
+            .updateTable('signup_verification_status')
+            .set({
+                pan_document_status: 'pending',
+                updated_at: new Date(),
+            })
+            .where('id', '=', checkpoint.id)
+            .execute();
+    });
+
+    const userDetails = await db
+        .selectFrom('signup_checkpoints')
+        .innerJoin('pan_detail', 'signup_checkpoints.pan_id', 'pan_detail.id')
+        .innerJoin('user_name', 'pan_detail.name', 'user_name.id')
+        .select(['user_name.first_name'])
+        .where('signup_checkpoints.email', '=', email)
+        .executeTakeFirst();
+
+    if (userDetails) {
+        // Send documents received confirmation email
+        await sendDocumentsReceivedConfirmation(email, {
+            userName: userDetails.first_name,
+            email,
+        });
+
+        logger.info(`PAN verification record uploaded - confirmation email sent to ${email}`);
+    }
+
+    await redisClient.del(`signup_pan_verification:${uid}`);
+    res.status(CREATED).json({
+        message: 'PAN verification record uploaded successfully',
+    });
+};
+
+const getPanVerificationRecord = async (req: Request<JwtType>, res: Response) => {
+    const { email } = req.auth!;
+
+    const { pan_document: url } = await db
+        .selectFrom('signup_checkpoints')
+        .select('pan_document')
+        .where('email', '=', email)
+        .executeTakeFirstOrThrow();
+
+    if (url === null) {
+        res.status(NO_CONTENT).json({ message: 'PAN verification record not uploaded' });
+    } else {
+        res.status(OK).json({
+            data: { url },
+            message: 'PAN verification record uploaded.',
+        });
+    }
+};
+
 const finalizeSignup = async (req: Request<JwtType>, res: Response) => {
     const { email } = req.auth!;
 
@@ -2043,6 +2128,8 @@ export {
     getSignature,
     putIncomeProof,
     getIncomeProof,
+    putPanVerificationRecord,
+    getPanVerificationRecord,
     finalizeSignup,
     setupMpin,
     setupPassword,
