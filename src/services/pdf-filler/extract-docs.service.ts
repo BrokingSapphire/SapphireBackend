@@ -4,6 +4,7 @@ import logger from '@app/logger';
 import s3Service from '@app/services/s3.service';
 import { db } from '@app/database';
 import axios from 'axios';
+import { env } from '@app/env';
 
 export interface CachedDocument {
     type: 'pan-verification' | 'income-proof';
@@ -77,18 +78,40 @@ class DocumentExtractionService {
             return { success: false, documents: [], error: error.message };
         }
     }
-
     /**
      * Download document from URL (S3 or external)
      */
     private async downloadDocument(url: string): Promise<Buffer> {
-        const response = await axios.get(url, {
-            responseType: 'arraybuffer',
-            timeout: 30000,
-            maxContentLength: 20 * 1024 * 1024, // 20MB max
-        });
+        try {
+            // Use environment variables for S3 detection
+            const s3Domain = `${env.aws.s3_bucket}.s3.${env.aws.region}.amazonaws.com`;
 
-        return Buffer.from(response.data);
+            if (url.includes(s3Domain)) {
+                // Extract S3 key from URL
+                const s3Key = url.split('.com/')[1];
+                const result = await s3Service.downloadFileAsBuffer(s3Key);
+                logger.info(`Successfully downloaded S3 file, buffer size: ${result.buffer.length} bytes`);
+                return result.buffer;
+            }
+
+            // Fallback to direct HTTP download for external URLs
+            logger.info(`Using direct HTTP download for external URL`);
+            const response = await axios.get(url, {
+                responseType: 'arraybuffer',
+                timeout: 30000,
+                maxContentLength: 20 * 1024 * 1024,
+            });
+
+            return Buffer.from(response.data);
+        } catch (error: any) {
+            logger.error(`Failed to download document:`, {
+                error: error.message,
+                isS3Url: url.includes('.s3.') && url.includes('.amazonaws.com'),
+                code: error.code,
+                statusCode: error.response?.status,
+            });
+            throw error;
+        }
     }
 
     /**

@@ -5,7 +5,6 @@ import logger from '@app/logger';
 import s3Service from '@app/services/s3.service';
 import documentExtractionService, { CachedDocument } from './extract-docs.service';
 import PDFDataFetcherService from './pdf-data-fetcher.service';
-import { customFormFields, defaultPageSections } from './pdf.types';
 
 export interface MergedPDFResult {
     success: boolean;
@@ -323,18 +322,6 @@ class PDFMergerService {
         logger.info(`Batch merge completed: ${successCount}/${emails.length} successful`);
 
         return results;
-    }
-
-    /**
-     * Validate PDF buffer
-     */
-    private async validatePDFBuffer(buffer: Buffer): Promise<boolean> {
-        try {
-            await PDFDocument.load(buffer);
-            return true;
-        } catch (error) {
-            return false;
-        }
     }
 
     /**
