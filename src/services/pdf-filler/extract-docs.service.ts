@@ -7,7 +7,7 @@ import axios from 'axios';
 import { env } from '@app/env';
 
 export interface CachedDocument {
-    type: 'pan-verification' | 'income-proof';
+    type: 'pan-verification' | 'income-proof' | 'aadhaar-verification';
     buffer: Buffer;
     fileName: string;
 }
@@ -32,7 +32,13 @@ class DocumentExtractionService {
             // Get document URLs from database
             const userData = await db
                 .selectFrom('signup_checkpoints')
-                .select(['pan_document', 'pan_document_issuer', 'income_proof', 'income_proof_type'])
+                .select([
+                    'pan_document',
+                    'pan_document_issuer',
+                    'income_proof',
+                    'income_proof_type',
+                    'aadhaar_document',
+                ])
                 .where('email', '=', email)
                 .executeTakeFirst();
 
@@ -54,6 +60,21 @@ class DocumentExtractionService {
                     logger.info('PAN document cached', { email });
                 } catch (error) {
                     logger.error('Failed to download PAN document', { email, error });
+                }
+            }
+
+            // Download Aadhaar document if available
+            if (userData.aadhaar_document) {
+                try {
+                    const buffer = await this.downloadDocument(userData.aadhaar_document);
+                    documents.push({
+                        type: 'aadhaar-verification',
+                        buffer,
+                        fileName: `${emailPrefix}_aadhaar_verification.pdf`,
+                    });
+                    logger.info('Aadhaar document cached', { email });
+                } catch (error) {
+                    logger.error('Failed to download Aadhaar document', { email, error });
                 }
             }
 
@@ -121,11 +142,11 @@ class DocumentExtractionService {
         try {
             const userData = await db
                 .selectFrom('signup_checkpoints')
-                .select(['pan_document', 'income_proof'])
+                .select(['pan_document', 'income_proof', 'aadhaar_document'])
                 .where('email', '=', email)
                 .executeTakeFirst();
 
-            return !!(userData?.pan_document || userData?.income_proof);
+            return !!(userData?.pan_document || userData?.income_proof || userData?.aadhaar_document);
         } catch (error) {
             return false;
         }
