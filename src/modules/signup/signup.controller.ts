@@ -1911,24 +1911,6 @@ const putIncomeProof = async (req: Request<JwtType, UIDParams>, res: Response) =
             .execute();
     });
 
-    const userDetails = await db
-        .selectFrom('signup_checkpoints')
-        .innerJoin('pan_detail', 'signup_checkpoints.pan_id', 'pan_detail.id')
-        .innerJoin('user_name', 'pan_detail.name', 'user_name.id')
-        .select(['user_name.first_name'])
-        .where('signup_checkpoints.email', '=', email)
-        .executeTakeFirst();
-
-    if (userDetails) {
-        // Send documents received confirmation email
-        await sendDocumentsReceivedConfirmation(email, {
-            userName: userDetails.first_name,
-            email,
-        });
-
-        logger.info(`Documents received confirmation email sent to ${email}`);
-    }
-
     await redisClient.del(`signup_income_proof:${uid}`);
     res.status(CREATED).json({
         message: 'Income proof uploaded successfully',
@@ -1986,24 +1968,6 @@ const putPanVerificationRecord = async (req: Request<JwtType, UIDParams>, res: R
             .where('id', '=', checkpoint.id)
             .execute();
     });
-
-    const userDetails = await db
-        .selectFrom('signup_checkpoints')
-        .innerJoin('pan_detail', 'signup_checkpoints.pan_id', 'pan_detail.id')
-        .innerJoin('user_name', 'pan_detail.name', 'user_name.id')
-        .select(['user_name.first_name'])
-        .where('signup_checkpoints.email', '=', email)
-        .executeTakeFirst();
-
-    if (userDetails) {
-        // Send documents received confirmation email
-        await sendDocumentsReceivedConfirmation(email, {
-            userName: userDetails.first_name,
-            email,
-        });
-
-        logger.info(`PAN verification record uploaded - confirmation email sent to ${email}`);
-    }
 
     await redisClient.del(`signup_pan_verification:${uid}`);
     res.status(CREATED).json({
@@ -2086,6 +2050,19 @@ const finalizeSignup = async (req: Request<JwtType>, res: Response) => {
             .where('email', '=', email)
             .execute();
     });
+
+    try {
+        const formattedName = formatName(userData.first_name);
+
+        // Send documents received confirmation EMAIL
+        await sendDocumentsReceivedConfirmation(email, {
+            userName: formattedName,
+            email,
+        });
+        logger.info(`Documents received confirmation email sent to ${email}`);
+    } catch (error) {
+        logger.error(`Failed to send documents received confirmation email: ${error}`);
+    }
 
     try {
         if (userData.phone) {
