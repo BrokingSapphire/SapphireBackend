@@ -393,6 +393,39 @@ const getCheckpoint = async (req: Request<JwtType, GetCheckpointType>, res: Resp
             },
             message: 'Bank validation details fetched',
         });
+    } else if (step === CheckpointStep.COMPLETE_UPI_VALIDATION) {
+        const bankValidation = await db
+            .selectFrom('signup_checkpoints')
+            .innerJoin('bank_to_checkpoint', 'signup_checkpoints.id', 'bank_to_checkpoint.checkpoint_id')
+            .innerJoin('bank_account', 'bank_to_checkpoint.bank_account_id', 'bank_account.id')
+            .innerJoin('signup_verification_status', 'signup_checkpoints.id', 'signup_verification_status.id')
+            .select([
+                'bank_account.account_holder_name',
+                'bank_account.account_no',
+                'bank_account.ifsc_code',
+                'bank_account.account_type',
+                'bank_account.verification',
+                'signup_verification_status.bank_status',
+            ])
+            .where('signup_checkpoints.email', '=', email)
+            .executeTakeFirst();
+
+        if (!bankValidation) {
+            res.status(NOT_FOUND).json({ message: 'UPI validation not found' });
+            return;
+        }
+
+        res.status(OK).json({
+            data: {
+                account_holder_name: bankValidation.account_holder_name,
+                account_number: bankValidation.account_no.replace(/\d(?=\d{4})/g, '*'),
+                ifsc_code: bankValidation.ifsc_code,
+                account_type: bankValidation.account_type,
+                verification_status: bankValidation.bank_status,
+                is_completed: bankValidation.bank_status === 'verified',
+            },
+            message: 'UPI validation details fetched',
+        });
     } else if (step === CheckpointStep.ADD_NOMINEES) {
         const nominees = await db
             .selectFrom('signup_checkpoints')
@@ -1325,7 +1358,7 @@ const postCheckpoint = async (
             await redisClient.set(
                 upiDataKey,
                 JSON.stringify({
-                    clientId: clientId,
+                    clientId,
                     validationData: rpcResponse.data.data,
                 }),
             );
