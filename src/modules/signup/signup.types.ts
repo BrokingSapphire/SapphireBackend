@@ -17,6 +17,7 @@ export enum CheckpointStep {
     OTHER_DETAIL = 'other_detail',
     BANK_VALIDATION_START = 'bank_validation_start',
     BANK_VALIDATION = 'bank_validation',
+    COMPLETE_BANK_VALIDATION = 'complete_bank_validation',
     SIGNATURE = 'signature',
     IPV = 'ipv',
     ADD_NOMINEES = 'add_nominees',
@@ -176,6 +177,7 @@ export type PostCheckpointType = ToDiscoUnion<
             },
             'validation_type'
         >;
+        [CheckpointStep.COMPLETE_BANK_VALIDATION]: {};
         [CheckpointStep.SIGNATURE]: {};
         [CheckpointStep.IPV]: {};
         [CheckpointStep.INCOME_PROOF]: {

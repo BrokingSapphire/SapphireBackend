@@ -360,6 +360,39 @@ const getCheckpoint = async (req: Request<JwtType, GetCheckpointType>, res: Resp
             .executeTakeFirstOrThrow();
 
         res.status(OK).json({ data: { bank }, message: 'Bank details fetched' });
+    } else if (step === CheckpointStep.COMPLETE_BANK_VALIDATION) {
+        const bankValidation = await db
+            .selectFrom('signup_checkpoints')
+            .innerJoin('bank_to_checkpoint', 'signup_checkpoints.id', 'bank_to_checkpoint.checkpoint_id')
+            .innerJoin('bank_account', 'bank_to_checkpoint.bank_account_id', 'bank_account.id')
+            .innerJoin('signup_verification_status', 'signup_checkpoints.id', 'signup_verification_status.id')
+            .select([
+                'bank_account.account_holder_name',
+                'bank_account.account_no',
+                'bank_account.ifsc_code',
+                'bank_account.account_type',
+                'bank_account.verification',
+                'signup_verification_status.bank_status',
+            ])
+            .where('signup_checkpoints.email', '=', email)
+            .executeTakeFirst();
+
+        if (!bankValidation) {
+            res.status(NOT_FOUND).json({ message: 'Bank validation not found' });
+            return;
+        }
+
+        res.status(OK).json({
+            data: {
+                account_holder_name: bankValidation.account_holder_name,
+                account_number: bankValidation.account_no.replace(/\d(?=\d{4})/g, '*'),
+                ifsc_code: bankValidation.ifsc_code,
+                account_type: bankValidation.account_type,
+                verification_status: bankValidation.bank_status,
+                is_completed: bankValidation.bank_status === 'verified',
+            },
+            message: 'Bank validation details fetched',
+        });
     } else if (step === CheckpointStep.ADD_NOMINEES) {
         const nominees = await db
             .selectFrom('signup_checkpoints')
@@ -1423,8 +1456,54 @@ const postCheckpoint = async (
                     .execute();
             });
 
-            res.status(CREATED).json({ message: 'Bank validation completed' });
+            res.status(CREATED).json({
+                message: 'bank-user-name',
+                data: {
+                    account_holder_name: accountHolderName,
+                },
+            });
         }
+    } else if (step === CheckpointStep.COMPLETE_BANK_VALIDATION) {
+        const bankValidation = await db
+            .selectFrom('signup_checkpoints')
+            .innerJoin('bank_to_checkpoint', 'signup_checkpoints.id', 'bank_to_checkpoint.checkpoint_id')
+            .innerJoin('bank_account', 'bank_to_checkpoint.bank_account_id', 'bank_account.id')
+            .select([
+                'bank_account.account_holder_name',
+                'bank_account.account_no',
+                'bank_account.ifsc_code',
+                'bank_account.verification',
+            ])
+            .where('signup_checkpoints.email', '=', email)
+            .where('bank_account.verification', '=', 'verified')
+            .executeTakeFirst();
+
+        if (!bankValidation) {
+            throw new ForbiddenError('Please complete bank validation first');
+        }
+
+        await db.transaction().execute(async (tx) => {
+            const checkpointId = await tx
+                .selectFrom('signup_checkpoints')
+                .select('id')
+                .where('email', '=', email)
+                .executeTakeFirstOrThrow();
+
+            await tx
+                .updateTable('signup_verification_status')
+                .set({ bank_status: 'verified', updated_at: new Date() })
+                .where('id', '=', checkpointId.id)
+                .execute();
+        });
+
+        res.status(OK).json({
+            message: 'Bank validation completed successfully',
+            data: {
+                account_holder_name: bankValidation.account_holder_name,
+                account_number: bankValidation.account_no.replace(/\d(?=\d{4})/g, '*'), // Mask account number
+                ifsc_code: bankValidation.ifsc_code,
+            },
+        });
     } else if (step === CheckpointStep.SIGNATURE) {
         const uid = randomUUID();
 
