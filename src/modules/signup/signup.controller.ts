@@ -1321,67 +1321,23 @@ const postCheckpoint = async (
                 return;
             }
 
-            await redisClient.del(`upi-validation:${email}`);
+            const upiDataKey = `upi-validation-data:${email}`;
+            await redisClient.set(
+                upiDataKey,
+                JSON.stringify({
+                    clientId: clientId,
+                    validationData: rpcResponse.data.data,
+                }),
+            );
 
-            await db.transaction().execute(async (tx) => {
-                const checkpointId = await tx
-                    .selectFrom('signup_checkpoints')
-                    .select('id')
-                    .where('email', '=', email)
-                    .executeTakeFirstOrThrow();
-
-                const deleted = await tx
-                    .deleteFrom('bank_to_checkpoint')
-                    .where('checkpoint_id', '=', checkpointId.id)
-                    .returning('bank_account_id')
-                    .execute();
-
-                if (deleted.length > 0) {
-                    await tx
-                        .deleteFrom('bank_account')
-                        .where(
-                            'id',
-                            'in',
-                            deleted.map((d) => d.bank_account_id),
-                        )
-                        .execute();
-                }
-
-                const bankId = await tx
-                    .insertInto('bank_account')
-                    .values({
-                        account_no: rpcResponse.data.data.details.account_number,
-                        ifsc_code: rpcResponse.data.data.details.ifsc,
-                        verification: 'verified',
-                        account_type: AccountType.SAVINGS,
-                        account_holder_name: rpcResponse.data.data.details.account_holder_name || null,
-                    })
-                    .onConflict((oc) =>
-                        oc.constraint('uq_bank_account').doUpdateSet((eb) => ({
-                            account_no: eb.ref('excluded.account_no'),
-                            account_holder_name: eb.ref('excluded.account_holder_name'),
-                        })),
-                    )
-                    .returning('id')
-                    .executeTakeFirstOrThrow();
-
-                await tx
-                    .insertInto('bank_to_checkpoint')
-                    .values({
-                        checkpoint_id: checkpointId.id,
-                        bank_account_id: bankId.id,
-                        is_primary: true,
-                    })
-                    .execute();
-
-                await tx
-                    .updateTable('signup_verification_status')
-                    .set({ bank_status: 'pending', updated_at: new Date() })
-                    .where('id', '=', checkpointId.id)
-                    .execute();
+            res.status(OK).json({
+                message: 'upi-user-name',
+                data: {
+                    account_holder_name: rpcResponse.data.data.details.account_holder_name,
+                    account_number: rpcResponse.data.data.details.account_number,
+                    ifsc_code: rpcResponse.data.data.details.ifsc,
+                },
             });
-
-            res.status(CREATED).json({ message: 'UPI validation completed' });
         } else {
             const { bank } = req.body;
 
@@ -1463,6 +1419,88 @@ const postCheckpoint = async (
                 },
             });
         }
+    } else if (step === CheckpointStep.COMPLETE_UPI_VALIDATION) {
+        const upiDataKey = `upi-validation-data:${email}`;
+        const upiData = await redisClient.get(upiDataKey);
+
+        if (!upiData) {
+            throw new UnauthorizedError(
+                'UPI validation data not found or expired. Please restart the UPI validation process.',
+            );
+        }
+
+        const { clientId, validationData } = JSON.parse(upiData);
+
+        await db.transaction().execute(async (tx) => {
+            const checkpointId = await tx
+                .selectFrom('signup_checkpoints')
+                .select('id')
+                .where('email', '=', email)
+                .executeTakeFirstOrThrow();
+
+            const deleted = await tx
+                .deleteFrom('bank_to_checkpoint')
+                .where('checkpoint_id', '=', checkpointId.id)
+                .returning('bank_account_id')
+                .execute();
+
+            if (deleted.length > 0) {
+                await tx
+                    .deleteFrom('bank_account')
+                    .where(
+                        'id',
+                        'in',
+                        deleted.map((d) => d.bank_account_id),
+                    )
+                    .execute();
+            }
+
+            const bankId = await tx
+                .insertInto('bank_account')
+                .values({
+                    account_no: validationData.details.account_number,
+                    ifsc_code: validationData.details.ifsc,
+                    verification: 'verified',
+                    account_type: AccountType.SAVINGS, // Default to savings for UPI
+                    account_holder_name: validationData.details.account_holder_name || null,
+                })
+                .onConflict((oc) =>
+                    oc.constraint('uq_bank_account').doUpdateSet((eb) => ({
+                        account_no: eb.ref('excluded.account_no'),
+                        account_holder_name: eb.ref('excluded.account_holder_name'),
+                    })),
+                )
+                .returning('id')
+                .executeTakeFirstOrThrow();
+
+            await tx
+                .insertInto('bank_to_checkpoint')
+                .values({
+                    checkpoint_id: checkpointId.id,
+                    bank_account_id: bankId.id,
+                    is_primary: true,
+                })
+                .execute();
+
+            await tx
+                .updateTable('signup_verification_status')
+                .set({ bank_status: 'verified', updated_at: new Date() })
+                .where('id', '=', checkpointId.id)
+                .execute();
+        });
+
+        // Clean up temporary data
+        await redisClient.del(upiDataKey);
+        await redisClient.del(`upi-validation:${email}`);
+
+        res.status(OK).json({
+            message: 'UPI validation completed successfully',
+            data: {
+                account_holder_name: validationData.details.account_holder_name,
+                account_number: validationData.details.account_number.replace(/\d(?=\d{4})/g, '*'),
+                ifsc_code: validationData.details.ifsc,
+            },
+        });
     } else if (step === CheckpointStep.COMPLETE_BANK_VALIDATION) {
         const bankValidation = await db
             .selectFrom('signup_checkpoints')
