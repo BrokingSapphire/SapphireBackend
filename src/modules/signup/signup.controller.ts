@@ -1321,10 +1321,12 @@ const postCheckpoint = async (
                         ifsc_code: rpcResponse.data.data.details.ifsc,
                         verification: 'verified',
                         account_type: AccountType.SAVINGS,
+                        account_holder_name: rpcResponse.data.data.details.account_holder_name || null,
                     })
                     .onConflict((oc) =>
                         oc.constraint('uq_bank_account').doUpdateSet((eb) => ({
                             account_no: eb.ref('excluded.account_no'),
+                            account_holder_name: eb.ref('excluded.account_holder_name'),
                         })),
                     )
                     .returning('id')
@@ -1360,6 +1362,8 @@ const postCheckpoint = async (
             if (!bankResponse.data.data.account_exists)
                 throw new UnprocessableEntityError('Bank account does not exist');
 
+            const accountHolderName = bankResponse.data.data.full_name;
+
             await db.transaction().execute(async (tx) => {
                 const checkpointId = await tx
                     .selectFrom('signup_checkpoints')
@@ -1391,11 +1395,13 @@ const postCheckpoint = async (
                         ifsc_code: bank.ifsc_code,
                         account_type: bank.account_type,
                         verification: 'verified',
+                        account_holder_name: accountHolderName,
                     })
                     .onConflict((oc) =>
                         oc.constraint('uq_bank_account').doUpdateSet((eb) => ({
                             account_no: eb.ref('excluded.account_no'),
                             account_type: eb.ref('excluded.account_type'),
+                            account_holder_name: eb.ref('excluded.account_holder_name'),
                         })),
                     )
                     .returning('id')
