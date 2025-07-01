@@ -30,3 +30,10 @@ export interface DownloadResult {
     lastModified?: Date;
     metadata?: Record<string, string>;
 }
+
+export interface PresignedUrlOptions {
+    expiresIn?: number;
+    responseContentType?: string;
+    responseContentDisposition?: string;
+    responseCacheControl?: string;
+}
