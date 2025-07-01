@@ -118,7 +118,7 @@ const updateWatchlistName = async (
                     1,
                 ),
             )
-            .returning('id')
+            .returning('watchlist.id')
             .executeTakeFirst();
 
         if (!updated) {
@@ -429,7 +429,7 @@ const updateCategoryName = async (
                     1,
                 ),
             )
-            .returning('id')
+            .returning('watchlist_category.id')
             .executeTakeFirst();
 
         if (!updated) {
@@ -456,7 +456,7 @@ const updateCategoryName = async (
                 .where('user_watchlist.id', '=', watchlistId)
                 .where('user_watchlist.user_id', '=', userId)
                 .where('watchlist_category_map.id', '=', categoryId)
-                .returning('id')
+                .returning('watchlist_category_map.id')
                 .executeTakeFirst();
         }
 
