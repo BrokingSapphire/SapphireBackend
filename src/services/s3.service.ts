@@ -10,7 +10,9 @@ import {
 import { env } from '@app/env';
 import { createReadStream } from 'fs';
 import { Readable } from 'stream';
-import { UploadOptions, UploadResult, FileInfo, DownloadResult } from './types/s3.types';
+import { UploadOptions, UploadResult, FileInfo, DownloadResult, PresignedUrlOptions } from './types/s3.types';
+import logger from '@app/logger';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 class S3Service {
     private readonly s3Client: S3Client;
@@ -127,6 +129,7 @@ class S3Service {
             Metadata: options.metadata,
             CacheControl: options.cacheControl,
             Expires: options.expires,
+            ServerSideEncryption: 'AES256',
         });
 
         const response = await this.s3Client.send(command);
@@ -138,6 +141,42 @@ class S3Service {
             location: `s3://${this.bucket}/${key}`,
             etag: response.ETag,
         };
+    }
+
+    async generatePresignedUrl(s3Key: string, options: PresignedUrlOptions = {}): Promise<string | null> {
+        try {
+            const {
+                expiresIn = 3600, // 1 hour default
+                responseContentType,
+                responseContentDisposition,
+                responseCacheControl = 'private, no-cache',
+            } = options;
+
+            const command = new GetObjectCommand({
+                Bucket: this.bucket,
+                Key: s3Key,
+                ResponseContentType: responseContentType,
+                ResponseContentDisposition: responseContentDisposition,
+                ResponseCacheControl: responseCacheControl,
+            });
+
+            const presignedUrl = await getSignedUrl(this.s3Client, command, {
+                expiresIn,
+            });
+
+            logger.info(`Generated pre-signed URL for key: ${s3Key}`, {
+                expiresIn,
+                keyLength: s3Key.length,
+            });
+
+            return presignedUrl;
+        } catch (error: any) {
+            logger.error(`Failed to generate pre-signed URL for key: ${s3Key}`, {
+                error: error.message,
+                code: error.code,
+            });
+            return null;
+        }
     }
 
     /**
