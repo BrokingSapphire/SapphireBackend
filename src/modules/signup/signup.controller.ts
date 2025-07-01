@@ -1366,7 +1366,7 @@ const postCheckpoint = async (
             res.status(OK).json({
                 message: 'upi-user-name',
                 data: {
-                    account_holder_name: rpcResponse.data.data.details.account_holder_name,
+                    account_holder_name: rpcResponse.data.data.details.holder_name,
                     account_number: rpcResponse.data.data.details.account_number,
                     ifsc_code: rpcResponse.data.data.details.ifsc,
                 },
@@ -1494,8 +1494,8 @@ const postCheckpoint = async (
                     account_no: validationData.details.account_number,
                     ifsc_code: validationData.details.ifsc,
                     verification: 'verified',
-                    account_type: AccountType.SAVINGS, // Default to savings for UPI
-                    account_holder_name: validationData.details.account_holder_name || null,
+                    account_type: AccountType.SAVINGS,
+                    account_holder_name: validationData.details.holder_name || null,
                 })
                 .onConflict((oc) =>
                     oc.constraint('uq_bank_account').doUpdateSet((eb) => ({
@@ -1529,7 +1529,7 @@ const postCheckpoint = async (
         res.status(OK).json({
             message: 'UPI validation completed successfully',
             data: {
-                account_holder_name: validationData.details.account_holder_name,
+                account_holder_name: validationData.details.holder_name,
                 account_number: validationData.details.account_number.replace(/\d(?=\d{4})/g, '*'),
                 ifsc_code: validationData.details.ifsc,
             },
