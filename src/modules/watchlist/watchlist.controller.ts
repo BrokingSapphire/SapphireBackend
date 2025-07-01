@@ -348,7 +348,7 @@ const createCategoryInWatchlist = async (
                     .select(eb.fn.countAll<number>().as('all'))
                     .where('user_watchlist_id', '=', watchlistId),
             }))
-            .onConflict((oc) => oc.constraint('uq_user_watchlist').doNothing())
+            .onConflict((oc) => oc.constraint('uq_watchlist_category_map').doNothing())
             .returning(['id', 'position_index'])
             .executeTakeFirst();
     });
