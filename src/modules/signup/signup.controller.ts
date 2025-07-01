@@ -50,12 +50,12 @@ import { sendDocumentsReceivedConfirmation } from '@app/services/notification.se
 import s3Service from '@app/services/s3.service';
 import { SmsTemplateType } from '@app/services/notifications-types/sms.types';
 import smsService from '@app/services/sms.service';
-import { fileFromPath } from 'formdata-node/file-from-path';
 import { NotNull } from 'kysely';
 import { generateMergedPDFAsync } from '@app/services/pdf-filler/generate-merge-pdf.service';
 import { compareNormalizedNames } from '@app/utils/lower-name';
 import { UpdateObjectExpression } from 'kysely/dist/cjs/parser/update-set-parser';
 import { DB } from '@app/database/db';
+import { Blob } from 'formdata-node';
 
 const requestOtp = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, RequestOtpType>,
@@ -1742,7 +1742,12 @@ const postCheckpoint = async (
             },
         });
 
-        await ESignService.uploadFileFromUrl(esignResponse.data.data.client_id, url!);
+        const file = await axios(url!, {
+            method: 'GET',
+            responseType: 'blob',
+        });
+
+        await ESignService.uploadFile(esignResponse.data.data.client_id, new Blob([file.data]));
 
         const key = `esign:${email}`;
         await redisClient.set(key, esignResponse.data.data.client_id);
