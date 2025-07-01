@@ -1710,48 +1710,167 @@ const postCheckpoint = async (
             .where('signup_checkpoints.email', '=', email)
             .executeTakeFirstOrThrow();
 
-        const url = await generateMergedPDFAsync(email);
+        // Step 1: Generate PDF URL with proper error handling
+        logger.info(`Starting PDF generation for eSign - user: ${email}`);
 
-        const esignResponse = await ESignService.initialize({
-            pdf_pre_uploaded: true,
-            expiry_minutes: 10,
-            callback_url: redirect_url,
-            config: {
-                accept_selfie: false,
-                allow_selfie_upload: false,
-                accept_virtual_sign: false,
-                track_location: false,
-                allow_download: false,
-                skip_otp: true,
-                skip_email: true,
-                auth_mode: '1',
-                reason: 'kyc',
-                positions: {
-                    '1': [
-                        {
-                            x: 100,
-                            y: 600,
-                        },
-                    ],
+        let pdfUrl: string | null = null;
+        try {
+            pdfUrl = await generateMergedPDFAsync(email);
+            logger.info(`PDF generation result for ${email}:`, { pdfUrl });
+        } catch (pdfError: any) {
+            logger.error(`PDF generation failed for ${email}:`, pdfError);
+            throw new Error(`PDF generation failed: ${pdfError.message}`);
+        }
+
+        // Step 2: Validate PDF URL
+        if (!pdfUrl) {
+            logger.error(`PDF generation returned null URL for user: ${email}`);
+            throw new Error('PDF generation failed - no URL returned');
+        }
+
+        if (typeof pdfUrl !== 'string') {
+            logger.error(`PDF generation returned invalid URL type for user: ${email}`, {
+                urlType: typeof pdfUrl,
+                urlValue: pdfUrl,
+            });
+            throw new Error(`Invalid PDF URL type: expected string, got ${typeof pdfUrl}`);
+        }
+
+        // Step 3: Validate URL format
+        try {
+            const urlObj = new URL(pdfUrl);
+            if (!urlObj.protocol.startsWith('http')) {
+                throw new Error(`Invalid URL protocol: ${urlObj.protocol}`);
+            }
+            logger.info(`PDF URL validation successful for ${email}:`, {
+                protocol: urlObj.protocol,
+                hostname: urlObj.hostname,
+            });
+        } catch (urlError: any) {
+            logger.error(`Invalid PDF URL format for user: ${email}`, {
+                url: pdfUrl,
+                error: urlError.message,
+            });
+            throw new Error(`Invalid PDF URL format: ${urlError.message}`);
+        }
+
+        // Step 4: Initialize eSign service
+        logger.info(`Initializing eSign service for user: ${email}`);
+        let esignResponse;
+        try {
+            esignResponse = await ESignService.initialize({
+                pdf_pre_uploaded: true,
+                expiry_minutes: 10,
+                callback_url: redirect_url,
+                config: {
+                    accept_selfie: false,
+                    allow_selfie_upload: false,
+                    accept_virtual_sign: false,
+                    track_location: false,
+                    allow_download: false,
+                    skip_otp: true,
+                    skip_email: true,
+                    auth_mode: '1',
+                    reason: 'kyc',
+                    positions: {
+                        '1': [
+                            {
+                                x: 100,
+                                y: 600,
+                            },
+                        ],
+                    },
                 },
-            },
-            prefill_options: {
-                full_name: checkpointData.full_name || email.split('@')[0],
-                mobile_number: phone,
-                user_email: email,
-            },
-        });
+                prefill_options: {
+                    full_name: checkpointData.full_name || email.split('@')[0],
+                    mobile_number: phone,
+                    user_email: email,
+                },
+            });
 
-        const file = await axios(url!, {
-            method: 'GET',
-            responseType: 'blob',
-        });
+            if (!esignResponse?.data?.data?.client_id) {
+                throw new Error('eSign service initialization failed - no client ID returned');
+            }
 
-        await ESignService.uploadFile(esignResponse.data.data.client_id, new Blob([file.data]));
+            logger.info(`eSign service initialized successfully for ${email}:`, {
+                clientId: esignResponse.data.data.client_id,
+            });
+        } catch (esignError: any) {
+            logger.error(`eSign service initialization failed for user: ${email}:`, esignError);
+            throw new Error(`eSign initialization failed: ${esignError.message}`);
+        }
 
+        // Step 5: Download PDF with proper error handling
+        logger.info(`Downloading PDF from URL for user: ${email}`);
+        let pdfBlob;
+        try {
+            const pdfResponse = await axios({
+                method: 'GET',
+                url: pdfUrl,
+                responseType: 'arraybuffer',
+                timeout: 60000, // 60 seconds timeout
+                maxContentLength: 50 * 1024 * 1024, // 50MB max
+                headers: {
+                    'User-Agent': 'eSign-Service/1.0',
+                    Accept: 'application/pdf, */*',
+                },
+            });
+
+            if (!pdfResponse.data) {
+                throw new Error('PDF download returned empty data');
+            }
+
+            if (pdfResponse.data.byteLength === 0) {
+                throw new Error('PDF download returned zero bytes');
+            }
+
+            pdfBlob = new Blob([pdfResponse.data], { type: 'application/pdf' });
+
+            logger.info(`PDF downloaded successfully for ${email}:`, {
+                size: pdfResponse.data.byteLength,
+                contentType: pdfResponse.headers['content-type'],
+            });
+        } catch (downloadError: any) {
+            logger.error(`PDF download failed for user: ${email}:`, {
+                url: pdfUrl,
+                error: downloadError.message,
+                code: downloadError.code,
+                status: downloadError.response?.status,
+            });
+
+            if (downloadError.code === 'ENOTFOUND') {
+                throw new Error('PDF URL not found - DNS resolution failed');
+            } else if (downloadError.code === 'ECONNREFUSED') {
+                throw new Error('PDF URL connection refused');
+            } else if (downloadError.response?.status === 404) {
+                throw new Error('PDF not found at the specified URL');
+            } else if (downloadError.response?.status === 403) {
+                throw new Error('Access denied to PDF URL');
+            } else {
+                throw new Error(`PDF download failed: ${downloadError.message}`);
+            }
+        }
+
+        // Step 6: Upload PDF to eSign service
+        logger.info(`Uploading PDF to eSign service for user: ${email}`);
+        try {
+            const uploadResult = await ESignService.uploadFile(esignResponse.data.data.client_id, pdfBlob);
+
+            logger.info(`PDF uploaded to eSign service successfully for ${email}`);
+        } catch (uploadError: any) {
+            logger.error(`eSign file upload failed for user: ${email}:`, uploadError);
+            throw new Error(`eSign file upload failed: ${uploadError.message}`);
+        }
+
+        // Step 7: Store eSign session in Redis
         const key = `esign:${email}`;
         await redisClient.set(key, esignResponse.data.data.client_id);
-        await redisClient.expire(key, 10 * 60);
+        await redisClient.expire(key, 10 * 60); // 10 minutes
+
+        logger.info(`eSign initialization completed successfully for user: ${email}`, {
+            clientId: esignResponse.data.data.client_id,
+            esignUrl: esignResponse.data.data.url,
+        });
 
         res.status(OK).json({
             data: {
