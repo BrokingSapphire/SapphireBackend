@@ -1710,7 +1710,18 @@ const postCheckpoint = async (
             .where('signup_checkpoints.email', '=', email)
             .executeTakeFirstOrThrow();
 
-        const url = await generateMergedPDFAsync(email);
+        logger.info(`Starting PDF generation for eSign - user: ${email}`);
+        const pdfUrl = await generateMergedPDFAsync(email);
+
+        if (!pdfUrl) {
+            throw new Error('PDF generation failed - no URL returned');
+        }
+
+        if (typeof pdfUrl !== 'string' || !pdfUrl.startsWith('http')) {
+            throw new Error(`Invalid PDF URL: ${pdfUrl}`);
+        }
+
+        logger.info(`PDF URL generated successfully for ${email}`);
         const esignResponse = await ESignService.initialize({
             pdf_pre_uploaded: true,
             expiry_minutes: 10,
@@ -1741,15 +1752,45 @@ const postCheckpoint = async (
             },
         });
 
-        const file = await axios(url!, {
+        const pdfResponse = await axios({
             method: 'GET',
-            responseType: 'blob',
+            url: pdfUrl,
+            responseType: 'arraybuffer',
+            timeout: 60000,
+            maxContentLength: 50 * 1024 * 1024,
+            headers: {
+                'User-Agent': 'eSign-Service/1.0',
+                Accept: 'application/pdf, */*',
+            },
         });
 
-        await ESignService.uploadFile(esignResponse.data.data.client_id, new Blob([file.data]));
+        if (!pdfResponse.data || pdfResponse.data.byteLength === 0) {
+            throw new Error('PDF download returned empty data');
+        }
+
+        // Step 4: Convert to proper Buffer
+        const pdfBuffer = Buffer.from(pdfResponse.data);
+
+        // Validate PDF header
+        if (!pdfBuffer.slice(0, 4).toString().startsWith('%PDF')) {
+            throw new Error('Downloaded file is not a valid PDF');
+        }
+
+        const pdfBlob = new Blob([pdfBuffer], { type: 'application/pdf' });
+
+        logger.info(`PDF downloaded and converted successfully for ${email}:`, {
+            bufferSize: pdfBuffer.length,
+            blobSize: pdfBlob.size,
+            isValidPDF: true,
+        });
+
+        // Step 5: Upload to eSign service
+        await ESignService.uploadFile(esignResponse.data.data.client_id, pdfBlob);
+
+        // Step 6: Store in Redis
         const key = `esign:${email}`;
         await redisClient.set(key, esignResponse.data.data.client_id);
-        await redisClient.expire(key, 10 * 60); // 10 minutes
+        await redisClient.expire(key, 10 * 60);
 
         logger.info(`eSign initialization completed successfully for user: ${email}`, {
             clientId: esignResponse.data.data.client_id,
@@ -1850,7 +1891,6 @@ const postCheckpoint = async (
         res.status(OK).json({
             message: 'eSign completed successfully',
             data: {
-                download_url: s3UploadResult?.url || downloadResponse.data.data.url,
                 signed_at: new Date().toISOString(),
             },
         });
