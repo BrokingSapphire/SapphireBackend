@@ -401,13 +401,13 @@ const updateCategoryName = async (
 ) => {
     const { userId } = req.auth!;
     const { watchlistId, categoryId } = req.params;
-    const { categoryName } = req.body;
+    const { name } = req.body;
 
     const [update, alreadyFound] = await db.transaction().execute(async (tx) => {
         const { id } = await tx
             .insertInto('watchlist_category')
             .values({
-                category: categoryName,
+                category: name,
             })
             .onConflict((oc) =>
                 oc.constraint('uq_watchlist_category').doUpdateSet((eb) => ({
@@ -566,7 +566,7 @@ const deleteCategory = async (
                     qc
                         .selectFrom('watchlist_category_map')
                         .innerJoin('user_watchlist', 'user_watchlist.id', 'watchlist_category_map.user_watchlist_id')
-                        .select('id')
+                        .select('watchlist_category_map.id')
                         .where('user_watchlist.id', '=', watchlistId)
                         .where('user_watchlist.user_id', '=', userId)
                         .where('category_id', 'is', null),

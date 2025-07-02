@@ -22,7 +22,7 @@ export type UpdatePositionPayload = {
 
 // Category Operations
 export type WatchlistCategoryCreate = {
-    categoryName: string;
+    name: string;
 };
 
 export type DeleteCategoryOptions = {
