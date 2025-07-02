@@ -56,6 +56,7 @@ import { compareNormalizedNames } from '@app/utils/lower-name';
 import { UpdateObjectExpression } from 'kysely/dist/cjs/parser/update-set-parser';
 import { DB } from '@app/database/db';
 import { Blob } from 'formdata-node';
+import { IFSCService } from '@app/services/razorpay/ifsc.service';
 
 const requestOtp = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, RequestOtpType>,
@@ -1374,6 +1375,30 @@ const postCheckpoint = async (
         } else {
             const { bank } = req.body;
 
+            const ifscService = new IFSCService();
+            const ifscResponse = await ifscService.lookup(bank.ifsc_code);
+
+            if (ifscResponse.status === 404) {
+                throw new UnprocessableEntityError('Invalid IFSC code');
+            }
+
+            const ifscDetails = ifscResponse.data;
+
+            // Validate IFSC supports required services
+            if (!ifscDetails.NEFT && !ifscDetails.RTGS) {
+                throw new UnprocessableEntityError('IFSC code does not support NEFT/RTGS transactions');
+            }
+
+            logger.info(`IFSC validation successful for ${bank.ifsc_code}`, {
+                bank: ifscDetails.BANK,
+                branch: ifscDetails.BRANCH,
+                city: ifscDetails.CITY,
+                rtgs: ifscDetails.RTGS,
+                neft: ifscDetails.NEFT,
+                imps: ifscDetails.IMPS,
+                upi: ifscDetails.UPI,
+            });
+
             const verification = new BankVerification();
             const bankResponse = await verification.verification({
                 id_number: bank.account_number,
@@ -1449,6 +1474,12 @@ const postCheckpoint = async (
                 message: 'bank-user-name',
                 data: {
                     account_holder_name: accountHolderName,
+                    bank_details: {
+                        bank_name: ifscDetails.BANK,
+                        city: ifscDetails.CITY.toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase()),
+                        district: ifscDetails.DISTRICT.toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase()),
+                        state: ifscDetails.STATE.toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase()),
+                    },
                 },
             });
         }
