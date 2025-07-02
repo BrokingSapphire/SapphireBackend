@@ -176,6 +176,18 @@ const CheckpointSchema = Joi.object({
     }),
 });
 
+const ValidateIfscSchema = Joi.object({
+    ifsc_code: Joi.string()
+        .length(11)
+        .pattern(/^[A-Z]{4}0[A-Z0-9]{6}$/)
+        .required()
+        .messages({
+            'string.length': 'IFSC code must be exactly 11 characters',
+            'string.pattern.base': 'Invalid IFSC code format',
+            'any.required': 'IFSC code is required',
+        }),
+});
+
 const SetupMpinSchema = Joi.object({
     mpin: Joi.string()
         .pattern(/^[0-9]{4}$/)
@@ -207,4 +219,12 @@ const SetupPasswordSchema = Joi.object({
     }),
 });
 
-export { RequestOtpSchema, ResendOtpSchema, VerifyOtpSchema, CheckpointSchema, SetupMpinSchema, SetupPasswordSchema };
+export {
+    RequestOtpSchema,
+    ResendOtpSchema,
+    VerifyOtpSchema,
+    CheckpointSchema,
+    SetupMpinSchema,
+    SetupPasswordSchema,
+    ValidateIfscSchema,
+};

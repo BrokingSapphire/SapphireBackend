@@ -6,6 +6,7 @@ import {
     VerifyOtpSchema,
     SetupMpinSchema,
     SetupPasswordSchema,
+    ValidateIfscSchema,
 } from './signup.validator';
 import { validate } from '@app/middlewares';
 import {
@@ -25,6 +26,7 @@ import {
     verifyOtp,
     setupMpin,
     setupPassword,
+    validateIfsc,
 } from './signup.controller';
 import { jwtMiddleware } from '@app/utils/jwt';
 
@@ -103,6 +105,64 @@ router.post('/resend-otp', validate(ResendOtpSchema), resendOtp);
  *         description: Email or phone number not found
  */
 router.post('/verify-otp', validate(VerifyOtpSchema), verifyOtp);
+
+/**
+ * @swagger
+ * /validate-ifsc:
+ *   post:
+ *     tags: [Signup]
+ *     summary: Validate IFSC code and get bank details
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               ifsc_code:
+ *                 type: string
+ *                 description: IFSC code to validate
+ *                 example: "ICIC0000001"
+ *             required:
+ *               - ifsc_code
+ *     responses:
+ *       200:
+ *         description: IFSC code validated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     ifsc_code:
+ *                       type: string
+ *                     bank_details:
+ *                       type: object
+ *                       properties:
+ *                         bank_name:
+ *                           type: string
+ *                         branch_name:
+ *                           type: string
+ *                         city:
+ *                           type: string
+ *                         district:
+ *                           type: string
+ *                         state:
+ *                           type: string
+ *       400:
+ *         description: IFSC code is required
+ *       422:
+ *         description: Invalid IFSC code or IFSC does not support NEFT/RTGS
+ *       401:
+ *         description: Unauthorized
+ */
+router.post('/validate-ifsc', jwtMiddleware, validate(ValidateIfscSchema), validateIfsc);
 
 router.get('/checkpoint/:step', jwtMiddleware, getCheckpoint);
 

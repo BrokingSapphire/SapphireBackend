@@ -1374,31 +1374,6 @@ const postCheckpoint = async (
             });
         } else {
             const { bank } = req.body;
-
-            const ifscService = new IFSCService();
-            const ifscResponse = await ifscService.lookup(bank.ifsc_code);
-
-            if (ifscResponse.status === 404) {
-                throw new UnprocessableEntityError('Invalid IFSC code');
-            }
-
-            const ifscDetails = ifscResponse.data;
-
-            // Validate IFSC supports required services
-            if (!ifscDetails.NEFT && !ifscDetails.RTGS) {
-                throw new UnprocessableEntityError('IFSC code does not support NEFT/RTGS transactions');
-            }
-
-            logger.info(`IFSC validation successful for ${bank.ifsc_code}`, {
-                bank: ifscDetails.BANK,
-                branch: ifscDetails.BRANCH,
-                city: ifscDetails.CITY,
-                rtgs: ifscDetails.RTGS,
-                neft: ifscDetails.NEFT,
-                imps: ifscDetails.IMPS,
-                upi: ifscDetails.UPI,
-            });
-
             const verification = new BankVerification();
             const bankResponse = await verification.verification({
                 id_number: bank.account_number,
@@ -1474,12 +1449,6 @@ const postCheckpoint = async (
                 message: 'bank-user-name',
                 data: {
                     account_holder_name: accountHolderName,
-                    bank_details: {
-                        bank_name: ifscDetails.BANK,
-                        city: ifscDetails.CITY.toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase()),
-                        district: ifscDetails.DISTRICT.toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase()),
-                        state: ifscDetails.STATE.toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase()),
-                    },
                 },
             });
         }
@@ -1928,6 +1897,44 @@ const postCheckpoint = async (
     }
 };
 
+const validateIfsc = async (
+    req: Request<JwtType, ParamsDictionary, DefaultResponseData, { ifsc_code: string }>,
+    res: Response,
+) => {
+    const { ifsc_code } = req.body;
+
+    if (!ifsc_code || ifsc_code.trim().length === 0) {
+        throw new BadRequestError('IFSC code is required');
+    }
+
+    const ifscService = new IFSCService();
+    const ifscResponse = await ifscService.lookup(ifsc_code.toUpperCase());
+
+    if (ifscResponse.status === 404) {
+        throw new UnprocessableEntityError('Invalid IFSC code');
+    }
+
+    const ifscDetails = ifscResponse.data;
+
+    if (!ifscDetails.NEFT && !ifscDetails.RTGS) {
+        throw new UnprocessableEntityError('IFSC code does not support NEFT/RTGS transactions');
+    }
+
+    res.status(OK).json({
+        message: 'IFSC code validated successfully',
+        data: {
+            ifsc_code: ifsc_code.toUpperCase(),
+            bank_details: {
+                bank_name: ifscDetails.BANK,
+                branch_name: ifscDetails.BRANCH.toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase()),
+                city: ifscDetails.CITY.toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase()),
+                district: ifscDetails.DISTRICT.toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase()),
+                state: ifscDetails.STATE.toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase()),
+            },
+        },
+    });
+};
+
 const setupMpin = async (
     req: Request<JwtType, ParamsDictionary, DefaultResponseData, SetupMpinType>,
     res: Response,
@@ -2339,4 +2346,5 @@ export {
     finalizeSignup,
     setupMpin,
     setupPassword,
+    validateIfsc,
 };
