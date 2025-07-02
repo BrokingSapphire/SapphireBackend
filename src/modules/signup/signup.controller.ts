@@ -1387,30 +1387,46 @@ const postCheckpoint = async (
             const accountHolderName = bankResponse.data.data.full_name;
 
             await db.transaction().execute(async (tx) => {
-                const checkpointId = await tx
+                const checkpoint = await tx
                     .selectFrom('signup_checkpoints')
                     .select('id')
                     .where('email', '=', email)
                     .executeTakeFirstOrThrow();
 
-                const deleted = await tx
-                    .deleteFrom('bank_to_checkpoint')
-                    .where('checkpoint_id', '=', checkpointId.id)
-                    .returning('bank_account_id')
+                const checkpointId = checkpoint.id;
+
+                // STEP 1: Get old bank relations for this checkpoint
+                const existingRelations = await tx
+                    .selectFrom('bank_to_checkpoint')
+                    .select('bank_account_id')
+                    .where('checkpoint_id', '=', checkpointId)
                     .execute();
 
-                if (deleted.length > 0) {
-                    await tx
-                        .deleteFrom('bank_account')
-                        .where(
-                            'id',
-                            'in',
-                            deleted.map((d) => d.bank_account_id),
-                        )
-                        .execute();
+                // STEP 2: Remove bank_to_checkpoint entries
+                await tx.deleteFrom('bank_to_checkpoint').where('checkpoint_id', '=', checkpointId).execute();
+                // STEP 3: Clean up unused bank_account entries
+                for (const relation of existingRelations) {
+                    const bankId = relation.bank_account_id;
+
+                    const stillUsedInCheckpoint = await tx
+                        .selectFrom('bank_to_checkpoint')
+                        .select('checkpoint_id')
+                        .where('bank_account_id', '=', bankId)
+                        .executeTakeFirst();
+
+                    const stillUsedInUser = await tx
+                        .selectFrom('bank_to_user')
+                        .select('user_id')
+                        .where('bank_account_id', '=', bankId)
+                        .executeTakeFirst();
+
+                    if (!stillUsedInCheckpoint && !stillUsedInUser) {
+                        await tx.deleteFrom('bank_account').where('id', '=', bankId).execute();
+                    }
                 }
 
-                const bankId = await tx
+                // STEP 4: Insert new bank_account (upsert pattern)
+                const newBank = await tx
                     .insertInto('bank_account')
                     .values({
                         account_no: bank.account_number,
@@ -1429,27 +1445,27 @@ const postCheckpoint = async (
                     .returning('id')
                     .executeTakeFirstOrThrow();
 
+                // STEP 5: Link to checkpoint
                 await tx
                     .insertInto('bank_to_checkpoint')
                     .values({
-                        checkpoint_id: checkpointId.id,
-                        bank_account_id: bankId.id,
+                        checkpoint_id: checkpointId,
+                        bank_account_id: newBank.id,
                         is_primary: true,
                     })
                     .execute();
 
+                // STEP 6: Update verification status
                 await tx
                     .updateTable('signup_verification_status')
                     .set({ bank_status: 'pending', updated_at: new Date() })
-                    .where('id', '=', checkpointId.id)
+                    .where('id', '=', checkpointId)
                     .execute();
             });
 
             res.status(CREATED).json({
                 message: 'bank-user-name',
-                data: {
-                    account_holder_name: accountHolderName,
-                },
+                data: { account_holder_name: accountHolderName },
             });
         }
     } else if (step === CheckpointStep.COMPLETE_UPI_VALIDATION) {
