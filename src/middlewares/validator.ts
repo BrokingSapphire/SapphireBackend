@@ -23,7 +23,19 @@ const validate = <
     ) => {
         const { value, error } = schema.validate(req[validationSelector], { abortEarly: false });
         if (error) throw new BadRequestError(error.message);
-        req[validationSelector] = value;
+
+        if (validationSelector === 'query') {
+            const newQuery = { ...value };
+            Object.defineProperty(req, 'query', {
+                value: newQuery,
+                writable: true,
+                enumerable: true,
+                configurable: true,
+            });
+        } else {
+            req[validationSelector] = value;
+        }
+
         next();
     };
 };

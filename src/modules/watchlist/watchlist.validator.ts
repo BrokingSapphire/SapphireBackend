@@ -13,7 +13,7 @@ export const WatchlistCategoryParamSchema = Joi.object({
 
 // --- PAYLOAD SCHEMAS (BODY) ---
 export const NamePayloadSchema = Joi.object({
-    name: Joi.string().max(100).required(),
+    name: Joi.string().max(20).required(),
 });
 
 export const UpdatePositionPayloadSchema = Joi.object({

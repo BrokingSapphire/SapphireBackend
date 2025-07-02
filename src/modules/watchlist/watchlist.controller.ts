@@ -1,6 +1,6 @@
 import { ParamsDictionary } from 'express-serve-static-core';
 import { Request, Response, DefaultResponseData } from '@app/types';
-import { CREATED, NOT_FOUND, OK } from '@app/utils/httpstatus';
+import { BAD_REQUEST, CREATED, NOT_FOUND, OK } from '@app/utils/httpstatus';
 import { db } from '@app/database';
 import { DB } from '@app/database/db.d';
 import { SessionJwtType } from '@app/modules/common.types';
@@ -100,56 +100,52 @@ const updateWatchlistName = async (
     const { watchlistId } = req.params;
     const { name } = req.body;
 
-    const found = await db.transaction().execute(async (tx) => {
-        let updated = await tx
-            .updateTable('watchlist')
-            .from('user_watchlist')
-            .set({ name })
-            .whereRef('user_watchlist.watchlist_id', '=', 'watchlist.id')
-            .where('user_watchlist.id', '=', watchlistId)
-            .where('user_watchlist.user_id', '=', userId)
-            .where((eb) =>
-                eb(
-                    eb
-                        .selectFrom('user_watchlist')
-                        .select(eb.fn.countAll<number>().as('all'))
-                        .whereRef('watchlist_id', '=', 'watchlist.id'),
-                    '=',
-                    1,
-                ),
+    const [update, alreadyFound] = await db.transaction().execute(async (tx) => {
+        const { id } = await tx
+            .insertInto('watchlist')
+            .values({
+                name,
+            })
+            .onConflict((oc) =>
+                oc.constraint('uq_watchlist').doUpdateSet((eb) => ({
+                    name: eb.ref('excluded.name'),
+                })),
             )
-            .returning('watchlist.id')
+            .returning('id')
+            .executeTakeFirstOrThrow();
+
+        const existingUserWatchlist = await tx
+            .selectFrom('user_watchlist')
+            .select('id')
+            .where('user_id', '=', userId)
+            .where('watchlist_id', '=', id)
             .executeTakeFirst();
 
-        if (!updated) {
-            const { id } = await tx
-                .insertInto('watchlist')
-                .values({
-                    name,
-                })
-                .onConflict((oc) =>
-                    oc.constraint('uq_watchlist').doUpdateSet((eb) => ({
-                        name: eb.ref('excluded.name'),
-                    })),
-                )
-                .returning('id')
-                .executeTakeFirstOrThrow();
-
-            updated = await tx
-                .updateTable('user_watchlist')
-                .set({
-                    watchlist_id: id,
-                })
-                .where('id', '=', watchlistId)
-                .where('user_id', '=', userId)
-                .returning('id')
-                .executeTakeFirst();
+        if (existingUserWatchlist) {
+            return [false, true];
         }
 
-        return updated !== null;
+        const updated = await tx
+            .updateTable('user_watchlist')
+            .set({
+                watchlist_id: id,
+            })
+            .where('id', '=', watchlistId)
+            .where('user_id', '=', userId)
+            .returning('id')
+            .executeTakeFirst();
+
+        return [updated !== null, false];
     });
 
-    if (!found) {
+    if (alreadyFound) {
+        res.status(BAD_REQUEST).json({
+            message: 'Watchlist with this name already exists.',
+        });
+        return;
+    }
+
+    if (!update) {
         res.status(NOT_FOUND).json({ message: 'Watchlist not found.' });
         return;
     }
@@ -386,7 +382,7 @@ const getAllCategoriesOfWatchlist = async (req: Request<SessionJwtType, Watchlis
             'watchlist_category.category as categoryName',
             'watchlist_category_map.position_index as positionIndex',
         ])
-        .where('user_watchlist.watchlist_id', '=', watchlistId)
+        .where('user_watchlist.id', '=', watchlistId)
         .where('user_watchlist.user_id', '=', userId)
         .orderBy('watchlist_category_map.position_index', 'asc')
         .execute();
@@ -407,66 +403,61 @@ const updateCategoryName = async (
     const { watchlistId, categoryId } = req.params;
     const { categoryName } = req.body;
 
-    const found = await db.transaction().execute(async (tx) => {
-        let updated = await tx
-            .updateTable('watchlist_category')
-            .from(['watchlist_category_map', 'user_watchlist'])
-            .set({
+    const [update, alreadyFound] = await db.transaction().execute(async (tx) => {
+        const { id } = await tx
+            .insertInto('watchlist_category')
+            .values({
                 category: categoryName,
             })
-            .whereRef('watchlist_category_map.category_id', '=', 'watchlist_category.id')
+            .onConflict((oc) =>
+                oc.constraint('uq_watchlist_category').doUpdateSet((eb) => ({
+                    category: eb.ref('excluded.category'),
+                })),
+            )
+            .returning('id')
+            .executeTakeFirstOrThrow();
+
+        const existingCategoryMap = await tx
+            .selectFrom('watchlist_category_map')
+            .innerJoin('user_watchlist', 'user_watchlist.id', 'watchlist_category_map.user_watchlist_id')
+            .select('watchlist_category_map.id')
+            .where('user_watchlist.id', '=', watchlistId)
+            .where('user_watchlist.user_id', '=', userId)
+            .where('watchlist_category_map.category_id', '=', id)
+            .executeTakeFirst();
+
+        if (existingCategoryMap) {
+            return [false, true];
+        }
+
+        const updated = await tx
+            .updateTable('watchlist_category_map')
+            .from('user_watchlist')
+            .set({
+                category_id: id,
+            })
             .whereRef('user_watchlist.id', '=', 'watchlist_category_map.user_watchlist_id')
             .where('user_watchlist.id', '=', watchlistId)
             .where('user_watchlist.user_id', '=', userId)
             .where('watchlist_category_map.id', '=', categoryId)
-            .where((eb) =>
-                eb(
-                    eb
-                        .selectFrom('watchlist_category_map')
-                        .select(eb.fn.countAll<number>().as('all'))
-                        .whereRef('category_id', '=', 'watchlist_category.id'),
-                    '=',
-                    1,
-                ),
-            )
-            .returning('watchlist_category.id')
+            .returning('watchlist_category_map.id')
             .executeTakeFirst();
 
-        if (!updated) {
-            const { id } = await tx
-                .insertInto('watchlist_category')
-                .values({
-                    category: categoryName,
-                })
-                .onConflict((oc) =>
-                    oc.constraint('uq_watchlist_category').doUpdateSet((eb) => ({
-                        category: eb.ref('excluded.category'),
-                    })),
-                )
-                .returning('id')
-                .executeTakeFirstOrThrow();
-
-            updated = await tx
-                .updateTable('watchlist_category_map')
-                .from('user_watchlist')
-                .set({
-                    category_id: id,
-                })
-                .whereRef('user_watchlist.id', '=', 'watchlist_category_map.user_watchlist_id')
-                .where('user_watchlist.id', '=', watchlistId)
-                .where('user_watchlist.user_id', '=', userId)
-                .where('watchlist_category_map.id', '=', categoryId)
-                .returning('watchlist_category_map.id')
-                .executeTakeFirst();
-        }
-
-        return updated !== null;
+        return [updated !== null, false];
     });
 
-    if (!found) {
+    if (alreadyFound) {
+        res.status(BAD_REQUEST).json({
+            message: 'Category with this name already exists.',
+        });
+        return;
+    }
+
+    if (!update) {
         res.status(NOT_FOUND).json({ message: 'Category not found.' });
         return;
     }
+
     res.status(OK).json({ message: 'Category name updated successfully.' });
 };
 
@@ -766,7 +757,7 @@ const getWatchlistEntries = async (
         .where('watchlist_category_map.id', '=', categoryId)
         .where('user_watchlist.id', '=', watchlistId)
         .where('user_watchlist.user_id', '=', userId)
-        .orderBy('position_index', 'asc')
+        .orderBy('user_watchlist_entry.position_index', 'asc')
         .offset(offset)
         .limit(limit)
         .execute();
