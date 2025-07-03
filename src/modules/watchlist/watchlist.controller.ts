@@ -100,6 +100,17 @@ const updateWatchlistName = async (
     const { watchlistId } = req.params;
     const { name } = req.body;
 
+    const wid = await db
+        .selectFrom('user_watchlist')
+        .select('watchlist_id')
+        .where('id', '=', watchlistId)
+        .executeTakeFirstOrThrow();
+
+    if (!wid.watchlist_id) {
+        res.status(BAD_REQUEST).json({ message: 'Cannot rename default watchlist.' });
+        return;
+    }
+
     const [update, alreadyFound] = await db.transaction().execute(async (tx) => {
         const { id } = await tx
             .insertInto('watchlist')
@@ -372,11 +383,9 @@ const getAllCategoriesOfWatchlist = async (req: Request<SessionJwtType, Watchlis
     const categoriesData = await db
         .selectFrom('user_watchlist')
         .innerJoin('watchlist_category_map', (join) =>
-            join
-                .onRef('watchlist_category_map.user_watchlist_id', '=', 'user_watchlist.id')
-                .on('watchlist_category_map.category_id', 'is not', null),
+            join.onRef('watchlist_category_map.user_watchlist_id', '=', 'user_watchlist.id'),
         )
-        .innerJoin('watchlist_category', 'watchlist_category.id', 'watchlist_category_map.category_id')
+        .leftJoin('watchlist_category', 'watchlist_category.id', 'watchlist_category_map.category_id')
         .select([
             'watchlist_category_map.id as id',
             'watchlist_category.category as categoryName',
@@ -402,6 +411,17 @@ const updateCategoryName = async (
     const { userId } = req.auth!;
     const { watchlistId, categoryId } = req.params;
     const { name } = req.body;
+
+    const cid = await db
+        .selectFrom('watchlist_category_map')
+        .select('category_id')
+        .where('id', '=', categoryId)
+        .executeTakeFirstOrThrow();
+
+    if (!cid.category_id) {
+        res.status(BAD_REQUEST).json({ message: 'Cannot rename default category.' });
+        return;
+    }
 
     const [update, alreadyFound] = await db.transaction().execute(async (tx) => {
         const { id } = await tx
