@@ -1,6 +1,9 @@
 import * as fs from 'fs';
 import * as pdf from 'html-pdf';
 import AadhaarXMLParser from './aadhaar-xml.parser';
+import s3Service from '@app/services/s3.service';
+import { db } from '@app/database';
+import logger from '@app/logger';
 
 export interface AadhaarData {
     name?: string;
@@ -9,6 +12,7 @@ export interface AadhaarData {
     address?: string;
     aadhaarNumber?: string;
     photo?: string;
+    photoS3Url?: string;
     validTill?: string;
     doi?: string;
 }
@@ -253,5 +257,69 @@ export class AadhaarConverter {
                 resolve(buffer);
             });
         });
+    }
+
+    // save aadhar-photo to S3
+    public async extractAadhaarDataWithS3Upload(
+        xmlData: string,
+        uploadPhotoToS3?: boolean,
+        s3PhotoFolder?: string,
+    ): Promise<AadhaarData> {
+        const aadhaarData = this.parseXmlData(xmlData);
+
+        if (uploadPhotoToS3 && aadhaarData.photo) {
+            try {
+                const photoS3Url = await this.uploadPhotoToS3(
+                    aadhaarData.photo,
+                    aadhaarData.aadhaarNumber || 'unknown',
+                    s3PhotoFolder,
+                );
+                aadhaarData.photoS3Url = photoS3Url;
+            } catch (error) {
+                logger.error('Failed to upload photo to S3:', error);
+            }
+        }
+
+        return aadhaarData;
+    }
+
+    private async uploadPhotoToS3(photoBase64: string, aadhaarNumber: string, folder?: string): Promise<string> {
+        const sanitizedAadhaarNumber = aadhaarNumber.replace(/\D/g, '');
+        const timestamp = Date.now();
+        const filename = `aadhaar_photo_${sanitizedAadhaarNumber}_${timestamp}.jpg`;
+
+        // Upload options
+        const uploadOptions = {
+            folder: 'aadhaar-photos',
+            contentType: 'image/jpeg',
+            metadata: {
+                aadhaarNumber: sanitizedAadhaarNumber,
+                uploadedAt: new Date().toISOString(),
+                source: 'aadhaar_xml',
+            },
+        };
+
+        try {
+            const uploadResult = await s3Service.uploadFromBase64(photoBase64, filename, uploadOptions);
+
+            logger.info(`Photo uploaded to S3: ${uploadResult.url}`);
+
+            await this.savePhotoUrlToDb(uploadResult.url, aadhaarNumber);
+            return uploadResult.url;
+        } catch (error) {
+            logger.error('S3 upload error:', error);
+            throw new Error(`Failed to upload photo to S3: ${error}`);
+        }
+    }
+    private async savePhotoUrlToDb(photoS3Url: string, aadhaarNumber: string): Promise<void> {
+        try {
+            await db
+                .updateTable('aadhaar_detail')
+                .set({ photo_s3_url: photoS3Url })
+                .where('masked_aadhaar_no', '=', aadhaarNumber)
+                .execute();
+        } catch (error) {
+            logger.error('Failed to save photo URL to database:', error);
+        }
     }
 }
