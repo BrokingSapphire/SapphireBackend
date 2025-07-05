@@ -28,6 +28,7 @@ import {
 import { CredentialsType, ResponseWithToken } from '@app/modules/common.types';
 import DigiLockerService from '@app/services/surepass/digilocker.service';
 import ESignService from '@app/services/surepass/esign.service';
+import deviceTrackingService from '@app/services/deviceip.service';
 import AadhaarXMLParser from '@app/utils/aadhaar-xml.parser';
 import { AadhaarConverter } from '@app/utils/aadhaar-xml-to-pdf';
 import { sign } from '@app/utils/jwt';
@@ -57,6 +58,48 @@ import { UpdateObjectExpression } from 'kysely/dist/cjs/parser/update-set-parser
 import { DB } from '@app/database/db';
 import { Blob } from 'formdata-node';
 import { IFSCService } from '@app/services/razorpay/ifsc.service';
+
+// storing the Device IP
+const storeSignupIp = async (req: Request, email: string) => {
+    try {
+        // Check if IP is already stored for this email
+        const existingIp = await db.selectFrom('signup_ip').select('id').where('email', '=', email).executeTakeFirst();
+
+        if (existingIp) {
+            logger.info(`IP already stored for email ${email}, skipping`);
+            return;
+        }
+
+        const deviceInfo = await deviceTrackingService.getDeviceInfo(req);
+
+        logger.info(`Storing IP info for email ${email}`, {
+            email,
+            ip: deviceInfo.ip,
+            location: deviceInfo.location,
+            device: deviceInfo.device,
+            timestamp: deviceInfo.timestamp,
+        });
+
+        await db
+            .insertInto('signup_ip')
+            .values({
+                email,
+                ip_address: deviceInfo.ip,
+                user_agent: deviceInfo.device.userAgent,
+                browser: deviceInfo.device.browser || null,
+                device: deviceInfo.device.device || null,
+                device_type: deviceInfo.device.deviceType || null,
+                location_country: deviceInfo.location.country || null,
+                location_region: deviceInfo.location.region || null,
+                location_city: deviceInfo.location.city || null,
+            })
+            .execute();
+
+        logger.info(`IP information stored successfully for email ${email}`);
+    } catch (error) {
+        logger.error(`Failed to store IP information for email ${email}:`, error);
+    }
+};
 
 const requestOtp = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, RequestOtpType>,
@@ -225,6 +268,8 @@ const verifyOtp = async (
             }
         });
 
+        // store IP
+        await storeSignupIp(req, email);
         const token = sign<JwtType>({ email, phone });
 
         res.status(OK).json({ message: 'OTP verified', token, data: { clientId: client_id } });
