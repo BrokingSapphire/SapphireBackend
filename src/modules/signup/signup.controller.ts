@@ -1110,8 +1110,6 @@ const postCheckpoint = async (
             logger.warn(`No bank verification data found for user ${email}, setting doubt flag`);
         }
 
-        await redisClient.del(mismatchKey);
-
         await db.transaction().execute(async (tx) => {
             const address = parserData.address;
             const permanentAddressId = await insertAddressGetId(tx, {
@@ -1183,6 +1181,9 @@ const postCheckpoint = async (
                 .where('id', '=', checkpoint.id)
                 .execute();
         });
+
+        await redisClient.del(mismatchKey);
+
         const responseMessage = shouldSetDoubt
             ? 'Aadhaar verification completed with manual review required due to name verification failure'
             : 'Aadhaar verification completed successfully';
