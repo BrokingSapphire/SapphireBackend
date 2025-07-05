@@ -799,15 +799,15 @@ const finalizeVerification = async (req: Request, res: Response) => {
         await trx
             .insertInto('watchlist_category_map')
             .values([
+                {
+                    user_watchlist_id: watchlist.id,
+                    position_index: 0,
+                },
                 ...categories.map((cat, index) => ({
                     user_watchlist_id: watchlist.id,
                     category_id: cat.id,
-                    position_index: index,
+                    position_index: index + 1,
                 })),
-                {
-                    user_watchlist_id: watchlist.id,
-                    position_index: categories.length,
-                },
             ])
             .execute();
 
@@ -1020,15 +1020,15 @@ const autoFinalVerification = async (req: Request, res: Response) => {
         await trx
             .insertInto('watchlist_category_map')
             .values([
+                {
+                    user_watchlist_id: watchlist.id,
+                    position_index: 0,
+                },
                 ...categories.map((cat, index) => ({
                     user_watchlist_id: watchlist.id,
                     category_id: cat.id,
-                    position_index: index,
+                    position_index: index + 1,
                 })),
-                {
-                    user_watchlist_id: watchlist.id,
-                    position_index: categories.length,
-                },
             ])
             .execute();
 

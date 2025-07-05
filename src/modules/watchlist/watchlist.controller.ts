@@ -41,7 +41,7 @@ const createWatchlist = async (
             .returning('id')
             .executeTakeFirstOrThrow();
 
-        return await tx
+        const uwl = await tx
             .insertInto('user_watchlist')
             .values((eb) => ({
                 user_id: userId,
@@ -54,6 +54,21 @@ const createWatchlist = async (
             .onConflict((oc) => oc.constraint('uq_user_watchlist').doNothing())
             .returning(['id', 'position_index'])
             .executeTakeFirst();
+
+        if (!uwl) {
+            return null;
+        }
+
+        await tx
+            .insertInto('watchlist_category_map')
+            .values({
+                user_watchlist_id: uwl.id,
+                position_index: 0,
+            })
+            .onConflict((oc) => oc.constraint('uq_watchlist_category_map').doNothing())
+            .executeTakeFirstOrThrow();
+
+        return uwl;
     });
 
     if (result) {
@@ -241,6 +256,18 @@ const updateWatchlistPosition = async (
 const deleteWatchlist = async (req: Request<SessionJwtType, WatchlistParam>, res: Response) => {
     const { userId } = req.auth!;
     const { watchlistId } = req.params;
+
+    const wid = await db
+        .selectFrom('user_watchlist')
+        .select('watchlist_id')
+        .where('id', '=', watchlistId)
+        .where('user_id', '=', userId)
+        .executeTakeFirstOrThrow();
+
+    if (!wid.watchlist_id) {
+        res.status(BAD_REQUEST).json({ message: 'Cannot delete default watchlist.' });
+        return;
+    }
 
     await db.transaction().execute(async (tx) => {
         await tx
@@ -578,6 +605,20 @@ const deleteCategory = async (
     const { userId } = req.auth!;
     const { watchlistId, categoryId } = req.params;
     const { moveElementsToUncategorized } = req.query;
+
+    const cid = await db
+        .selectFrom('watchlist_category_map')
+        .innerJoin('user_watchlist', 'user_watchlist.id', 'watchlist_category_map.user_watchlist_id')
+        .select('watchlist_category_map.category_id')
+        .where('watchlist_category_map.id', '=', categoryId)
+        .where('user_watchlist.id', '=', watchlistId)
+        .where('user_watchlist.user_id', '=', userId)
+        .executeTakeFirstOrThrow();
+
+    if (!cid.category_id) {
+        res.status(BAD_REQUEST).json({ message: 'Cannot delete default category.' });
+        return;
+    }
 
     await db.transaction().execute(async (tx) => {
         if (moveElementsToUncategorized) {
