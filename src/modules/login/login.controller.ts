@@ -47,6 +47,30 @@ const formatName = (name: string): string => {
         .join(' ');
 };
 
+const isFirstLoginOfDay = async (userId: string): Promise<boolean> => {
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
+
+    logger.info(`Checking first login for user ${userId}`);
+    logger.info(`Current time: ${now.toISOString()}`);
+    logger.info(`Checking login history from: ${startOfDay.toISOString()} to: ${endOfDay.toISOString()}`);
+
+    const todayLogin = await db
+        .selectFrom('user_login_history')
+        .select('id')
+        .where('user_id', '=', userId)
+        .where('success', '=', true)
+        .where('login_time', '>=', startOfDay) // From 00:00:00 today
+        .where('login_time', '<', endOfDay) // Until 00:00:00 tomorrow (exclusive)
+        .executeTakeFirst();
+
+    const isFirstLogin = !todayLogin;
+    logger.info(`Is first login of day: ${isFirstLogin}`);
+
+    return isFirstLogin; // Return true if no successful login
+};
+
 const login = async (
     req: Request<undefined, ParamsDictionary, DefaultResponseData, LoginRequestType>,
     res: Response,
@@ -666,6 +690,8 @@ const verifyMpin = async (
         throw new UnauthorizedError('Invalid MPIN');
     }
 
+    const isFirstLogin = await isFirstLoginOfDay(userId);
+
     await db
         .updateTable('user_mpin')
         .set({
@@ -714,10 +740,20 @@ const verifyMpin = async (
         location: 'Unknown Location',
     });
 
+    if (isFirstLogin) {
+        logger.info('First login of the day detected', {
+            userId,
+            userEmail: session.email,
+            requestIp: deviceInfo.ip,
+            timestamp: new Date().toISOString(),
+        });
+    }
+
     res.status(OK).json({
         message: 'Login successful',
         token,
         firstName: session.userName,
+        isFirstLoginOfDay: isFirstLogin,
     } as any);
 };
 
