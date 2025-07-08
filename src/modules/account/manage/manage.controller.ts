@@ -17,21 +17,69 @@ import {
     VerifyDematFreezeOtpType,
     InitiateDematFreezeRequest,
     ResendDematFreezeOtpType,
+    ResendSegmentActivationOtpType,
+    VerifySegmentActivationOtpType,
 } from './manage.types';
 import redisClient from '@app/services/redis.service';
 import { EmailOtpVerification } from '@app/services/otp.service';
 import SRNGenerator from '@app/services/srn-generator';
+import { randomUUID } from 'crypto';
 
+const getCurrentSegments = async (
+    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, undefined>,
+    res: Response<DefaultResponseData>,
+) => {
+    const { userId } = req.auth!;
+
+    // Get currently active segments for the user
+    const activeSegments = await db
+        .selectFrom('investment_segments_to_user')
+        .select(['segment'])
+        .where('user_id', '=', userId)
+        .execute();
+
+    const activeSegmentNames = activeSegments.map((s) => s.segment);
+
+    // Format response to match the UI expectations
+    const segmentStatus = {
+        cashMutualFunds: activeSegmentNames.includes('Cash'),
+        futuresAndOptions: activeSegmentNames.includes('F&O'),
+        commodityDerivatives: activeSegmentNames.includes('Commodity'),
+        debt: activeSegmentNames.includes('Debt'),
+        currency: activeSegmentNames.includes('Currency'),
+    };
+
+    // Check if income proof is required based on current segments
+    const requiresIncomeProof = activeSegmentNames.some(
+        (segment: string) => segment === 'Currency' || segment === 'Commodity' || segment === 'F&O',
+    );
+
+    const segmentsRequiringProof = activeSegmentNames.filter(
+        (segment: string) => segment === 'Currency' || segment === 'Commodity' || segment === 'F&O',
+    );
+
+    res.status(OK).json({
+        message: 'Current segment activation status retrieved successfully',
+        data: {
+            segments: segmentStatus,
+            activeSegments: activeSegmentNames,
+            requiresIncomeProof,
+            segmentsRequiringProof,
+            totalActiveSegments: activeSegmentNames.length,
+        },
+    });
+};
 const updateSegmentActivation = async (
-    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, Partial<SegmentActivationSettings>>,
+    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, SegmentActivationSettings>,
     res: Response<DefaultResponseData>,
 ) => {
     const { userId } = req.auth!;
     const { cashMutualFunds, futuresAndOptions, commodityDerivatives, debt, currency } = req.body;
 
-    const srnGenerator = new SRNGenerator('RMS');
-    const srn = srnGenerator.generateTimestampSRN();
+    // Get user email for OTP
+    const user = await db.selectFrom('user').select(['email']).where('id', '=', userId).executeTakeFirstOrThrow();
 
+    // Get currently active segments
     const currentSegments = await db
         .selectFrom('investment_segments_to_user')
         .select(['segment'])
@@ -39,6 +87,111 @@ const updateSegmentActivation = async (
         .execute();
 
     const currentSegmentNames = currentSegments.map((s) => s.segment);
+
+    // Check if there are any changes to segments
+    const requestedSegments = [
+        { name: 'Cash', isActive: cashMutualFunds },
+        { name: 'F&O', isActive: futuresAndOptions },
+        { name: 'Commodity', isActive: commodityDerivatives },
+        { name: 'Debt', isActive: debt },
+        { name: 'Currency', isActive: currency },
+    ].filter((segment) => segment.isActive !== undefined);
+
+    // Check for any changes (activations or deactivations)
+    const hasChanges = requestedSegments.some(({ name, isActive }) => {
+        const segmentExists = currentSegmentNames.includes(name as any);
+        return (isActive && !segmentExists) || (!isActive && segmentExists);
+    });
+
+    // If no changes are being made, return early
+    if (!hasChanges) {
+        res.status(OK).json({
+            message: 'No changes detected in segment activation',
+            data: {
+                requiresOtpVerification: false,
+                currentSegments: currentSegmentNames,
+            },
+        });
+        return;
+    }
+
+    // Generate session ID for OTP verification
+    const sessionId = randomUUID();
+
+    // Store session data in Redis
+    const sessionData = {
+        userId,
+        email: user.email,
+        segmentSettings: req.body,
+        isUsed: false,
+        timestamp: new Date().toISOString(),
+    };
+
+    const redisKey = `segment_activation_otp:${sessionId}`;
+    await redisClient.set(redisKey, JSON.stringify(sessionData));
+    await redisClient.expire(redisKey, 10 * 60); // 10 minutes expiry
+
+    // Send OTP immediately
+    const emailOtp = new EmailOtpVerification(user.email, 'segment-activation');
+    await emailOtp.sendOtp();
+
+    res.status(OK).json({
+        message: 'OTP sent to your registered email address. Please verify to update segments.',
+        data: {
+            sessionId,
+            requiresOtpVerification: true,
+        },
+    });
+};
+
+// Step 2: Verify OTP and update segment activation
+const verifySegmentActivationOtp = async (
+    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, VerifySegmentActivationOtpType>,
+    res: Response<DefaultResponseData>,
+) => {
+    const { userId } = req.auth!;
+    const { sessionId, otp } = req.body;
+
+    const srnGenerator = new SRNGenerator('RMS');
+    const srn = srnGenerator.generateTimestampSRN();
+
+    // Verify session
+    const redisKey = `segment_activation_otp:${sessionId}`;
+    const sessionStr = await redisClient.get(redisKey);
+
+    if (!sessionStr) {
+        throw new UnauthorizedError('Segment activation session expired or invalid');
+    }
+
+    const session = JSON.parse(sessionStr);
+
+    if (session.isUsed) {
+        throw new UnauthorizedError('Segment activation session already used');
+    }
+
+    if (session.userId !== userId) {
+        throw new UnauthorizedError('Invalid segment activation session');
+    }
+
+    // Verify OTP
+    const emailOtp = new EmailOtpVerification(session.email, 'segment-activation');
+    await emailOtp.verifyOtp(otp);
+
+    // Mark session as used
+    session.isUsed = true;
+    await redisClient.set(redisKey, JSON.stringify(session));
+
+    // Get current segments
+    const currentSegments = await db
+        .selectFrom('investment_segments_to_user')
+        .select(['segment'])
+        .where('user_id', '=', userId)
+        .execute();
+
+    const currentSegmentNames = currentSegments.map((s) => s.segment);
+
+    // Update segments based on session data
+    const { cashMutualFunds, futuresAndOptions, commodityDerivatives, debt, currency } = session.segmentSettings;
 
     await db.transaction().execute(async (tx) => {
         const segmentUpdates = [
@@ -67,8 +220,10 @@ const updateSegmentActivation = async (
         }
     });
 
-    // need to make a proper db for the srn -> link with all the issues of a particular client
+    // Clean up Redis session
+    await redisClient.del(redisKey);
 
+    // Get final segments
     const finalSegments = await db
         .selectFrom('investment_segments_to_user')
         .select(['segment'])
@@ -88,11 +243,62 @@ const updateSegmentActivation = async (
     res.status(OK).json({
         message: 'Segment activation updated successfully',
         data: {
-            ...req.body,
+            ...session.segmentSettings,
             requiresIncomeProof,
             segmentsRequiringProof,
             srn,
             generatedAt: new Date().toISOString(),
+            activatedSegments: finalSegmentNames,
+        },
+    });
+};
+
+// Step 3: Resend OTP for segment activation
+const resendSegmentActivationOtp = async (
+    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, ResendSegmentActivationOtpType>,
+    res: Response<DefaultResponseData>,
+) => {
+    const { userId } = req.auth!;
+    const { sessionId } = req.body;
+
+    // Check rate limiting
+    const rateLimitKey = `resend-segment-activation-otp-limit:${userId}`;
+    const rateLimitCount = await redisClient.get(rateLimitKey);
+
+    if (rateLimitCount && parseInt(rateLimitCount, 10) >= 3) {
+        throw new BadRequestError('Too many resend attempts. Please wait before trying again.');
+    }
+
+    // Verify session exists and is valid
+    const redisKey = `segment_activation_otp:${sessionId}`;
+    const sessionStr = await redisClient.get(redisKey);
+
+    if (!sessionStr) {
+        throw new UnauthorizedError('Segment activation session expired or invalid');
+    }
+
+    const session = JSON.parse(sessionStr);
+
+    if (session.isUsed) {
+        throw new UnauthorizedError('Segment activation session already used');
+    }
+
+    if (session.userId !== userId) {
+        throw new UnauthorizedError('Invalid segment activation session');
+    }
+
+    // Resend OTP
+    const emailOtp = new EmailOtpVerification(session.email, 'segment-activation');
+    await emailOtp.resendExistingOtp();
+
+    // Update rate limit
+    await redisClient.incr(rateLimitKey);
+    await redisClient.expire(rateLimitKey, 10 * 60); // 10 minutes expiration
+
+    res.status(OK).json({
+        message: 'OTP resent successfully to your registered email address',
+        data: {
+            sessionId,
         },
     });
 };
@@ -576,11 +782,14 @@ const updateSettlementFrequency = async (
 
 export {
     updateSegmentActivation,
+    verifySegmentActivationOtp,
+    resendSegmentActivationOtp,
     getBankAccounts,
     addBankAccount,
     removeBankAccount,
     initiateDematFreeze,
     resendDematFreezeOtp,
     verifyDematFreezeOtp,
+    getCurrentSegments,
     updateSettlementFrequency,
 };

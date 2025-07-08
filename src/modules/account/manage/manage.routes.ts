@@ -2,18 +2,24 @@ import { Router } from 'express';
 import {
     addBankAccount,
     getBankAccounts,
+    getCurrentSegments,
     initiateDematFreeze,
     removeBankAccount,
     resendDematFreezeOtp,
+    resendSegmentActivationOtp,
     updateSegmentActivation,
     updateSettlementFrequency,
     verifyDematFreezeOtp,
+    verifySegmentActivationOtp,
 } from './manage.controller';
 
 const router = Router();
 
 // Segment Activation Route
+router.get('/manage/segments', getCurrentSegments);
 router.put('/manage/segment-activation', updateSegmentActivation);
+router.post('/manage/segment-activation/verify-otp', verifySegmentActivationOtp);
+router.post('/manage/segment-activation/resend-otp', resendSegmentActivationOtp);
 
 // Bank Account Routes
 router.get('/manage/bank-accounts', getBankAccounts);

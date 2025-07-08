@@ -35,14 +35,6 @@ export type ResendSettlementFrequencyOtpRequestType = {
     sessionId: string;
 };
 
-export interface SegmentActivationSettings {
-    cashMutualFunds?: boolean;
-    futuresAndOptions?: boolean;
-    commodityDerivatives?: boolean;
-    debt?: boolean;
-    currency?: boolean;
-}
-
 export interface AddBankAccountRequest {
     account_no: string;
     ifsc_code: string;
@@ -69,5 +61,23 @@ export interface VerifyDematFreezeOtpType {
 }
 
 export interface ResendDematFreezeOtpType {
+    sessionId: string;
+}
+
+// Segment Activation Types
+export interface SegmentActivationSettings {
+    cashMutualFunds?: boolean;
+    futuresAndOptions?: boolean;
+    commodityDerivatives?: boolean;
+    debt?: boolean;
+    currency?: boolean;
+}
+
+export interface VerifySegmentActivationOtpType {
+    sessionId: string;
+    otp: string;
+}
+
+export interface ResendSegmentActivationOtpType {
     sessionId: string;
 }

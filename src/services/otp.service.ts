@@ -151,6 +151,7 @@ type EmailTemplate =
     | '2fa-setup'
     | '2fa-disable'
     | 'settlement-frequency-change'
+    | 'segment-activation'
     | 'demat-freeze';
 
 class EmailOtpVerification extends OtpVerification {
