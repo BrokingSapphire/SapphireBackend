@@ -4,6 +4,8 @@ import loginRouter from './login';
 import fundsRouter from './funds';
 import fcmRouter from './firebaseCloudMessaging';
 import webhookRouter from './webhooks';
+import generalRouter from './account/general';
+import manageRouter from './account/manage';
 import { db } from '@app/database';
 import { OK } from '@app/utils/httpstatus';
 import redisClient from '@app/services/redis.service';
@@ -16,6 +18,8 @@ const router = Router();
 
 router.use('/auth/signup', signupRouter);
 router.use('/auth/login', loginRouter);
+router.use('/auth/accounts', jwtMiddleware, generalRouter);
+router.use('/auth/accounts', jwtMiddleware, manageRouter);
 router.use('/compliance', complianceRouter);
 router.use('/fcm', fcmRouter);
 router.use('/funds', jwtMiddleware, fundsRouter);
