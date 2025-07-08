@@ -4,15 +4,18 @@ import {
     getBankAccounts,
     getCurrentSegments,
     getIncomeProofStatus,
+    getSettlementFrequency,
     initiateDematFreeze,
     initiateIncomeProofUpload,
     removeBankAccount,
     resendDematFreezeOtp,
     resendSegmentActivationOtp,
+    resendSettlementFrequencyOtp,
     updateSegmentActivation,
     updateSettlementFrequency,
     verifyDematFreezeOtp,
     verifySegmentActivationOtp,
+    verifySettlementFrequencyOtp,
 } from './manage.controller';
 import { putIncomeProof } from '@app/modules/signup/signup.controller';
 
@@ -39,6 +42,10 @@ router.post('/manage/demat/initiate-freeze', initiateDematFreeze);
 router.post('/manage/demat/resend-otp', resendDematFreezeOtp);
 router.post('/manage/demat/verify-freeze-otp', verifyDematFreezeOtp);
 
+// update settlement frequency
+router.get('/manage/settlement-frequency', getSettlementFrequency);
 router.put('/manage/settlement-frequency', updateSettlementFrequency);
+router.post('/manage/settlement-frequency/verify-otp', verifySettlementFrequencyOtp);
+router.post('/manage/settlement-frequency/resend-otp', resendSettlementFrequencyOtp);
 
 export default router;

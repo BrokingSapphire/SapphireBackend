@@ -863,14 +863,83 @@ const verifyDematFreezeOtp = async (
     }
 };
 
-const updateSettlementFrequency = async (
-    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, VerifySettlementFrequencyChangeRequestType>,
+const getSettlementFrequency = async (
+    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, undefined>,
     res: Response<DefaultResponseData>,
 ) => {
     const { userId } = req.auth!;
-    const { sessionId, otp, frequency } = req.body;
 
-    const srnGenerator = new SRNGenerator('ACC'); // ACC = Accounts & Finance
+    const userFrequency = await db
+        .selectFrom('user_settlement_frequency')
+        .select(['settlement_frequency', 'updated_at'])
+        .where('user_id', '=', userId)
+        .executeTakeFirst();
+
+    // Default to bill_to_bill if no record exists
+    const currentFrequency = userFrequency?.settlement_frequency || FundsSettlementFrequency.BILL_TO_BILL;
+    const lastUpdated = userFrequency?.updated_at || null;
+
+    res.status(OK).json({
+        message: 'Settlement frequency retrieved successfully',
+        data: {
+            currentFrequency,
+            lastUpdated,
+            availableOptions: [
+                { value: FundsSettlementFrequency.THIRTY_DAYS, label: '30 Days' },
+                { value: FundsSettlementFrequency.NINETY_DAYS, label: '90 Days' },
+                { value: FundsSettlementFrequency.BILL_TO_BILL, label: 'Bill to Bill' },
+            ],
+        },
+    });
+};
+
+const updateSettlementFrequency = async (
+    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, { frequency: FundsSettlementFrequency }>,
+    res: Response<DefaultResponseData>,
+) => {
+    const { userId } = req.auth!;
+    const { frequency } = req.body;
+
+    // Get user email for OTP
+    const user = await db.selectFrom('user').select(['email']).where('id', '=', userId).executeTakeFirstOrThrow();
+
+    // Generate session ID for OTP verification
+    const sessionId = randomUUID();
+
+    // Store session data in Redis
+    const sessionData = {
+        userId,
+        email: user.email,
+        frequency,
+        isUsed: false,
+        timestamp: new Date().toISOString(),
+    };
+
+    const redisKey = `settlement_frequency_change:${sessionId}`;
+    await redisClient.set(redisKey, JSON.stringify(sessionData));
+    await redisClient.expire(redisKey, 10 * 60); // 10 minutes expiry
+
+    // Send OTP immediately
+    const emailOtp = new EmailOtpVerification(user.email, 'settlement-frequency-change');
+    await emailOtp.sendOtp();
+
+    res.status(OK).json({
+        message: 'OTP sent to your registered email address. Please verify to complete the change.',
+        data: {
+            sessionId,
+            newFrequency: frequency,
+        },
+    });
+};
+
+const verifySettlementFrequencyOtp = async (
+    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, { sessionId: string; otp: string }>,
+    res: Response<DefaultResponseData>,
+) => {
+    const { userId } = req.auth!;
+    const { sessionId, otp } = req.body;
+
+    const srnGenerator = new SRNGenerator('ACC');
     const srn = srnGenerator.generateTimestampSRN();
 
     const redisKey = `settlement_frequency_change:${sessionId}`;
@@ -890,10 +959,6 @@ const updateSettlementFrequency = async (
         throw new UnauthorizedError('Invalid settlement frequency change session');
     }
 
-    if (session.frequency !== frequency) {
-        throw new UnauthorizedError('Frequency mismatch with original request');
-    }
-
     // Verify OTP
     const emailOtp = new EmailOtpVerification(session.email, 'settlement-frequency-change');
     await emailOtp.verifyOtp(otp);
@@ -904,7 +969,7 @@ const updateSettlementFrequency = async (
 
     const existingRecord = await db
         .selectFrom('user_settlement_frequency')
-        .select(['user_id', 'settlement_frequency'])
+        .select(['user_id'])
         .where('user_id', '=', userId)
         .executeTakeFirst();
 
@@ -915,38 +980,88 @@ const updateSettlementFrequency = async (
             .insertInto('user_settlement_frequency')
             .values({
                 user_id: userId,
-                settlement_frequency: frequency,
+                settlement_frequency: session.frequency,
                 created_at: currentTime,
                 updated_at: currentTime,
             })
             .execute();
     } else {
-        // Update existing record
         await db
             .updateTable('user_settlement_frequency')
             .set({
-                settlement_frequency: frequency,
+                settlement_frequency: session.frequency,
                 updated_at: currentTime,
             })
             .where('user_id', '=', userId)
             .execute();
     }
 
+    // Clean up Redis session
+    await redisClient.del(redisKey);
+
     let frequencyMessage;
-    if (frequency === FundsSettlementFrequency.THIRTY_DAYS) {
-        frequencyMessage = 'Funds settlement frequency updated to 30 days successfully';
-    } else if (frequency === FundsSettlementFrequency.NINETY_DAYS) {
-        frequencyMessage = 'Funds settlement frequency updated to 90 days successfully';
+    if (session.frequency === FundsSettlementFrequency.THIRTY_DAYS) {
+        frequencyMessage = 'Settlement frequency updated to 30 days successfully';
+    } else if (session.frequency === FundsSettlementFrequency.NINETY_DAYS) {
+        frequencyMessage = 'Settlement frequency updated to 90 days successfully';
     } else {
-        frequencyMessage = 'Funds settlement frequency updated to Bill to Bill settlement successfully';
+        frequencyMessage = 'Settlement frequency updated to Bill to Bill successfully';
     }
+
     res.status(OK).json({
         message: frequencyMessage,
         data: {
-            settlementFrequency: frequency,
+            settlementFrequency: session.frequency,
             updatedAt: currentTime,
             srn,
-            generatedAt: currentTime.toISOString(),
+        },
+    });
+};
+
+const resendSettlementFrequencyOtp = async (
+    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, { sessionId: string }>,
+    res: Response<DefaultResponseData>,
+) => {
+    const { userId } = req.auth!;
+    const { sessionId } = req.body;
+
+    // Check rate limiting
+    const rateLimitKey = `resend-settlement-frequency-otp-limit:${userId}`;
+    const rateLimitCount = await redisClient.get(rateLimitKey);
+
+    if (rateLimitCount && parseInt(rateLimitCount, 10) >= 3) {
+        throw new BadRequestError('Too many resend attempts. Please wait before trying again.');
+    }
+
+    const redisKey = `settlement_frequency_change:${sessionId}`;
+    const sessionStr = await redisClient.get(redisKey);
+
+    if (!sessionStr) {
+        throw new UnauthorizedError('Settlement frequency change session expired or invalid');
+    }
+
+    const session = JSON.parse(sessionStr);
+
+    if (session.isUsed) {
+        throw new UnauthorizedError('Settlement frequency change session already used');
+    }
+
+    if (session.userId !== userId) {
+        throw new UnauthorizedError('Invalid settlement frequency change session');
+    }
+
+    // Resend OTP
+    const emailOtp = new EmailOtpVerification(session.email, 'settlement-frequency-change');
+    await emailOtp.resendExistingOtp();
+
+    // Update rate limit
+    await redisClient.incr(rateLimitKey);
+    await redisClient.expire(rateLimitKey, 10 * 60);
+
+    res.status(OK).json({
+        message: 'OTP resent successfully to your registered email address',
+        data: {
+            sessionId,
         },
     });
 };
@@ -962,8 +1077,11 @@ export {
     resendDematFreezeOtp,
     verifyDematFreezeOtp,
     getCurrentSegments,
-    updateSettlementFrequency,
     getIncomeProofStatus,
     initiateIncomeProofUpload,
     putIncomeProof,
+    getSettlementFrequency,
+    updateSettlementFrequency,
+    verifySettlementFrequencyOtp,
+    resendSettlementFrequencyOtp,
 };
