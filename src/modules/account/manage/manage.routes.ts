@@ -3,7 +3,9 @@ import {
     addBankAccount,
     getBankAccounts,
     getCurrentSegments,
+    getIncomeProofStatus,
     initiateDematFreeze,
+    initiateIncomeProofUpload,
     removeBankAccount,
     resendDematFreezeOtp,
     resendSegmentActivationOtp,
@@ -12,6 +14,7 @@ import {
     verifyDematFreezeOtp,
     verifySegmentActivationOtp,
 } from './manage.controller';
+import { putIncomeProof } from '@app/modules/signup/signup.controller';
 
 const router = Router();
 
@@ -20,6 +23,11 @@ router.get('/manage/segments', getCurrentSegments);
 router.put('/manage/segment-activation', updateSegmentActivation);
 router.post('/manage/segment-activation/verify-otp', verifySegmentActivationOtp);
 router.post('/manage/segment-activation/resend-otp', resendSegmentActivationOtp);
+
+// Income Proof Routes
+router.get('/manage/income-proof/status', getIncomeProofStatus);
+router.post('/manage/income-proof/initiate', initiateIncomeProofUpload);
+router.put('/manage/income-proof/:uid', putIncomeProof);
 
 // Bank Account Routes
 router.get('/manage/bank-accounts', getBankAccounts);

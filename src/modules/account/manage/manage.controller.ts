@@ -5,7 +5,8 @@ import { DefaultResponseData } from '@app/types.d';
 import { OK } from '@app/utils/httpstatus';
 import { SessionJwtType } from '@app/modules/common.types';
 import { db } from '@app/database';
-import { BadRequestError, UnauthorizedError } from '@app/apiError';
+import { BadRequestError, UnauthorizedError, UnprocessableEntityError } from '@app/apiError';
+import { pdfUpload, wrappedMulterHandler } from '@app/services/multer-s3.service';
 import {
     DematAction,
     DematStatus,
@@ -19,11 +20,154 @@ import {
     ResendDematFreezeOtpType,
     ResendSegmentActivationOtpType,
     VerifySegmentActivationOtpType,
+    IncomeProofStatus,
 } from './manage.types';
 import redisClient from '@app/services/redis.service';
 import { EmailOtpVerification } from '@app/services/otp.service';
 import SRNGenerator from '@app/services/srn-generator';
 import { randomUUID } from 'crypto';
+import { UIDParams } from '@app/modules/signup/signup.types';
+import { IncomeProofTypeEnum } from '@app/database/db';
+
+const getIncomeProofStatus = async (
+    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, undefined>,
+    res: Response<DefaultResponseData>,
+) => {
+    const { userId } = req.auth!;
+
+    // Check current segments
+    const activeSegments = await db
+        .selectFrom('investment_segments_to_user')
+        .select(['segment'])
+        .where('user_id', '=', userId)
+        .execute();
+
+    const activeSegmentNames = activeSegments.map((s) => s.segment);
+    const requiresIncomeProof = activeSegmentNames.some(
+        (segment: string) => segment === 'Currency' || segment === 'Commodity' || segment === 'F&O',
+    );
+
+    const segmentsRequiringProof = activeSegmentNames.filter(
+        (segment: string) => segment === 'Currency' || segment === 'Commodity' || segment === 'F&O',
+    );
+
+    let incomeProofStatus: IncomeProofStatus = {
+        hasIncomeProof: false,
+        incomeProofType: null,
+        incomeProofUrl: null,
+        canProceed: true,
+    };
+
+    if (requiresIncomeProof) {
+        // Check user table for existing income proof
+        const userData = await db
+            .selectFrom('user')
+            .select(['income_proof', 'income_proof_type'])
+            .where('id', '=', userId)
+            .executeTakeFirst();
+
+        incomeProofStatus = {
+            hasIncomeProof: !!userData?.income_proof,
+            incomeProofType: userData?.income_proof_type || null,
+            incomeProofUrl: userData?.income_proof || null,
+            canProceed: !!userData?.income_proof,
+        };
+    }
+
+    res.status(OK).json({
+        message: 'Income proof status retrieved successfully',
+        data: {
+            requiresIncomeProof,
+            segmentsRequiringProof,
+            activeSegments: activeSegmentNames,
+            incomeProofStatus,
+        },
+    });
+};
+
+const initiateIncomeProofUpload = async (
+    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, { income_proof_type: string }>,
+    res: Response<DefaultResponseData>,
+) => {
+    const { userId } = req.auth!;
+    const { income_proof_type } = req.body;
+
+    // Check if user has segments that require income proof
+    const activeSegments = await db
+        .selectFrom('investment_segments_to_user')
+        .select(['segment'])
+        .where('user_id', '=', userId)
+        .execute();
+
+    const activeSegmentNames = activeSegments.map((s) => s.segment);
+    const requiresIncomeProof = activeSegmentNames.some(
+        (segment: string) => segment === 'Currency' || segment === 'Commodity' || segment === 'F&O',
+    );
+
+    if (!requiresIncomeProof) {
+        throw new BadRequestError('Income proof not required for your current segments');
+    }
+
+    // Update income proof type in user table
+    await db
+        .updateTable('user')
+        .set({
+            income_proof_type: income_proof_type as IncomeProofTypeEnum,
+            updated_at: new Date(),
+        })
+        .where('id', '=', userId)
+        .execute();
+
+    const uid = randomUUID();
+    await redisClient.set(`manage_income_proof:${uid}`, userId.toString());
+    await redisClient.expire(`manage_income_proof:${uid}`, 10 * 60);
+
+    res.status(OK).json({
+        data: { uid, income_proof_type },
+        message: 'Income proof upload initiated',
+    });
+};
+
+const putIncomeProof = async (
+    req: Request<SessionJwtType, UIDParams, DefaultResponseData, undefined>,
+    res: Response<DefaultResponseData>,
+) => {
+    const { uid } = req.params;
+    const { userId } = req.auth!;
+
+    const storedUserId = await redisClient.get(`manage_income_proof:${uid}`);
+    if (!storedUserId || storedUserId !== userId.toString()) {
+        throw new UnauthorizedError('Income proof upload not authorized or expired.');
+    }
+    const pdfUploadHandler = wrappedMulterHandler(pdfUpload.single('pdf'));
+
+    let uploadResult;
+    try {
+        uploadResult = await pdfUploadHandler(req, res);
+    } catch (e: any) {
+        throw new UnprocessableEntityError(e.message);
+    }
+
+    // Update income proof in user table
+    await db
+        .updateTable('user')
+        .set({
+            income_proof: uploadResult.file.location,
+            updated_at: new Date(),
+        })
+        .where('id', '=', userId)
+        .execute();
+
+    await redisClient.del(`manage_income_proof:${uid}`);
+
+    res.status(OK).json({
+        message: 'Income proof uploaded successfully. Segment activation completed.',
+        data: {
+            url: uploadResult.file.location,
+            status: 'completed',
+        },
+    });
+};
 
 const getCurrentSegments = async (
     req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, undefined>,
@@ -240,8 +384,33 @@ const verifySegmentActivationOtp = async (
         (segment: string) => segment === 'Currency' || segment === 'Commodity' || segment === 'F&O',
     );
 
+    // Check current income proof status
+    let incomeProofStatus: IncomeProofStatus = {
+        hasIncomeProof: false,
+        incomeProofType: null,
+        incomeProofUrl: null,
+        canProceed: true,
+    };
+
+    if (requiresIncomeProof) {
+        const user = await db
+            .selectFrom('user')
+            .select(['income_proof', 'income_proof_type'])
+            .where('id', '=', userId)
+            .executeTakeFirst();
+
+        incomeProofStatus = {
+            hasIncomeProof: !!user?.income_proof,
+            incomeProofType: user?.income_proof_type || null,
+            incomeProofUrl: user?.income_proof || null,
+            canProceed: !!user?.income_proof,
+        };
+    }
+
     res.status(OK).json({
-        message: 'Segment activation updated successfully',
+        message: incomeProofStatus.canProceed
+            ? 'Segment activation updated successfully'
+            : 'Segments activated. Please upload income proof to complete the process.',
         data: {
             ...session.segmentSettings,
             requiresIncomeProof,
@@ -249,6 +418,8 @@ const verifySegmentActivationOtp = async (
             srn,
             generatedAt: new Date().toISOString(),
             activatedSegments: finalSegmentNames,
+            incomeProofStatus,
+            nextStep: incomeProofStatus.canProceed ? 'completed' : 'upload_income_proof',
         },
     });
 };
@@ -792,4 +963,7 @@ export {
     verifyDematFreezeOtp,
     getCurrentSegments,
     updateSettlementFrequency,
+    getIncomeProofStatus,
+    initiateIncomeProofUpload,
+    putIncomeProof,
 };

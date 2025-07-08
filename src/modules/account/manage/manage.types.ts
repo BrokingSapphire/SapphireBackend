@@ -1,3 +1,4 @@
+import { IncomeProofTypeEnum } from '@app/database/db';
 import { AccountType } from '@app/modules/signup/signup.types';
 
 export enum DematStatus {
@@ -80,4 +81,15 @@ export interface VerifySegmentActivationOtpType {
 
 export interface ResendSegmentActivationOtpType {
     sessionId: string;
+}
+
+export interface IncomeProofStatus {
+    hasIncomeProof: boolean;
+    incomeProofType: IncomeProofTypeEnum | null;
+    incomeProofUrl: string | null;
+    canProceed: boolean;
+}
+
+export interface InitiateIncomeProofRequest {
+    income_proof_type: IncomeProofTypeEnum; // Use enum instead of string
 }
