@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import {
     addBankAccount,
-    freezeDematAccount,
     getBankAccounts,
+    initiateDematFreeze,
     removeBankAccount,
+    resendDematFreezeOtp,
     updateSegmentActivation,
     updateSettlementFrequency,
+    verifyDematFreezeOtp,
 } from './manage.controller';
 
 const router = Router();
@@ -19,7 +21,9 @@ router.post('/manage/bank-accounts', addBankAccount);
 router.delete('/manage/bank-accounts/remove', removeBankAccount);
 
 // Demat Freeze Routes
-router.post('/manage/demat-freeze', freezeDematAccount);
+router.post('/manage/demat/initiate-freeze', initiateDematFreeze);
+router.post('/manage/demat/resend-otp', resendDematFreezeOtp);
+router.post('/manage/demat/verify-freeze-otp', verifyDematFreezeOtp);
 
 router.put('/manage/settlement-frequency', updateSettlementFrequency);
 

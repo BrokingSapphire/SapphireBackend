@@ -53,11 +53,21 @@ export interface RemoveBankRequest {
     bankAccountId: number;
 }
 
-export interface FreezeDematRequest {
+export interface UpdateSettlementFrequencyRequest {
+    frequency: FundsSettlementFrequency;
+}
+
+export interface InitiateDematFreezeRequest {
     action: DematAction;
     reason?: string;
 }
 
-export interface UpdateSettlementFrequencyRequest {
-    frequency: FundsSettlementFrequency;
+// Step 2: Verify OTP and execute freeze/unfreeze
+export interface VerifyDematFreezeOtpType {
+    sessionId: string;
+    otp: string;
+}
+
+export interface ResendDematFreezeOtpType {
+    sessionId: string;
 }

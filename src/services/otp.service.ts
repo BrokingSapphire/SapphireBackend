@@ -150,7 +150,8 @@ type EmailTemplate =
     | '2fa-login'
     | '2fa-setup'
     | '2fa-disable'
-    | 'settlement-frequency-change';
+    | 'settlement-frequency-change'
+    | 'demat-freeze';
 
 class EmailOtpVerification extends OtpVerification {
     private readonly template: EmailTemplate;

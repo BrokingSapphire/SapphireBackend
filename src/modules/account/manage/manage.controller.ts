@@ -14,7 +14,9 @@ import {
     AddBankAccountRequest,
     RemoveBankRequest,
     SegmentActivationSettings,
-    FreezeDematRequest,
+    VerifyDematFreezeOtpType,
+    InitiateDematFreezeRequest,
+    ResendDematFreezeOtpType,
 } from './manage.types';
 import redisClient from '@app/services/redis.service';
 import { EmailOtpVerification } from '@app/services/otp.service';
@@ -228,16 +230,173 @@ const removeBankAccount = async (
     });
 };
 
-const freezeDematAccount = async (
-    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, FreezeDematRequest>,
+//     /*
+//     Later On need to add more checks like
+//     - If the user has any active orders, they cannot freeze the demat account
+//     - If the user has any active holdings, they cannot freeze the demat account
+//     - If the user has any active mutual funds, they cannot freeze the demat account
+//     - If the user has any active loans, they cannot freeze the demat account
+
+//     All things needs to be 0 i number to freeze the demat account
+//     */
+
+const initiateDematFreeze = async (
+    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, InitiateDematFreezeRequest>,
     res: Response<DefaultResponseData>,
 ) => {
     const { userId } = req.auth!;
     const { action, reason } = req.body;
 
+    // Get user email for OTP
+    const user = await db.selectFrom('user').select(['email']).where('id', '=', userId).executeTakeFirstOrThrow();
+
+    // Validate current demat status
+    let currentDematStatus = await db
+        .selectFrom('user_demat_status')
+        .select(['demat_status'])
+        .where('user_id', '=', userId)
+        .executeTakeFirst();
+
+    if (!currentDematStatus) {
+        await db
+            .insertInto('user_demat_status')
+            .values({
+                user_id: userId,
+                demat_status: DematStatus.ACTIVE,
+                freeze_until: null,
+            })
+            .execute();
+        currentDematStatus = { demat_status: DematStatus.ACTIVE };
+    }
+
+    if (action === DematAction.FREEZE && currentDematStatus.demat_status === DematStatus.FROZEN) {
+        throw new BadRequestError('Demat account is already frozen');
+    }
+
+    if (action === DematAction.UNFREEZE && currentDematStatus.demat_status !== DematStatus.FROZEN) {
+        throw new BadRequestError('Demat account is not frozen');
+    }
+
+    // Generate session ID
+    const sessionId = require('crypto').randomUUID();
+
+    // Store session data in Redis
+    const sessionData = {
+        userId,
+        email: user.email,
+        action,
+        reason: reason || null,
+        isUsed: false,
+        timestamp: new Date().toISOString(),
+    };
+
+    const redisKey = `demat_freeze_otp:${sessionId}`;
+    await redisClient.set(redisKey, JSON.stringify(sessionData));
+    await redisClient.expire(redisKey, 10 * 60); // 10 minutes expiry
+
+    // Send OTP immediately
+    const emailOtp = new EmailOtpVerification(user.email, 'demat-freeze');
+    await emailOtp.sendOtp();
+
+    res.status(OK).json({
+        message: 'OTP sent to your registered email address. Please verify to proceed.',
+        data: {
+            sessionId,
+            action,
+            reason,
+        },
+    });
+};
+
+// Step 2: Resend OTP for demat freeze
+const resendDematFreezeOtp = async (
+    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, ResendDematFreezeOtpType>,
+    res: Response<DefaultResponseData>,
+) => {
+    const { userId } = req.auth!;
+    const { sessionId } = req.body;
+
+    // Check rate limiting
+    const rateLimitKey = `resend-demat-freeze-otp-limit:${userId}`;
+    const rateLimitCount = await redisClient.get(rateLimitKey);
+
+    if (rateLimitCount && parseInt(rateLimitCount, 10) >= 3) {
+        throw new BadRequestError('Too many resend attempts. Please wait before trying again.');
+    }
+
+    // Verify session exists and is valid
+    const redisKey = `demat_freeze_otp:${sessionId}`;
+    const sessionStr = await redisClient.get(redisKey);
+
+    if (!sessionStr) {
+        throw new UnauthorizedError('Demat freeze session expired or invalid');
+    }
+
+    const session = JSON.parse(sessionStr);
+
+    if (session.isUsed) {
+        throw new UnauthorizedError('Demat freeze session already used');
+    }
+
+    if (session.userId !== userId) {
+        throw new UnauthorizedError('Invalid demat freeze session');
+    }
+
+    // Resend OTP
+    const emailOtp = new EmailOtpVerification(session.email, 'demat-freeze');
+    await emailOtp.resendExistingOtp();
+
+    // Update rate limit
+    await redisClient.incr(rateLimitKey);
+    await redisClient.expire(rateLimitKey, 10 * 60); // 10 minutes expiration
+
+    res.status(OK).json({
+        message: 'OTP resent successfully to your registered email address',
+        data: {
+            sessionId,
+            action: session.action,
+        },
+    });
+};
+
+// Step 2: Verify OTP and execute freeze/unfreeze
+const verifyDematFreezeOtp = async (
+    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, VerifyDematFreezeOtpType>,
+    res: Response<DefaultResponseData>,
+) => {
+    const { userId } = req.auth!;
+    const { sessionId, otp } = req.body;
+
     const srnGenerator = new SRNGenerator('RMS');
     const srn = srnGenerator.generateTimestampSRN();
 
+    // Verify session
+    const redisKey = `demat_freeze_otp:${sessionId}`;
+    const sessionStr = await redisClient.get(redisKey);
+
+    if (!sessionStr) {
+        throw new UnauthorizedError('Demat freeze session expired or invalid');
+    }
+
+    const session = JSON.parse(sessionStr);
+
+    if (session.isUsed) {
+        throw new UnauthorizedError('Demat freeze session already used');
+    }
+
+    if (session.userId !== userId) {
+        throw new UnauthorizedError('Invalid demat freeze session');
+    }
+
+    // Verify OTP
+    const emailOtp = new EmailOtpVerification(session.email, 'demat-freeze');
+    await emailOtp.verifyOtp(otp);
+
+    // Mark session as used
+    session.isUsed = true;
+    await redisClient.set(redisKey, JSON.stringify(session));
+
+    // Get current demat status
     let currentDematStatus = await db
         .selectFrom('user_demat_status')
         .select(['demat_status', 'freeze_until'])
@@ -253,31 +412,14 @@ const freezeDematAccount = async (
                 freeze_until: null,
             })
             .execute();
-
         currentDematStatus = { demat_status: DematStatus.ACTIVE, freeze_until: null };
     }
 
-    if (action === DematAction.FREEZE && currentDematStatus.demat_status === DematStatus.FROZEN) {
-        throw new BadRequestError('Demat account is already frozen');
-    }
-
-    if (action === DematAction.UNFREEZE && currentDematStatus.demat_status !== DematStatus.FROZEN) {
-        throw new BadRequestError('Demat account is not frozen');
-    }
-
-    /* 
-    Later On need to add more checks like
-    - If the user has any active orders, they cannot freeze the demat account
-    - If the user has any active holdings, they cannot freeze the demat account
-    - If the user has any active mutual funds, they cannot freeze the demat account
-    - If the user has any active loans, they cannot freeze the demat account
-
-    All things needs to be 0 i number to freeze the demat account
-    */
-
-    const newStatus = action === DematAction.FREEZE ? DematStatus.FROZEN : DematStatus.ACTIVE;
+    const newStatus = session.action === DematAction.FREEZE ? DematStatus.FROZEN : DematStatus.ACTIVE;
     const currentTime = new Date();
-    const freezeUntil = action === DematAction.FREEZE ? new Date(currentTime.getTime() + 48 * 60 * 60 * 1000) : null;
+    const freezeUntil =
+        session.action === DematAction.FREEZE ? new Date(currentTime.getTime() + 48 * 60 * 60 * 1000) : null;
+
     await db.transaction().execute(async (tx) => {
         // Update user demat status
         await tx
@@ -290,7 +432,7 @@ const freezeDematAccount = async (
             .where('user_id', '=', userId)
             .execute();
 
-        if (action === DematAction.FREEZE) {
+        if (session.action === DematAction.FREEZE) {
             // Logout from all devices - deactivate all sessions
             await tx
                 .updateTable('user_sessions')
@@ -308,8 +450,8 @@ const freezeDematAccount = async (
             .insertInto('demat_freeze_log')
             .values({
                 user_id: userId,
-                action,
-                reason: reason || null,
+                action: session.action,
+                reason: session.reason,
                 previous_status: currentDematStatus.demat_status,
                 new_status: newStatus,
                 freeze_until: freezeUntil,
@@ -317,21 +459,29 @@ const freezeDematAccount = async (
             .execute();
     });
 
-    if (action === DematAction.FREEZE) {
+    // Clean up Redis session
+    await redisClient.del(redisKey);
+
+    if (session.action === DematAction.FREEZE) {
         res.status(OK).json({
             message:
                 'Demat account frozen successfully. You will be logged out from all devices and cannot login for 48 hours.',
             data: {
-                action,
+                action: session.action,
                 status: newStatus,
                 srn,
-                reason,
+                reason: session.reason,
                 freezeUntil,
             },
         });
     } else {
         res.status(OK).json({
             message: 'Demat account unfrozen successfully. You can now login normally.',
+            data: {
+                action: session.action,
+                status: newStatus,
+                srn,
+            },
         });
     }
 };
@@ -429,6 +579,8 @@ export {
     getBankAccounts,
     addBankAccount,
     removeBankAccount,
-    freezeDematAccount,
+    initiateDematFreeze,
+    resendDematFreezeOtp,
+    verifyDematFreezeOtp,
     updateSettlementFrequency,
 };
