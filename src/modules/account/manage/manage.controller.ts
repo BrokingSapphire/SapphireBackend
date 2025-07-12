@@ -301,7 +301,7 @@ const updateSegmentActivation = async (
     }
 
     res.status(OK).json({
-        message: 'OTP sent to your registered email address. Please verify to update segments.',
+        message: 'OTP sent to your registered email address and phone number. Please verify to update segments.',
         data: {
             sessionId,
             requiresOtpVerification: true,
@@ -490,7 +490,7 @@ const resendSegmentActivationOtp = async (
     const emailOtp = new EmailOtpVerification(session.email, 'segment-activation');
     await emailOtp.resendExistingOtp();
 
-    // Get the OTP from Redis to send via SMS
+    // Get the existing OTP for SMS
     const otpKey = `otp:email-otp:segment-activation:${session.email}`;
     const existingOtp = await redisClient.get(otpKey);
 
@@ -509,7 +509,7 @@ const resendSegmentActivationOtp = async (
     await redisClient.expire(rateLimitKey, 10 * 60); // 10 minutes expiration
 
     res.status(OK).json({
-        message: 'OTP resent successfully to your registered email address',
+        message: 'OTP resent successfully to your registered email address and phone number',
         data: {
             sessionId,
         },
@@ -812,7 +812,7 @@ const initiateDematFreeze = async (
     }
 
     res.status(OK).json({
-        message: 'OTP sent to your registered email address. Please verify to proceed.',
+        message: 'OTP sent to your registered email address and phone number. Please verify to proceed.',
         data: {
             sessionId,
             action,
@@ -863,7 +863,7 @@ const resendDematFreezeOtp = async (
         .where('user.id', '=', userId)
         .executeTakeFirst();
 
-    // Resend OTP
+    // resend OTP
     const emailOtp = new EmailOtpVerification(session.email, 'demat-freeze');
     await emailOtp.resendExistingOtp();
 
@@ -886,7 +886,7 @@ const resendDematFreezeOtp = async (
     await redisClient.expire(rateLimitKey, 10 * 60); // 10 minutes expiration
 
     res.status(OK).json({
-        message: 'OTP resent successfully to your registered email address',
+        message: 'OTP resent successfully to your registered email address and phone number',
         data: {
             sessionId,
             action: session.action,
@@ -1101,7 +1101,7 @@ const updateSettlementFrequency = async (
     }
 
     res.status(OK).json({
-        message: 'OTP sent to your registered email address. Please verify to complete the change.',
+        message: 'OTP sent to your registered email address and phone number. Please verify to complete the change.',
         data: {
             sessionId,
             newFrequency: frequency,
@@ -1235,11 +1235,10 @@ const resendSettlementFrequencyOtp = async (
         .where('user.id', '=', userId)
         .executeTakeFirst();
 
-    // Resend OTP
     const emailOtp = new EmailOtpVerification(session.email, 'settlement-frequency-change');
     await emailOtp.resendExistingOtp();
 
-    // Get the OTP from Redis to send via SMS
+    // Get the existing OTP for SMS
     const otpKey = `otp:email-otp:settlement-frequency-change:${session.email}`;
     const existingOtp = await redisClient.get(otpKey);
 
@@ -1260,7 +1259,7 @@ const resendSettlementFrequencyOtp = async (
     await redisClient.expire(rateLimitKey, 10 * 60);
 
     res.status(OK).json({
-        message: 'OTP resent successfully to your registered email address',
+        message: 'OTP resent successfully to your registered email address and phone number',
         data: {
             sessionId,
         },
