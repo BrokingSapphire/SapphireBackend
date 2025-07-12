@@ -1114,6 +1114,7 @@ const postCheckpoint = async (
         const { full_name, dob } = req.body;
         const mismatchKey = `aadhaar_mismatch:${email}`;
         const mismatchData = await redisClient.get(mismatchKey);
+
         if (!mismatchData) {
             throw new UnauthorizedError(
                 'Aadhaar mismatch data not found or expired. Restart the Digilocker session again.',
@@ -1124,6 +1125,7 @@ const postCheckpoint = async (
         const parserData = parsedMismatchData.parser_data;
 
         let shouldSetDoubt = false;
+
         const bankData = await db
             .selectFrom('signup_checkpoints')
             .innerJoin('bank_to_checkpoint', 'signup_checkpoints.id', 'bank_to_checkpoint.checkpoint_id')
@@ -1176,55 +1178,249 @@ const postCheckpoint = async (
                 coId = await insertNameGetId(tx, splitName(co));
             }
 
-            const exists = await tx
+            const maskedAadhaarNo = parserData.uid.substring(9, 12);
+
+            // **STEP 1: Check current checkpoint's Aadhaar reference**
+            const currentCheckpoint = await tx
                 .selectFrom('signup_checkpoints')
-                .select('aadhaar_id')
+                .select(['aadhaar_id', 'id', 'client_id'])
                 .where('email', '=', email)
                 .executeTakeFirst();
 
-            if (exists && exists.aadhaar_id) {
-                await updateCheckpoint(tx, email, phone, {
-                    aadhaar_id: null,
-                }).execute();
+            // **STEP 2: Check if this user already has a completed account with same Aadhaar**
+            const existingUser = await tx
+                .selectFrom('user')
+                .innerJoin('aadhaar_detail', 'user.aadhaar_id', 'aadhaar_detail.id')
+                .select(['user.id as user_id', 'user.email', 'aadhaar_detail.id as aadhaar_id'])
+                .where('user.email', '=', email)
+                .where('aadhaar_detail.masked_aadhaar_no', '=', maskedAadhaarNo)
+                .executeTakeFirst();
 
-                await tx.deleteFrom('aadhaar_detail').where('address_id', '=', exists.aadhaar_id).execute();
-            }
+            if (existingUser) {
+                logger.info(
+                    `User ${email} already has completed account with Aadhaar ${maskedAadhaarNo}, updating existing record`,
+                );
 
-            const aadhaarId = await tx
-                .insertInto('aadhaar_detail')
-                .values({
-                    masked_aadhaar_no: parserData.uid.substring(9, 12),
-                    name: nameId,
-                    dob: new Date(parserData.dob),
-                    co: coId,
-                    address_id: permanentAddressId,
-                    post_office: parserData.postOffice === undefined ? null : parserData.postOffice,
-                    gender: parserData.gender,
-                })
-                .returning('id')
-                .executeTakeFirstOrThrow();
-            const userProvidedNameId = await insertNameGetId(tx, splitName(full_name));
+                const aadhaarId = await tx
+                    .updateTable('aadhaar_detail')
+                    .set({
+                        name: nameId,
+                        dob: new Date(parserData.dob),
+                        co: coId,
+                        address_id: permanentAddressId,
+                        post_office: parserData.postOffice === undefined ? null : parserData.postOffice,
+                        gender: parserData.gender,
+                    })
+                    .where('id', '=', existingUser.aadhaar_id)
+                    .returning('id')
+                    .executeTakeFirstOrThrow();
 
-            const checkpoint = await updateCheckpoint(tx, email, phone, {
-                aadhaar_id: aadhaarId.id,
-                permanent_address_id: permanentAddressId,
-                correspondence_address_id: permanentAddressId,
-                doubt: shouldSetDoubt,
-                user_provided_name: userProvidedNameId,
-                user_provided_dob: new Date(dob),
-            })
-                .returning('id')
-                .executeTakeFirstOrThrow();
+                const userProvidedNameId = await insertNameGetId(tx, splitName(full_name));
 
-            await tx
-                .updateTable('signup_verification_status')
-                .set({
+                const updateData: UpdateObjectExpression<DB, 'signup_checkpoints', 'signup_checkpoints'> = {
+                    aadhaar_id: aadhaarId.id,
+                    permanent_address_id: permanentAddressId,
+                    correspondence_address_id: permanentAddressId,
+                    doubt: shouldSetDoubt,
+                    user_provided_name: userProvidedNameId,
+                    user_provided_dob: new Date(dob),
+                };
+
+                // Add document data if available
+                if (parsedMismatchData.aadhaar_document_data?.s3_url) {
+                    updateData.aadhaar_document = parsedMismatchData.aadhaar_document_data.s3_url;
+                }
+
+                if (parsedMismatchData.pan_document_data?.s3_url) {
+                    updateData.pan_document = parsedMismatchData.pan_document_data.s3_url;
+                    updateData.pan_document_issuer = parsedMismatchData.pan_document_data.issuer;
+                }
+
+                const checkpoint = await updateCheckpoint(tx, email, phone, updateData)
+                    .returning('id')
+                    .executeTakeFirstOrThrow();
+
+                // Update verification status
+                const verificationStatusUpdate: any = {
                     aadhaar_status: 'pending',
                     address_status: 'pending',
                     updated_at: new Date(),
-                })
-                .where('id', '=', checkpoint.id)
-                .execute();
+                };
+
+                if (parsedMismatchData.aadhaar_document_data?.s3_url) {
+                    verificationStatusUpdate.aadhaar_document_status = 'verified';
+                }
+
+                if (parsedMismatchData.pan_document_data?.s3_url) {
+                    verificationStatusUpdate.pan_document_status = 'verified';
+                }
+
+                await tx
+                    .updateTable('signup_verification_status')
+                    .set(verificationStatusUpdate)
+                    .where('id', '=', checkpoint.id)
+                    .execute();
+            } else {
+                // **STEP 3: Check for conflicts with other users**
+                const conflictingUser = await tx
+                    .selectFrom('user')
+                    .innerJoin('aadhaar_detail', 'user.aadhaar_id', 'aadhaar_detail.id')
+                    .select(['user.email', 'user.id'])
+                    .where('aadhaar_detail.masked_aadhaar_no', '=', maskedAadhaarNo)
+                    .where('user.email', '!=', email)
+                    .executeTakeFirst();
+
+                if (conflictingUser) {
+                    logger.error(`Aadhaar ${maskedAadhaarNo} already used by different user ${conflictingUser.email}`);
+                    throw new BadRequestError(
+                        'This Aadhaar number is already registered with another account. ' +
+                            'If this is your Aadhaar number, please contact customer support.',
+                    );
+                }
+
+                // **STEP 4: Check for conflicts with other checkpoints**
+                const conflictingCheckpoint = await tx
+                    .selectFrom('signup_checkpoints')
+                    .innerJoin('aadhaar_detail', 'signup_checkpoints.aadhaar_id', 'aadhaar_detail.id')
+                    .select(['signup_checkpoints.email'])
+                    .where('aadhaar_detail.masked_aadhaar_no', '=', maskedAadhaarNo)
+                    .where('signup_checkpoints.email', '!=', email)
+                    .executeTakeFirst();
+
+                if (conflictingCheckpoint) {
+                    logger.error(
+                        `Aadhaar ${maskedAadhaarNo} in use by different signup ${conflictingCheckpoint.email}`,
+                    );
+                    throw new BadRequestError(
+                        'This Aadhaar number is currently being used in another signup process. ' +
+                            'Please try again later or contact support.',
+                    );
+                }
+
+                // **STEP 5: Clean up current checkpoint's old Aadhaar reference if exists**
+                if (currentCheckpoint && currentCheckpoint.aadhaar_id) {
+                    logger.info(`Cleaning up old Aadhaar reference for user ${email}`);
+
+                    // Remove reference from checkpoint first
+                    await tx
+                        .updateTable('signup_checkpoints')
+                        .set({ aadhaar_id: null })
+                        .where('id', '=', currentCheckpoint.id)
+                        .execute();
+
+                    // Check if old Aadhaar record is still referenced elsewhere
+                    const [checkpointRefs, userRefs] = await Promise.all([
+                        tx
+                            .selectFrom('signup_checkpoints')
+                            .select('id')
+                            .where('aadhaar_id', '=', currentCheckpoint.aadhaar_id)
+                            .executeTakeFirst(),
+
+                        tx
+                            .selectFrom('user')
+                            .select('id')
+                            .where('aadhaar_id', '=', currentCheckpoint.aadhaar_id)
+                            .executeTakeFirst(),
+                    ]);
+
+                    // Only delete if not referenced anywhere else
+                    if (!checkpointRefs && !userRefs) {
+                        await tx.deleteFrom('aadhaar_detail').where('id', '=', currentCheckpoint.aadhaar_id).execute();
+                        logger.info(`Deleted orphaned Aadhaar record ${currentCheckpoint.aadhaar_id}`);
+                    }
+                }
+
+                // **STEP 6: Create new Aadhaar record or update existing one**
+                const existingAadhaar = await tx
+                    .selectFrom('aadhaar_detail')
+                    .select('id')
+                    .where('masked_aadhaar_no', '=', maskedAadhaarNo)
+                    .executeTakeFirst();
+
+                let aadhaarId;
+                if (existingAadhaar) {
+                    // Update existing orphaned record
+                    aadhaarId = await tx
+                        .updateTable('aadhaar_detail')
+                        .set({
+                            name: nameId,
+                            dob: new Date(parserData.dob),
+                            co: coId,
+                            address_id: permanentAddressId,
+                            post_office: parserData.postOffice === undefined ? null : parserData.postOffice,
+                            gender: parserData.gender,
+                        })
+                        .where('id', '=', existingAadhaar.id)
+                        .returning('id')
+                        .executeTakeFirstOrThrow();
+
+                    logger.info(`Updated existing Aadhaar record ${existingAadhaar.id} for user ${email}`);
+                } else {
+                    // Create new record
+                    aadhaarId = await tx
+                        .insertInto('aadhaar_detail')
+                        .values({
+                            masked_aadhaar_no: maskedAadhaarNo,
+                            name: nameId,
+                            dob: new Date(parserData.dob),
+                            co: coId,
+                            address_id: permanentAddressId,
+                            post_office: parserData.postOffice === undefined ? null : parserData.postOffice,
+                            gender: parserData.gender,
+                        })
+                        .returning('id')
+                        .executeTakeFirstOrThrow();
+
+                    logger.info(`Created new Aadhaar record ${aadhaarId.id} for user ${email}`);
+                }
+
+                // **STEP 7: Update checkpoint with new Aadhaar reference**
+                const userProvidedNameId = await insertNameGetId(tx, splitName(full_name));
+
+                const updateData: UpdateObjectExpression<DB, 'signup_checkpoints', 'signup_checkpoints'> = {
+                    aadhaar_id: aadhaarId.id,
+                    permanent_address_id: permanentAddressId,
+                    correspondence_address_id: permanentAddressId,
+                    doubt: shouldSetDoubt,
+                    user_provided_name: userProvidedNameId,
+                    user_provided_dob: new Date(dob),
+                };
+
+                // Add document data if available
+                if (parsedMismatchData.aadhaar_document_data?.s3_url) {
+                    updateData.aadhaar_document = parsedMismatchData.aadhaar_document_data.s3_url;
+                }
+
+                if (parsedMismatchData.pan_document_data?.s3_url) {
+                    updateData.pan_document = parsedMismatchData.pan_document_data.s3_url;
+                    updateData.pan_document_issuer = parsedMismatchData.pan_document_data.issuer;
+                }
+
+                const checkpoint = await updateCheckpoint(tx, email, phone, updateData)
+                    .returning('id')
+                    .executeTakeFirstOrThrow();
+
+                // **STEP 8: Update verification status**
+                const verificationStatusUpdate: any = {
+                    aadhaar_status: 'pending',
+                    address_status: 'pending',
+                    updated_at: new Date(),
+                };
+
+                if (parsedMismatchData.aadhaar_document_data?.s3_url) {
+                    verificationStatusUpdate.aadhaar_document_status = 'verified';
+                }
+
+                if (parsedMismatchData.pan_document_data?.s3_url) {
+                    verificationStatusUpdate.pan_document_status = 'verified';
+                }
+
+                await tx
+                    .updateTable('signup_verification_status')
+                    .set(verificationStatusUpdate)
+                    .where('id', '=', checkpoint.id)
+                    .execute();
+            }
         });
 
         await redisClient.del(mismatchKey);
@@ -1237,6 +1433,10 @@ const postCheckpoint = async (
             message: responseMessage,
             data: {
                 requires_manual_review: shouldSetDoubt,
+                documents_stored: {
+                    aadhaar_document: !!parsedMismatchData.aadhaar_document_data?.s3_url,
+                    pan_document: !!parsedMismatchData.pan_document_data?.s3_url,
+                },
             },
         });
     } else if (step === CheckpointStep.INVESTMENT_SEGMENT) {
