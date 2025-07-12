@@ -187,6 +187,58 @@ const login = async (
         timestamp: new Date().toISOString(),
     });
 
+    // freeze-account check
+    let dematStatus = await db
+        .selectFrom('user_demat_status')
+        .select(['demat_status', 'freeze_until'])
+        .where('user_id', '=', user.id)
+        .executeTakeFirst();
+
+    if (!dematStatus) {
+        await db
+            .insertInto('user_demat_status')
+            .values({
+                user_id: user.id,
+                demat_status: 'active',
+                freeze_until: null,
+            })
+            .execute();
+        dematStatus = { demat_status: 'active', freeze_until: null };
+    }
+
+    const isAccountFrozen = dematStatus.demat_status === 'frozen';
+
+    // If account is frozen, prevent login
+    if (isAccountFrozen) {
+        logger.warn(`LOGIN BLOCKED - Account frozen for user ${user.email} from IP ${deviceInfo.ip}`, {
+            userId: user.id,
+            userEmail: user.email,
+            requestIp: deviceInfo.ip,
+            timestamp: new Date().toISOString(),
+        });
+
+        await db
+            .insertInto('user_login_history')
+            .values({
+                user_id: user.id,
+                email: user.email,
+                ip_address: deviceInfo.ip,
+                user_agent: deviceInfo.device.userAgent,
+                browser: deviceInfo.device.browser || null,
+                device: deviceInfo.device.device || null,
+                device_type: deviceInfo.device.deviceType || null,
+                location_country: deviceInfo.location.country || null,
+                location_region: deviceInfo.location.region || null,
+                location_city: deviceInfo.location.city || null,
+                success: false,
+                failure_reason: 'Account frozen',
+                session_id: null,
+            })
+            .execute();
+
+        throw new UnauthorizedError('Your account is frozen. Please contact support for assistance.');
+    }
+
     // Rest of your existing code remains the same...
     const user2FA = await db
         .selectFrom('user_2fa')

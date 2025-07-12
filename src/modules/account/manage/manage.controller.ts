@@ -11,7 +11,6 @@ import {
     DematAction,
     DematStatus,
     FundsSettlementFrequency,
-    VerifySettlementFrequencyChangeRequestType,
     AddBankAccountRequest,
     RemoveBankRequest,
     SegmentActivationSettings,
