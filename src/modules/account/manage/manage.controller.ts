@@ -27,6 +27,7 @@ import SRNGenerator from '@app/services/srn-generator';
 import { randomUUID } from 'crypto';
 import { UIDParams } from '@app/modules/signup/signup.types';
 import { IncomeProofTypeEnum } from '@app/database/db';
+import { IFSCService } from '@app/services/razorpay/ifsc.service';
 
 const getIncomeProofStatus = async (
     req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, undefined>,
@@ -488,10 +489,16 @@ const getBankAccounts = async (
             'bank_account.ifsc_code',
             'bank_account.account_type',
             'bank_account.verification',
+            'bank_account.account_holder_name',
+            'bank_account.bank_name',
+            'bank_account.branch_name',
             'bank_account.created_at',
             'bank_account.updated_at',
+            'bank_to_user.is_primary',
         ])
         .where('bank_to_user.user_id', '=', userId)
+        .orderBy('bank_to_user.is_primary', 'desc')
+        .orderBy('bank_account.created_at', 'desc')
         .execute();
 
     res.status(OK).json({
@@ -507,6 +514,19 @@ const addBankAccount = async (
     const { userId } = req.auth!;
     const { account_no, ifsc_code, account_type } = req.body;
 
+    const ifscService = new IFSCService();
+    let ifscResponse;
+
+    try {
+        ifscResponse = await ifscService.lookup(ifsc_code.toUpperCase());
+
+        if (ifscResponse.status === 404) {
+            throw new UnprocessableEntityError('Invalid IFSC code');
+        }
+    } catch (error) {
+        throw new UnprocessableEntityError('Unable to validate IFSC code. Please check and try again.');
+    }
+
     const srnGenerator = new SRNGenerator('ACC');
     const srn = srnGenerator.generateTimestampSRN();
 
@@ -514,7 +534,7 @@ const addBankAccount = async (
         .selectFrom('bank_account')
         .select(['id'])
         .where('account_no', '=', account_no)
-        .where('ifsc_code', '=', ifsc_code)
+        .where('ifsc_code', '=', ifsc_code.toUpperCase())
         .executeTakeFirst();
 
     if (existingAccount) {
@@ -533,6 +553,17 @@ const addBankAccount = async (
         let bankAccountId;
 
         if (existingAccount) {
+            await tx
+                .updateTable('bank_account')
+                .set({
+                    bank_name: ifscResponse.data.BANK,
+                    branch_name: ifscResponse.data.BRANCH,
+                    updated_at: new Date(),
+                })
+                .where('id', '=', existingAccount.id)
+                .where('bank_name', 'is', null)
+                .execute();
+
             bankAccountId = existingAccount.id;
         } else {
             // Create new bank account
@@ -543,6 +574,8 @@ const addBankAccount = async (
                     ifsc_code,
                     account_type,
                     verification: 'pending',
+                    bank_name: ifscResponse.data.BANK,
+                    branch_name: ifscResponse.data.BRANCH,
                 })
                 .returning('id')
                 .executeTakeFirstOrThrow();
@@ -563,7 +596,19 @@ const addBankAccount = async (
     res.status(OK).json({
         message: 'Bank account added successfully',
         data: {
-            ...req.body,
+            accountNumber: account_no,
+            ifscCode: ifsc_code.toUpperCase(),
+            accountType: account_type,
+            bankName: ifscResponse.data.BANK,
+            branchName: ifscResponse.data.BRANCH,
+            bankDetails: {
+                fullBankName: ifscResponse.data.BANK,
+                fullBranchName: ifscResponse.data.BRANCH,
+                city: ifscResponse.data.CITY,
+                state: ifscResponse.data.STATE,
+                district: ifscResponse.data.DISTRICT,
+            },
+            verification: 'pending',
             srn,
             generatedAt: new Date().toISOString(),
         },
@@ -580,16 +625,48 @@ const removeBankAccount = async (
     const srnGenerator = new SRNGenerator('ACC');
     const srn = srnGenerator.generateTimestampSRN();
 
-    const bankAccountLink = await db
+    const bankAccount = await db
         .selectFrom('bank_to_user')
-        .select(['bank_account_id'])
-        .where('user_id', '=', userId)
-        .where('bank_account_id', '=', bankAccountId)
+        .innerJoin('bank_account', 'bank_to_user.bank_account_id', 'bank_account.id')
+        .select([
+            'bank_account.id',
+            'bank_account.account_no',
+            'bank_account.ifsc_code',
+            'bank_account.bank_name',
+            'bank_account.branch_name',
+            'bank_account.account_type',
+            'bank_account.verification',
+            'bank_to_user.is_primary',
+        ])
+        .where('bank_to_user.user_id', '=', userId)
+        .where('bank_account.id', '=', bankAccountId)
         .executeTakeFirst();
 
-    if (!bankAccountLink) {
+    if (!bankAccount) {
         throw new BadRequestError('Bank account not found or does not belong to this user');
     }
+
+    if (bankAccount.is_primary) {
+        throw new BadRequestError(
+            'Cannot remove your primary bank account. This is the account used during signup and is required for compliance purposes. You can only add additional accounts, but the primary account must remain active.',
+        );
+    }
+
+    // check for any pending transactions
+    const hasActiveTransactions = await db
+        .selectFrom('balance_transactions')
+        .select('transaction_id')
+        .where('user_id', '=', userId)
+        .where('bank_id', '=', bankAccountId)
+        .where('status', 'in', ['pending'])
+        .executeTakeFirst();
+
+    if (hasActiveTransactions) {
+        throw new BadRequestError(
+            'Cannot remove bank account with pending transactions. Please wait for all transactions to complete.',
+        );
+    }
+
     await db
         .deleteFrom('bank_to_user')
         .where('user_id', '=', userId)
@@ -599,7 +676,7 @@ const removeBankAccount = async (
     res.status(OK).json({
         message: 'Bank account removed successfully',
         data: {
-            ...req.body,
+            bankAccountId,
             srn,
             generatedAt: new Date().toISOString(),
         },

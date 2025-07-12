@@ -1420,6 +1420,14 @@ const postCheckpoint = async (
             });
         } else {
             const { bank } = req.body;
+
+            const ifscService = new IFSCService();
+            const ifscResponse = await ifscService.lookup(bank.ifsc_code.toUpperCase());
+
+            if (ifscResponse.status === 404) {
+                throw new UnprocessableEntityError('Invalid IFSC code');
+            }
+
             const verification = new BankVerification();
             const bankResponse = await verification.verification({
                 id_number: bank.account_number,
@@ -1480,12 +1488,16 @@ const postCheckpoint = async (
                         account_type: bank.account_type,
                         verification: 'verified',
                         account_holder_name: accountHolderName,
+                        bank_name: ifscResponse.data.BANK,
+                        branch_name: ifscResponse.data.BRANCH,
                     })
                     .onConflict((oc) =>
                         oc.constraint('uq_bank_account').doUpdateSet((eb) => ({
                             account_no: eb.ref('excluded.account_no'),
                             account_type: eb.ref('excluded.account_type'),
                             account_holder_name: eb.ref('excluded.account_holder_name'),
+                            bank_name: eb.ref('excluded.bank_name'),
+                            branch_name: eb.ref('excluded.branch_name'),
                         })),
                     )
                     .returning('id')
