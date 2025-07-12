@@ -1,7 +1,7 @@
 import { InternalServerError } from '@app/apiError';
 import { db } from '@app/database';
 import logger from '@app/logger';
-import { PaymentService } from '@app/services/ntt-pg.service';
+import { NTTPaymentService } from '@app/services/ntt-pg.service';
 import { Request } from '@app/types';
 import { OK } from '@app/utils/httpstatus';
 import { Response } from 'express';
@@ -10,7 +10,7 @@ import { sendFundsAdded } from '@app/services/notification.service';
 const depositCallback = async (req: Request, res: Response): Promise<void> => {
     const { encData } = req.body;
 
-    const paymentService = new PaymentService(String());
+    const paymentService = new NTTPaymentService(String());
     const [response, isValid] = paymentService.decryptAndValidateResponse(encData);
 
     if (!isValid) {

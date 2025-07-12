@@ -17,7 +17,7 @@ const CHANNEL = 'ECOMM';
 const API = 'SALE';
 const STAGE = 1;
 
-export class PaymentService {
+export class NTTPaymentService {
     constructor(
         private readonly returnUrl: string,
         private readonly cancelUrl: string | null = null,

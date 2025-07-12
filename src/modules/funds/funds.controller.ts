@@ -3,7 +3,7 @@ import { ParamsDictionary } from 'express-serve-static-core';
 import { Request, DefaultResponseData } from '@app/types.d';
 import { db } from '@app/database';
 import { CREATED, OK } from '@app/utils/httpstatus';
-import { PaymentService } from '@app/services/ntt-pg.service';
+import { NTTPaymentService } from '@app/services/ntt-pg.service';
 import { env } from '@app/env';
 import { BalanceTransactionStatus, DepositTransactionType } from '@app/database/db';
 import { SessionJwtType } from '../common.types';
@@ -14,6 +14,7 @@ import {
     TransactionParam,
     DepositMode,
 } from './funds.types';
+import IdGenerator from '@app/services/id-generator';
 
 /**
  * Get user funds
@@ -71,8 +72,10 @@ const depositFunds = async (
     const bankAccountId = mode === DepositMode.NB ? req.body.bank_account_id : undefined;
     const payVPA = mode === DepositMode.UPI ? req.body.payVPA : undefined;
 
-    const merchantTxnId = generateReferenceNo(userId);
-    const paymentService = new PaymentService(
+    const merchantTxnId = await new IdGenerator('transaction_ref').nextValue({
+        mode: 'DP',
+    });
+    const paymentService = new NTTPaymentService(
         `${req.protocol}://${req.hostname}:${req.socket.localPort}${env.apiPath}/webhook/deposit/callback`,
     );
 
@@ -150,7 +153,9 @@ const withdrawFunds = async (
             .transaction()
             .setIsolationLevel('serializable')
             .execute(async (tx) => {
-                const txnId = generateReferenceNo(userId);
+                const txnId = await new IdGenerator('transaction_ref').nextValue({
+                    mode: 'WD',
+                });
                 await tx
                     .insertInto('balance_transactions')
                     .values({
@@ -281,10 +286,6 @@ const getTransactionInfo = async (req: Request<SessionJwtType, TransactionParam>
             },
         },
     });
-};
-
-const generateReferenceNo = (userId: string): string => {
-    return `TXN_${Date.now()}_${userId}`; // TODO: Generate a unique transaction ID
 };
 
 export { getUserFunds, depositFunds, withdrawFunds, getUserTransactions, getTransactionInfo, getBankAccounts };
