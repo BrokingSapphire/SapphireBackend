@@ -1,16 +1,24 @@
 import { Response } from 'express';
-import { Request } from '@app/types.d';
+import { ParamsDictionary } from 'express-serve-static-core';
+import { Request, DefaultResponseData } from '@app/types.d';
 import { db } from '@app/database';
 import { CREATED, OK } from '@app/utils/httpstatus';
 import { PaymentService } from '@app/services/ntt-pg.service';
 import { env } from '@app/env';
 import { BalanceTransactionStatus, DepositTransactionType } from '@app/database/db';
 import { SessionJwtType } from '../common.types';
+import {
+    DepositFundsPayload,
+    WithdrawFundsPayload,
+    GetTransactionsQuery,
+    TransactionParam,
+    DepositMode,
+} from './funds.types';
 
 /**
  * Get user funds
  */
-const getUserFunds = async (req: Request<SessionJwtType>, res: Response): Promise<void> => {
+const getUserFunds = async (req: Request<SessionJwtType, ParamsDictionary>, res: Response): Promise<void> => {
     const balance = await db
         .selectFrom('user_balance')
         .select([
@@ -32,7 +40,7 @@ const getUserFunds = async (req: Request<SessionJwtType>, res: Response): Promis
     });
 };
 
-const getBankAccounts = async (req: Request<SessionJwtType>, res: Response): Promise<void> => {
+const getBankAccounts = async (req: Request<SessionJwtType, ParamsDictionary>, res: Response): Promise<void> => {
     const bankAccounts = await db
         .selectFrom('bank_account')
         .innerJoin('bank_to_user', 'bank_to_user.bank_account_id', 'bank_account.id')
@@ -53,9 +61,15 @@ const getBankAccounts = async (req: Request<SessionJwtType>, res: Response): Pro
 /**
  * Add funds to user account
  */
-const depositFunds = async (req: Request<SessionJwtType>, res: Response): Promise<void> => {
+const depositFunds = async (
+    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, DepositFundsPayload>,
+    res: Response,
+): Promise<void> => {
     const { userId } = req.auth!;
     const { amount, mode } = req.body;
+
+    const bankAccountId = mode === DepositMode.NB ? req.body.bank_account_id : undefined;
+    const payVPA = mode === DepositMode.UPI ? req.body.payVPA : undefined;
 
     const merchantTxnId = generateReferenceNo(userId);
     const paymentService = new PaymentService(
@@ -67,7 +81,7 @@ const depositFunds = async (req: Request<SessionJwtType>, res: Response): Promis
         .innerJoin('phone_number', 'user.phone', 'phone_number.id')
         .innerJoin('user_name', 'user_name.id', 'user.name')
         .innerJoin('bank_to_user', 'bank_to_user.user_id', 'user.id')
-        .innerJoin('bank_account', 'bank_account.id', 'bank_account.id')
+        .innerJoin('bank_account', 'bank_account.id', 'bank_to_user.bank_account_id')
         .select([
             'user_name.full_name',
             'user_name.first_name',
@@ -77,7 +91,8 @@ const depositFunds = async (req: Request<SessionJwtType>, res: Response): Promis
             'bank_account.ifsc_code',
         ])
         .where('user.id', '=', userId)
-        .where('bank_to_user.is_primary', '=', true)
+        .$if(mode === DepositMode.UPI, (qb) => qb.where('bank_to_user.is_primary', '=', true))
+        .$if(mode === DepositMode.NB, (qb) => qb.where('bank_account.id', '=', bankAccountId!))
         .executeTakeFirstOrThrow();
 
     const paymentUrl = await paymentService.createPaymentRequest(
@@ -94,7 +109,8 @@ const depositFunds = async (req: Request<SessionJwtType>, res: Response): Promis
             custAccNo: details.account_no,
             custAccIfsc: details.ifsc_code,
         },
-        mode === 'UPI' ? 'UP' : 'NB',
+        mode === DepositMode.UPI ? 'UP' : 'NB',
+        payVPA,
     );
 
     res.status(OK).json({
@@ -108,8 +124,11 @@ const depositFunds = async (req: Request<SessionJwtType>, res: Response): Promis
 /**
  * Withdraw funds - standard withdrawal
  */
-const withdrawFunds = async (req: Request<SessionJwtType>, res: Response): Promise<void> => {
-    const { userId } = req.auth!!;
+const withdrawFunds = async (
+    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, WithdrawFundsPayload>,
+    res: Response,
+): Promise<void> => {
+    const { userId } = req.auth!;
     const { amount, bank_account_id, type } = req.body;
 
     const bankDetails = await db
@@ -158,7 +177,10 @@ const withdrawFunds = async (req: Request<SessionJwtType>, res: Response): Promi
 /**
  * Get user transactions
  */
-const getUserTransactions = async (req: Request<SessionJwtType>, res: Response): Promise<void> => {
+const getUserTransactions = async (
+    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, any, GetTransactionsQuery>,
+    res: Response,
+): Promise<void> => {
     const { limit, offset, transaction_type, status } = req.query;
 
     const { count } = db.fn;
@@ -226,7 +248,7 @@ const getUserTransactions = async (req: Request<SessionJwtType>, res: Response):
 /**
  * Get transaction by ID
  */
-const getTransactionInfo = async (req: Request<SessionJwtType>, res: Response): Promise<void> => {
+const getTransactionInfo = async (req: Request<SessionJwtType, TransactionParam>, res: Response): Promise<void> => {
     const { id } = req.params;
     const transaction = await db
         .selectFrom('balance_transactions')

@@ -8,7 +8,12 @@ import {
     getTransactionInfo,
     getBankAccounts,
 } from './funds.controller';
-import { DepositRequestSchema, WithdrawalRequestSchema } from './funds.validator';
+import {
+    DepositFundsPayloadSchema,
+    WithdrawFundsPayloadSchema,
+    GetTransactionsQuerySchema,
+    TransactionParamSchema,
+} from './funds.validator';
 
 /**
  * @swagger
@@ -59,7 +64,7 @@ router.get('/', getUserFunds);
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/DepositRequestSchema'
+ *             $ref: '#/components/schemas/DepositFundsPayloadSchema'
  *     responses:
  *       200:
  *         description: Funds added successfully
@@ -68,7 +73,7 @@ router.get('/', getUserFunds);
  *       401:
  *         description: Unauthorized
  */
-router.post('/deposit', validate(DepositRequestSchema), depositFunds);
+router.post('/deposit', validate(DepositFundsPayloadSchema), depositFunds);
 
 /**
  * @swagger
@@ -88,7 +93,7 @@ router.post('/deposit', validate(DepositRequestSchema), depositFunds);
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/WithdrawalRequestSchema'
+ *             $ref: '#/components/schemas/WithdrawFundsPayloadSchema'
  *     responses:
  *       200:
  *         description: Withdrawal request processed
@@ -97,7 +102,7 @@ router.post('/deposit', validate(DepositRequestSchema), depositFunds);
  *       401:
  *         description: Unauthorized
  */
-router.post('/withdraw', validate(WithdrawalRequestSchema), withdrawFunds);
+router.post('/withdraw', validate(WithdrawFundsPayloadSchema), withdrawFunds);
 
 /**
  * @swagger
@@ -144,7 +149,7 @@ router.get('/accounts', getBankAccounts);
  *       401:
  *         description: Unauthorized
  */
-router.get('/transactions', getUserTransactions);
+router.get('/transactions', validate(GetTransactionsQuerySchema, 'query'), getUserTransactions);
 
 /**
  * @swagger
@@ -167,6 +172,6 @@ router.get('/transactions', getUserTransactions);
  *       404:
  *         description: Transaction not found
  */
-router.get('/transaction/:id', getTransactionInfo);
+router.get('/transaction/:id', validate(TransactionParamSchema, 'params'), getTransactionInfo);
 
 export default router;

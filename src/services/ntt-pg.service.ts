@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { decrypt, encrypt, generateSignature } from '@app/utils/atom-crypto';
 import { env } from '@app/env';
 import {
@@ -9,7 +8,6 @@ import {
 } from '@app/services/types/ntt-payment.types';
 import * as querystring from 'node:querystring';
 import { NonNullableFields } from '@app/types';
-import logger from '@app/logger';
 
 const PAYMENT_URL = 'https://paynetzuat.atomtech.in/ots/payment/txn';
 const PAY_MODE = 'SS';
@@ -33,8 +31,8 @@ export class PaymentService {
         customerDetails: Omit<CustomerDetails, 'billingInfo'>,
         accountDetails: NonNullableFields<Pick<PaymentDetails, 'custAccNo' | 'custAccIfsc'>>,
         payType: 'UP' | 'NB',
+        payVPA?: string,
     ) {
-        logger.info(this.returnUrl);
         const signature = generateSignature(env.ntt.hashRequestKey, [
             env.ntt.userId,
             env.ntt.transactionPassword,
@@ -85,7 +83,7 @@ export class PaymentService {
                     subChannel: [payType],
                     bankDetails: {
                         otsBankId: payType === 'NB' ? env.ntt.uatBankId : undefined,
-                        payeeVPA: payType === 'UP' ? env.ntt.uatVpa : undefined,
+                        payeeVPA: payType === 'UP' ? payVPA! : undefined,
                     },
                     emiDetails: null,
                     multiProdDetails: null,

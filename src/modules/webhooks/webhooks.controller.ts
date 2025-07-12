@@ -14,7 +14,7 @@ const depositCallback = async (req: Request, res: Response): Promise<void> => {
     const [response, isValid] = paymentService.decryptAndValidateResponse(encData);
 
     if (!isValid) {
-        logger.error(response);
+        logger.error(JSON.stringify(response));
         throw new InternalServerError('Invalid payment response recieced.');
     }
 
