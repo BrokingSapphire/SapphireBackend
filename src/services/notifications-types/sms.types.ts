@@ -65,36 +65,36 @@ const templateContentMap: Record<SmsTemplateType, string> = {
 
     [SmsTemplateType.ACCOUNT_SUSPENSION_NOTICE]:
         'Dear {#name#}, your account has been temporarily suspended due to {#reason#}. Contact support for assistance. Sapphire Broking',
-    
+
     [SmsTemplateType.FORGET_MPIN]:
         'Your OTP to reset your Sapphire Terminal MPIN is {#otp#}. Do not share this OTP. It is valid for 10 minutes. Sapphire Broking',
-    
+
     [SmsTemplateType.MPIN_CHANGE_CONFIRMATION]:
         "Dear {#name#}, your Sapphire Terminal MPIN has been changed successfully. If this wasn't you, contact support immediately. Sapphire Broking",
 
     [SmsTemplateType.SEGMENT_MODIFICATION_OTP]:
-        "Dear {#name#}, your OTP for segment modification is {#otp#}. Do not share this OTP. It is valid for 10 minutes. Sapphire Broking",
+        'Dear {#name#}, your OTP for segment modification is {#otp#}. Do not share this OTP. It is valid for 10 minutes. Sapphire Broking',
 
     [SmsTemplateType.SEGMENT_MODIFICATION_APPROVED]:
-        "Dear {#name#}, your segment modification request has been approved. You can start trading in the new segment now. Sapphire Broking",
+        'Dear {#name#}, your segment modification request has been approved. You can start trading in the new segment now. Sapphire Broking',
 
     [SmsTemplateType.SEGMENT_MODIFICATION_REJECTED]:
-        "Dear {#name#}, your segment modification request has been rejected due to {#reason#}. Please resolve the mentioned discrepancies and reapply. Sapphire Broking",
-    
+        'Dear {#name#}, your segment modification request has been rejected due to {#reason#}. Please resolve the mentioned discrepancies and reapply. Sapphire Broking',
+
     [SmsTemplateType.BANK_ACCOUNT_ADDITION_OTP]:
-        "Dear {#name#}, your OTP for adding a bank account is {#otp#}. Do not share this OTP. It is valid for 10 minutes. Sapphire Broking",
+        'Dear {#name#}, your OTP for adding a bank account is {#otp#}. Do not share this OTP. It is valid for 10 minutes. Sapphire Broking',
 
     [SmsTemplateType.BANK_ACCOUNT_ADDITION_CONFIRMATION]:
         "Dear {#name#}, your bank account has been added successfully. If this wasn't you, contact support immediately. Sapphire Broking",
 
     [SmsTemplateType.BANK_ACCOUNT_ADDITION_REJECTION]:
-        "Dear {#name#}, your bank account addition request has been rejected due to {#reason#}. Please resolve the mentioned discrepancies and reapply. Sapphire Broking",
+        'Dear {#name#}, your bank account addition request has been rejected due to {#reason#}. Please resolve the mentioned discrepancies and reapply. Sapphire Broking',
 
     [SmsTemplateType.DEMAT_ACCOUNT_FREEZE_OTP]:
-        "Dear {#name#}, your OTP for freezing your demat account is {#otp#}. Do not share this OTP. It is valid for 10 minutes. Sapphire Broking",
+        'Dear {#name#}, your OTP for freezing your demat account is {#otp#}. Do not share this OTP. It is valid for 10 minutes. Sapphire Broking',
 
     [SmsTemplateType.RUNNING_ACCOUNT_SETTLEMENT_OTP]:
-        "Dear {#name#}, your OTP for running account settlement is {#otp#}. Do not share this OTP. It is valid for 10 minutes. Sapphire Broking",
+        'Dear {#name#}, your OTP for running account settlement is {#otp#}. Do not share this OTP. It is valid for 10 minutes. Sapphire Broking',
 };
 
 export default templateContentMap;

@@ -28,6 +28,9 @@ import { randomUUID } from 'crypto';
 import { UIDParams } from '@app/modules/signup/signup.types';
 import { IncomeProofTypeEnum } from '@app/database/db';
 import { IFSCService } from '@app/services/razorpay/ifsc.service';
+import { SmsTemplateType } from '@app/services/notifications-types/sms.types';
+import logger from '@app/logger';
+import smsService from '@app/services/sms.service';
 
 const getIncomeProofStatus = async (
     req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, undefined>,
@@ -221,7 +224,12 @@ const updateSegmentActivation = async (
     const { cashMutualFunds, futuresAndOptions, commodityDerivatives, debt, currency } = req.body;
 
     // Get user email for OTP
-    const user = await db.selectFrom('user').select(['email']).where('id', '=', userId).executeTakeFirstOrThrow();
+    const user = await db
+        .selectFrom('user')
+        .innerJoin('phone_number', 'user.phone', 'phone_number.id')
+        .select(['user.email', 'phone_number.phone'])
+        .where('user.id', '=', userId)
+        .executeTakeFirstOrThrow();
 
     // Get currently active segments
     const currentSegments = await db
@@ -278,6 +286,19 @@ const updateSegmentActivation = async (
     // Send OTP immediately
     const emailOtp = new EmailOtpVerification(user.email, 'segment-activation');
     await emailOtp.sendOtp();
+
+    const otpKey = `otp:email-otp:segment-activation:${user.email}`;
+    const otp = await redisClient.get(otpKey);
+
+    // Send SMS OTP
+    try {
+        if (user.phone && otp) {
+            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.SEGMENT_MODIFICATION_OTP, [otp]);
+            logger.info(`Segment activation OTP SMS sent to ${user.phone}`);
+        }
+    } catch (error) {
+        logger.error(`Failed to send segment activation OTP SMS: ${error}`);
+    }
 
     res.status(OK).json({
         message: 'OTP sent to your registered email address. Please verify to update segments.',
@@ -458,9 +479,30 @@ const resendSegmentActivationOtp = async (
         throw new UnauthorizedError('Invalid segment activation session');
     }
 
+    const user = await db
+        .selectFrom('user')
+        .innerJoin('phone_number', 'user.phone', 'phone_number.id')
+        .select(['phone_number.phone'])
+        .where('user.id', '=', userId)
+        .executeTakeFirst();
+
     // Resend OTP
     const emailOtp = new EmailOtpVerification(session.email, 'segment-activation');
     await emailOtp.resendExistingOtp();
+
+    // Get the OTP from Redis to send via SMS
+    const otpKey = `otp:email-otp:segment-activation:${session.email}`;
+    const existingOtp = await redisClient.get(otpKey);
+
+    // Send SMS OTP
+    try {
+        if (user && user.phone && existingOtp) {
+            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.SEGMENT_MODIFICATION_OTP, [existingOtp]);
+            logger.info(`Segment activation OTP SMS resent to ${user.phone}`);
+        }
+    } catch (error) {
+        logger.error(`Failed to resend segment activation OTP SMS: ${error}`);
+    }
 
     // Update rate limit
     await redisClient.incr(rateLimitKey);
@@ -700,8 +742,12 @@ const initiateDematFreeze = async (
     const { userId } = req.auth!;
     const { action, reason } = req.body;
 
-    // Get user email for OTP
-    const user = await db.selectFrom('user').select(['email']).where('id', '=', userId).executeTakeFirstOrThrow();
+    const user = await db
+        .selectFrom('user')
+        .innerJoin('phone_number', 'user.phone', 'phone_number.id')
+        .select(['user.email', 'phone_number.phone'])
+        .where('user.id', '=', userId)
+        .executeTakeFirstOrThrow();
 
     // Validate current demat status
     let currentDematStatus = await db
@@ -751,6 +797,20 @@ const initiateDematFreeze = async (
     const emailOtp = new EmailOtpVerification(user.email, 'demat-freeze');
     await emailOtp.sendOtp();
 
+    // Get the OTP from Redis to send via SMS
+    const otpKey = `otp:email-otp:demat-freeze:${user.email}`;
+    const otp = await redisClient.get(otpKey);
+
+    // Send SMS OTP
+    try {
+        if (user.phone && otp) {
+            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.DEMAT_ACCOUNT_FREEZE_OTP, [otp]);
+            logger.info(`Demat freeze OTP SMS sent to ${user.phone}`);
+        }
+    } catch (error) {
+        logger.error(`Failed to send demat freeze OTP SMS: ${error}`);
+    }
+
     res.status(OK).json({
         message: 'OTP sent to your registered email address. Please verify to proceed.',
         data: {
@@ -795,9 +855,31 @@ const resendDematFreezeOtp = async (
         throw new UnauthorizedError('Invalid demat freeze session');
     }
 
+    // Get user phone number
+    const user = await db
+        .selectFrom('user')
+        .innerJoin('phone_number', 'user.phone', 'phone_number.id')
+        .select(['phone_number.phone'])
+        .where('user.id', '=', userId)
+        .executeTakeFirst();
+
     // Resend OTP
     const emailOtp = new EmailOtpVerification(session.email, 'demat-freeze');
     await emailOtp.resendExistingOtp();
+
+    // Get the OTP from Redis to send via SMS
+    const otpKey = `otp:email-otp:demat-freeze:${session.email}`;
+    const existingOtp = await redisClient.get(otpKey);
+
+    // Send SMS OTP
+    try {
+        if (user && user.phone && existingOtp) {
+            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.DEMAT_ACCOUNT_FREEZE_OTP, [existingOtp]);
+            logger.info(`Demat freeze OTP SMS resent to ${user.phone}`);
+        }
+    } catch (error) {
+        logger.error(`Failed to resend demat freeze OTP SMS: ${error}`);
+    }
 
     // Update rate limit
     await redisClient.incr(rateLimitKey);
@@ -976,8 +1058,13 @@ const updateSettlementFrequency = async (
     const { userId } = req.auth!;
     const { frequency } = req.body;
 
-    // Get user email for OTP
-    const user = await db.selectFrom('user').select(['email']).where('id', '=', userId).executeTakeFirstOrThrow();
+    // Get user email and phone for OTP
+    const user = await db
+        .selectFrom('user')
+        .innerJoin('phone_number', 'user.phone', 'phone_number.id')
+        .select(['user.email', 'phone_number.phone'])
+        .where('user.id', '=', userId)
+        .executeTakeFirstOrThrow();
 
     // Generate session ID for OTP verification
     const sessionId = randomUUID();
@@ -998,6 +1085,20 @@ const updateSettlementFrequency = async (
     // Send OTP immediately
     const emailOtp = new EmailOtpVerification(user.email, 'settlement-frequency-change');
     await emailOtp.sendOtp();
+
+    // Get the OTP from Redis to send via SMS
+    const otpKey = `otp:email-otp:settlement-frequency-change:${user.email}`;
+    const otp = await redisClient.get(otpKey);
+
+    // Send SMS OTP
+    try {
+        if (user.phone && otp) {
+            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.RUNNING_ACCOUNT_SETTLEMENT_OTP, [otp]);
+            logger.info(`Settlement frequency change OTP SMS sent to ${user.phone}`);
+        }
+    } catch (error) {
+        logger.error(`Failed to send settlement frequency change OTP SMS: ${error}`);
+    }
 
     res.status(OK).json({
         message: 'OTP sent to your registered email address. Please verify to complete the change.',
@@ -1126,9 +1227,33 @@ const resendSettlementFrequencyOtp = async (
         throw new UnauthorizedError('Invalid settlement frequency change session');
     }
 
+    // Get user phone number
+    const user = await db
+        .selectFrom('user')
+        .innerJoin('phone_number', 'user.phone', 'phone_number.id')
+        .select(['phone_number.phone'])
+        .where('user.id', '=', userId)
+        .executeTakeFirst();
+
     // Resend OTP
     const emailOtp = new EmailOtpVerification(session.email, 'settlement-frequency-change');
     await emailOtp.resendExistingOtp();
+
+    // Get the OTP from Redis to send via SMS
+    const otpKey = `otp:email-otp:settlement-frequency-change:${session.email}`;
+    const existingOtp = await redisClient.get(otpKey);
+
+    // Send SMS OTP
+    try {
+        if (user && user.phone && existingOtp) {
+            await smsService.sendTemplatedSms(user.phone, SmsTemplateType.RUNNING_ACCOUNT_SETTLEMENT_OTP, [
+                existingOtp,
+            ]);
+            logger.info(`Settlement frequency change OTP SMS resent to ${user.phone}`);
+        }
+    } catch (error) {
+        logger.error(`Failed to resend settlement frequency change OTP SMS: ${error}`);
+    }
 
     // Update rate limit
     await redisClient.incr(rateLimitKey);
