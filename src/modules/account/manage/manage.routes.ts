@@ -3,6 +3,7 @@ import {
     addBankAccount,
     getBankAccounts,
     getCurrentSegments,
+    getDematAccount,
     getIncomeProofStatus,
     getSettlementFrequency,
     initiateDematFreeze,
@@ -47,5 +48,8 @@ router.get('/manage/settlement-frequency', getSettlementFrequency);
 router.put('/manage/settlement-frequency', updateSettlementFrequency);
 router.post('/manage/settlement-frequency/verify-otp', verifySettlementFrequencyOtp);
 router.post('/manage/settlement-frequency/resend-otp', resendSettlementFrequencyOtp);
+
+// demat account management routes
+router.get('/manage/demat-account', getDematAccount);
 
 export default router;

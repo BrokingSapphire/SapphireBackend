@@ -5,7 +5,7 @@ import { DefaultResponseData } from '@app/types.d';
 import { OK } from '@app/utils/httpstatus';
 import { SessionJwtType } from '@app/modules/common.types';
 import { db } from '@app/database';
-import { BadRequestError, UnauthorizedError, UnprocessableEntityError } from '@app/apiError';
+import { BadRequestError, NotFoundError, UnauthorizedError, UnprocessableEntityError } from '@app/apiError';
 import { pdfUpload, wrappedMulterHandler } from '@app/services/multer-s3.service';
 import {
     DematAction,
@@ -172,6 +172,47 @@ const putIncomeProof = async (
     });
 };
 
+const getDematAccount = async (
+    req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, undefined>,
+    res: Response<DefaultResponseData>,
+) => {
+    const { userId } = req.auth!;
+
+    const dematAccount = await db
+        .selectFrom('user')
+        .innerJoin('demat_account', 'user.demat_account_id', 'demat_account.id')
+        .select([
+            'demat_account.id',
+            'demat_account.bo_id',
+            'demat_account.dp_id',
+            'demat_account.dp_name',
+            'demat_account.depository',
+        ])
+        .where('user.id', '=', userId)
+        .executeTakeFirst();
+
+    if (!dematAccount) {
+        logger.warn(`No demat account found for user: ${userId}`);
+        throw new NotFoundError('Demat account not found for this user');
+    }
+
+    logger.info(`Successfully fetched demat account for user: ${userId}`, {
+        dematAccountId: dematAccount.id,
+        boId: dematAccount.bo_id,
+        depository: dematAccount.depository,
+    });
+
+    res.status(OK).json({
+        message: 'Demat account details retrieved successfully',
+        data: {
+            id: dematAccount.id,
+            bo_id: dematAccount.bo_id,
+            dp_id: dematAccount.dp_id,
+            dp_name: dematAccount.dp_name,
+            depository: dematAccount.depository,
+        },
+    });
+};
 const getCurrentSegments = async (
     req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, undefined>,
     res: Response<DefaultResponseData>,
@@ -1267,6 +1308,7 @@ const resendSettlementFrequencyOtp = async (
 };
 
 export {
+    getDematAccount,
     updateSegmentActivation,
     verifySegmentActivationOtp,
     resendSegmentActivationOtp,
