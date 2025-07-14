@@ -4,6 +4,7 @@ import { DepositMode, WithdrawType } from './funds.types';
 // --- PAYLOAD SCHEMAS (BODY) ---
 export const DepositFundsPayloadSchema = Joi.object({
     amount: Joi.number().positive().precision(2).required(),
+    redirect: Joi.string().uri().optional(),
     mode: Joi.string()
         .valid(...Object.values(DepositMode))
         .required(),
@@ -14,7 +15,6 @@ export const DepositFundsPayloadSchema = Joi.object({
     payVPA: Joi.string().when('mode', {
         is: DepositMode.UPI,
         then: Joi.required(),
-        otherwise: Joi.forbidden(),
     }),
 });
 

@@ -19,7 +19,7 @@ import IdGenerator from '@app/services/id-generator';
 /**
  * Get user funds
  */
-const getUserFunds = async (req: Request<SessionJwtType, ParamsDictionary>, res: Response): Promise<void> => {
+const getUserFunds = async (req: Request<SessionJwtType>, res: Response): Promise<void> => {
     const balance = await db
         .selectFrom('user_balance')
         .select([
@@ -41,7 +41,7 @@ const getUserFunds = async (req: Request<SessionJwtType, ParamsDictionary>, res:
     });
 };
 
-const getBankAccounts = async (req: Request<SessionJwtType, ParamsDictionary>, res: Response): Promise<void> => {
+const getBankAccounts = async (req: Request<SessionJwtType>, res: Response): Promise<void> => {
     const bankAccounts = await db
         .selectFrom('bank_account')
         .innerJoin('bank_to_user', 'bank_to_user.bank_account_id', 'bank_account.id')
@@ -67,7 +67,7 @@ const depositFunds = async (
     res: Response,
 ): Promise<void> => {
     const { userId } = req.auth!;
-    const { amount, mode } = req.body;
+    const { amount, mode, redirect } = req.body;
 
     const bankAccountId = mode === DepositMode.NB ? req.body.bank_account_id : undefined;
     const payVPA = mode === DepositMode.UPI ? req.body.payVPA : undefined;
@@ -76,7 +76,7 @@ const depositFunds = async (
         mode: 'DP',
     });
     const paymentService = new NTTPaymentService(
-        `${req.protocol}://${req.hostname}:${req.socket.localPort}${env.apiPath}/webhook/deposit/callback`,
+        `${req.protocol}://${req.hostname}:${req.socket.localPort}${env.apiPath}/webhook/deposit/callback${redirect ? `?redirect=${encodeURIComponent(redirect)}` : ''}`,
     );
 
     const details = await db

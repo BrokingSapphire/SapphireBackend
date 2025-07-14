@@ -11,16 +11,10 @@ export enum WithdrawType {
     INSTANT = 'Instant',
 }
 
-// Request payload types
-// export type DepositFundsPayload = {
-//     amount: number;
-//     mode: DepositMode;
-//     bank_account_id: number; // Always required in body, logic handles when to use it
-//     payVPA?: string; // Optional VPA for UPI payments
-// };
 export type DepositFundsPayload = Pretty<
     {
         amount: number;
+        redirect?: string;
     } & ToDiscoUnion<
         {
             [DepositMode.UPI]: { payVPA: string };
