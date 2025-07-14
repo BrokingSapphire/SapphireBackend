@@ -31,6 +31,7 @@ import { IFSCService } from '@app/services/razorpay/ifsc.service';
 import { SmsTemplateType } from '@app/services/notifications-types/sms.types';
 import logger from '@app/logger';
 import smsService from '@app/services/sms.service';
+import { BankImageService } from '@app/services/bank-image.service';
 
 const getIncomeProofStatus = async (
     req: Request<SessionJwtType, ParamsDictionary, DefaultResponseData, undefined>,
@@ -584,6 +585,11 @@ const getBankAccounts = async (
         .orderBy('bank_account.created_at', 'desc')
         .execute();
 
+    const bankAccountsWithImages = bankAccounts.map((account) => ({
+        ...account,
+        bankImageUrl: BankImageService.getBankImageUrl(account.bank_name || ''),
+    }));
+
     res.status(OK).json({
         message: 'Bank accounts retrieved successfully',
         data: bankAccounts,
@@ -609,6 +615,8 @@ const addBankAccount = async (
     } catch (error) {
         throw new UnprocessableEntityError('Unable to validate IFSC code. Please check and try again.');
     }
+
+    const bankImageUrl = BankImageService.getBankImageUrl(ifscResponse.data.BANK);
 
     const srnGenerator = new SRNGenerator('ACC');
     const srn = srnGenerator.generateTimestampSRN();
@@ -684,12 +692,14 @@ const addBankAccount = async (
             accountType: account_type,
             bankName: ifscResponse.data.BANK,
             branchName: ifscResponse.data.BRANCH,
+            bankImageUrl,
             bankDetails: {
                 fullBankName: ifscResponse.data.BANK,
                 fullBranchName: ifscResponse.data.BRANCH,
                 city: ifscResponse.data.CITY,
                 state: ifscResponse.data.STATE,
                 district: ifscResponse.data.DISTRICT,
+                bankImageUrl,
             },
             verification: 'pending',
             srn,
